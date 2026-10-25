@@ -31,6 +31,8 @@ PATCH_ORDER = [
     "009-android-touch-ui.patch",
     "010-android-keystore.patch",
     "011-android-battery-saver.patch",
+    "012-anti-fingerprinting.patch",
+    "013-webrtc-leak-prevention.patch",
 ]
 
 PATCHES_DIR = Path(__file__).parent.parent / "patches"

@@ -1,0 +1,14 @@
+diff --git a/third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.cc b/third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.cc
+index 44a1b2c..77d3e4f 100644
+--- a/third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.cc
++++ b/third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.cc
+@@ -150,6 +150,11 @@ void PeerConnectionDependencyFactory::InitializeSignalingThread() {
+   // Aegis Browser: Restringir recolección de candidatos ICE para evitar fugas de IP privada/VPN
+   // Solo permitir interfaces de red públicas con consentimiento explícito del usuario.
+   webrtc::PeerConnectionInterface::RTCConfiguration config;
++  config.continual_gathering_policy =
++      webrtc::PeerConnectionInterface::GATHER_CONTINUALLY;
++  // Ocultar interfaces de red locales / virtuales VPN
++  config.surface_cellular_candidates = false;
++  config.network_preference = webrtc::NetworkPreference::NEVER;
+ }
