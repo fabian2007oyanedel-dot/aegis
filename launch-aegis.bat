@@ -1,40 +1,51 @@
 @echo off
-title Aegis Browser - Modo Standalone Ultra Ligero
+chcp 65001 >nul
+title Aegis Browser
+
+set "HTML_TARGET=%~dp0src\ui\ntp\index.html"
+set "HTML_TARGET=%HTML_TARGET:\=/%"
+set "APP_URL=file:///%HTML_TARGET%"
+
 echo ==============================================================================
-echo                      INICIANDO AEGIS BROWSER v1.2.0
+echo                      INICIANDO AEGIS BROWSER v1.3.0
 echo             (Navegador Seguro, Ultra Optimizado y Sin Telemetria)
 echo ==============================================================================
 echo.
-
-set NTP_PATH=%~dp0src\ui\ntp\index.html
-set PROFILE_DIR=%TEMP%\aegis_isolated_profile
-
-echo [1/2] Verificando entorno y aceleracion por hardware...
-echo [2/2] Abriendo interfaz WebUI en ventana de aplicacion aislada...
+echo URL de inicio: %APP_URL%
 echo.
 
-:: 1. Intentar lanzar con Edge en modo App (Motor Chromium nativo de Windows)
-where msedge >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    echo Iniciando Aegis Browser en modo Standalone (Chromium Engine)...
-    start "" msedge --app="file:///%NTP_PATH:\=/%" --user-data-dir="%PROFILE_DIR%" --no-first-run --disable-default-apps
+:: 1. Probar Microsoft Edge (Ruta estándar de Windows)
+if exist "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" (
+    echo [OK] Lanzando Aegis Browser en ventana standalone (Edge Chromium Engine)...
+    start "" "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --app="%APP_URL%"
     goto :fin
 )
 
-:: 2. Intentar lanzar con Chrome en modo App
-where chrome >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    echo Iniciando Aegis Browser en modo Standalone (Chrome Engine)...
-    start "" chrome --app="file:///%NTP_PATH:\=/%" --user-data-dir="%PROFILE_DIR%" --no-first-run
+if exist "C:\Program Files\Microsoft\Edge\Application\msedge.exe" (
+    echo [OK] Lanzando Aegis Browser en ventana standalone (Edge Chromium Engine)...
+    start "" "C:\Program Files\Microsoft\Edge\Application\msedge.exe" --app="%APP_URL%"
     goto :fin
 )
 
-:: 3. Fallback: Abrir directamente el archivo HTML en el navegador por defecto
-echo Abriendo Aegis Browser en tu navegador web predeterminado...
-start "" "%NTP_PATH%"
+:: 2. Probar Google Chrome
+if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
+    echo [OK] Lanzando Aegis Browser en ventana standalone (Chrome Engine)...
+    start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --app="%APP_URL%"
+    goto :fin
+)
+
+if exist "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" (
+    echo [OK] Lanzando Aegis Browser en ventana standalone (Chrome Engine)...
+    start "" "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --app="%APP_URL%"
+    goto :fin
+)
+
+:: 3. Fallback con el explorador de Windows
+echo [OK] Abriendo Aegis Browser en el navegador predeterminado de Windows...
+start explorer.exe "%APP_URL%"
 
 :fin
 echo.
-echo [OK] Aegis Browser se esta ejecutando. Disfruta de la navegacion privada y sin anuncios!
-timeout /t 3 >nul
+echo Disfruta de la navegacion privada y sin publicidad en Aegis Browser!
+timeout /t 2 >nul
 exit /b 0
