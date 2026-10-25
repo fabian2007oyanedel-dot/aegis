@@ -2,70 +2,287 @@ name: Build Aegis Browser (Windows x64)
 
 on:
   workflow_dispatch:
+    inputs:
+      chromium_version:
+        description: "Versión de Chromium a compilar (ej: 130.0.6723.69)"
+        required: false
+        default: "main"
+      skip_shields_build:
+        description: "Saltar compilación de Shields Rust (usar caché)"
+        type: boolean
+        default: false
   push:
-    branches: [ main ]
+    branches: [main]
+    paths:
+      - 'src/shields/**'
+      - 'patches/**'
+      - 'config/args.gn'
+
+# Evitar builds concurrentes del mismo branch
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CHROMIUM_VERSION: ${{ github.event.inputs.chromium_version || 'main' }}
+  DEPOT_TOOLS_WIN_TOOLCHAIN: 0
+  # Directorio de build en el runner (se ubica en la unidad D: para más espacio)
+  BUILD_DIR: D:\chromium_build
+  DEPOT_TOOLS_DIR: D:\depot_tools
 
 jobs:
+  # ─────────────────────────────────────────────────────────────────
+  # JOB 1: Compilar el motor de bloqueo Aegis Shields en Rust
+  # ─────────────────────────────────────────────────────────────────
   build-shields:
-    name: Compilar Motor Aegis Shields (Rust)
+    name: "1/3 - Compilar Aegis Shields (Rust FFI)"
     runs-on: windows-latest
+    if: ${{ !inputs.skip_shields_build }}
+
+    outputs:
+      shields-lib-hash: ${{ steps.hash.outputs.hash }}
+
     steps:
-      - name: Checkout Código Fuente
+      - name: Checkout repositorio Aegis
         uses: actions/checkout@v4
 
-      - name: Configurar Rust Toolchain
+      - name: Caché de build Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            src/shields/target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: rust-shields-${{ runner.os }}-${{ hashFiles('src/shields/Cargo.lock', 'src/shields/src/**') }}
+          restore-keys: |
+            rust-shields-${{ runner.os }}-
+
+      - name: Configurar Rust Toolchain (stable-msvc)
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: stable-x86_64-pc-windows-msvc
           targets: x86_64-pc-windows-msvc
 
-      - name: Compilar adblock-rust FFI
+      - name: Compilar aegis_shields.lib (Release)
         working-directory: src/shields
-        run: |
-          cargo build --release --verbose
+        run: cargo build --release --verbose
 
-      - name: Subir Binario de Shields
+      - name: Calcular hash del binario
+        id: hash
+        shell: powershell
+        run: |
+          $hash = (Get-FileHash "src/shields/target/release/aegis_shields.lib" -Algorithm SHA256).Hash
+          echo "hash=$hash" >> $env:GITHUB_OUTPUT
+          echo "Shields hash: $hash"
+
+      - name: Subir aegis_shields.lib como artefacto
         uses: actions/upload-artifact@v4
         with:
           name: aegis-shields-windows-lib
           path: src/shields/target/release/aegis_shields.lib
+          retention-days: 7
 
-  build-browser:
-    name: Compilar Aegis Browser (Chromium Core)
-    needs: build-shields
+  # ─────────────────────────────────────────────────────────────────
+  # JOB 2: Compilar Chromium con parches de Aegis
+  # ─────────────────────────────────────────────────────────────────
+  build-chromium:
+    name: "2/3 - Compilar Aegis Browser (Chromium Core)"
     runs-on: windows-latest
+    needs: build-shields
+    # Nota: los runners de GitHub tienen ~14 GB de espacio en C:
+    # Para una build real de Chromium se necesita un self-hosted runner
+    # con al menos 80 GB libres. Este job está estructurado correctamente
+    # para ejecutarse en un runner self-hosted.
+
     steps:
-      - name: Checkout Código Fuente
+      - name: Checkout repositorio Aegis
         uses: actions/checkout@v4
 
-      - name: Descargar Motor Shields Compilado
+      - name: Descargar Aegis Shields compilado
         uses: actions/download-artifact@v4
         with:
           name: aegis-shields-windows-lib
           path: out/shields/
 
-      - name: Configurar Python
+      - name: Verificar espacio en disco
+        shell: powershell
+        run: |
+          $drives = Get-PSDrive -PSProvider FileSystem | Select-Object Name,
+            @{N='FreeGB';E={[Math]::Round($_.Free/1GB, 1)}}
+          $drives | Format-Table
+          $minRequired = 80
+          $dDrive = $drives | Where-Object { $_.Name -eq "D" }
+          if ($dDrive -and $dDrive.FreeGB -lt $minRequired) {
+            Write-Error "Espacio insuficiente en D: ($($dDrive.FreeGB) GB). Se requieren $minRequired GB."
+            exit 1
+          }
+
+      - name: Configurar Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Instalar depot_tools de Google
+      - name: Instalar depot_tools
         shell: powershell
         run: |
-          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git $HOME/depot_tools
-          Add-Content $env:GITHUB_PATH "$HOME/depot_tools"
+          git clone --depth=1 https://chromium.googlesource.com/chromium/tools/depot_tools.git $env:DEPOT_TOOLS_DIR
+          Add-Content $env:GITHUB_PATH $env:DEPOT_TOOLS_DIR
+          # Variable crítica: usar MSVC del runner, no el de Google
+          echo "DEPOT_TOOLS_WIN_TOOLCHAIN=0" >> $env:GITHUB_ENV
 
-      - name: Aplicar Parches y Generar Build
+      - name: Bootstrap gclient
         shell: powershell
         run: |
-          Write-Host "Inyectando parches de privacidad y motor Aegis Shields..."
-          # Pipeline de sincronización y build de Chromium con args.gn
-          Write-Host "Build completado con éxito."
+          $env:PATH = "$env:DEPOT_TOOLS_DIR;$env:PATH"
+          gclient version
 
-      - name: Publicar Instalador Aegis
+      - name: Caché de código fuente de Chromium
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BUILD_DIR }}
+          key: chromium-src-${{ env.CHROMIUM_VERSION }}
+          # El código fuente de Chromium es muy grande; en runners de GitHub
+          # la caché está limitada a 10 GB. Para producción usar self-hosted.
+
+      - name: Fetch código fuente de Chromium
+        shell: powershell
+        run: |
+          $env:PATH = "$env:DEPOT_TOOLS_DIR;$env:PATH"
+          if (-not (Test-Path "$env:BUILD_DIR\src")) {
+            New-Item -ItemType Directory -Path $env:BUILD_DIR -Force | Out-Null
+            Push-Location $env:BUILD_DIR
+            fetch --no-history chromium
+            Pop-Location
+          } else {
+            Push-Location $env:BUILD_DIR
+            gclient sync --no-history --force
+            Pop-Location
+          }
+
+      - name: Aplicar parches de Aegis
+        shell: powershell
+        run: |
+          $env:PATH = "$env:DEPOT_TOOLS_DIR;$env:PATH"
+          python scripts/apply_patches.py --src "$env:BUILD_DIR\src"
+
+      - name: Copiar args.gn y librería Shields
+        shell: powershell
+        run: |
+          $buildOut = "$env:BUILD_DIR\src\out\Aegis"
+          New-Item -ItemType Directory -Path $buildOut -Force | Out-Null
+          
+          # args.gn - activar Aegis Shields
+          Copy-Item config/args.gn $buildOut/args.gn -Force
+          
+          # Copiar la librería Rust compilada donde el BUILD.gn la espera
+          $shieldsOut = "$env:BUILD_DIR\src\out\Aegis\shields\"
+          New-Item -ItemType Directory -Path $shieldsOut -Force | Out-Null
+          Copy-Item out/shields/aegis_shields.lib $shieldsOut -Force
+          Copy-Item src/shields/include/aegis_shields.h "$env:BUILD_DIR\src\chrome\browser\net\" -Force
+
+      - name: Generar build system (gn gen)
+        shell: powershell
+        run: |
+          $env:PATH = "$env:DEPOT_TOOLS_DIR;$env:PATH"
+          Push-Location "$env:BUILD_DIR\src"
+          gn gen out/Aegis
+          Pop-Location
+
+      - name: Compilar Aegis Browser (autoninja)
+        shell: powershell
+        run: |
+          $env:PATH = "$env:DEPOT_TOOLS_DIR;$env:PATH"
+          $cores = (Get-CimInstance Win32_Processor).NumberOfLogicalProcessors
+          Write-Host "Compilando con $cores núcleos..."
+          Push-Location "$env:BUILD_DIR\src"
+          # Compilar solo el ejecutable del navegador
+          autoninja -C out/Aegis chrome -j $cores
+          Pop-Location
+
+      - name: Renombrar y empaquetar artefactos
+        shell: powershell
+        run: |
+          $outDir = "$env:BUILD_DIR\src\out\Aegis"
+          
+          # Renombrar chrome.exe → aegis.exe
+          Rename-Item "$outDir\chrome.exe" "aegis.exe" -Force
+          
+          # Crear directorio de release
+          $releaseDir = "release\windows-x64"
+          New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
+          
+          # Copiar archivos necesarios para distribución
+          $filesToCopy = @("aegis.exe", "chrome.dll", "v8_context_snapshot.bin",
+                           "icudtl.dat", "resources.pak", "chrome_100_percent.pak",
+                           "chrome_200_percent.pak", "snapshot_blob.bin")
+          foreach ($file in $filesToCopy) {
+            if (Test-Path "$outDir\$file") {
+              Copy-Item "$outDir\$file" $releaseDir -Force
+            }
+          }
+          
+          # Incluir locales y recursos
+          if (Test-Path "$outDir\locales") {
+            Copy-Item "$outDir\locales" $releaseDir -Recurse -Force
+          }
+          
+          # Mostrar tamaño del release
+          $size = (Get-ChildItem $releaseDir -Recurse | Measure-Object -Property Length -Sum).Sum
+          Write-Host "Tamaño total del release: $([Math]::Round($size/1MB, 1)) MB"
+
+      - name: Publicar Aegis Browser Windows x64
         uses: actions/upload-artifact@v4
         with:
-          name: aegis-browser-windows-x64
-          path: |
-            config/
-            src/shields/include/
-            README.md
+          name: aegis-browser-windows-x64-${{ github.sha }}
+          path: release/windows-x64/
+          retention-days: 30
+
+  # ─────────────────────────────────────────────────────────────────
+  # JOB 3: Verificación funcional básica post-build
+  # ─────────────────────────────────────────────────────────────────
+  verify-build:
+    name: "3/3 - Verificar Build"
+    runs-on: windows-latest
+    needs: build-chromium
+
+    steps:
+      - name: Descargar build de Aegis
+        uses: actions/download-artifact@v4
+        with:
+          name: aegis-browser-windows-x64-${{ github.sha }}
+          path: aegis-release/
+
+      - name: Verificar ejecutable existe y no está corrupto
+        shell: powershell
+        run: |
+          $exe = "aegis-release\aegis.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "aegis.exe no encontrado en el artefacto de release."
+            exit 1
+          }
+          $size = [Math]::Round((Get-Item $exe).Length / 1MB, 1)
+          Write-Host "✅ aegis.exe presente: $size MB"
+          
+          # Verificar que no sea menor de 50 MB (indicaría un build incompleto)
+          if ((Get-Item $exe).Length -lt 50MB) {
+            Write-Error "aegis.exe parece demasiado pequeño ($size MB). Build posiblemente incompleto."
+            exit 1
+          }
+          Write-Host "✅ Tamaño de ejecutable válido."
+
+      - name: Publicar checksums SHA256
+        shell: powershell
+        run: |
+          $files = Get-ChildItem "aegis-release\" -File
+          $checksumFile = "aegis-release\SHA256SUMS.txt"
+          foreach ($file in $files) {
+            $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash
+            "$hash  $($file.Name)" | Add-Content $checksumFile
+          }
+          Get-Content $checksumFile
+
+      - name: Subir checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-browser-checksums-${{ github.sha }}
+          path: aegis-release/SHA256SUMS.txt

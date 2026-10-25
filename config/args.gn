@@ -1,43 +1,65 @@
-# Aegis Browser - Build Configuration (args.gn)
-# Optimizado para máximo rendimiento, cero telemetría y exclusión de bloat
+# Aegis Browser - Configuración de Build (args.gn)
+# Fase 0: Compilación Vanilla (sin Aegis Shields)
+# Optimizado para máximo rendimiento, cero telemetría y exclusión de bloat.
 
-# 1. Configuración de Distribución y Optimización
-is_debug = false
-is_official_build = true
-is_component_build = false
-symbol_level = 0
-blink_symbol_level = 0
-enable_stripping = true
-dcheck_always_on = false
+# ── 1. Distribución y Optimización ─────────────────────────────────────────
+is_debug                = false
+is_official_build       = true     # Activa LTO, PGO y optimizaciones de release
+is_component_build      = false    # Build monolítico (más rápido en ejecución)
+symbol_level            = 0        # Sin símbolos de debug (menor tamaño binario)
+blink_symbol_level      = 0
+enable_stripping        = true     # Strip de símbolos al linkear
+dcheck_always_on        = false
 
-# Optimizaciones de CPU y Compilación
-use_thin_lto = true
-optimize_webui = true
+# ── 2. Optimizaciones de CPU ────────────────────────────────────────────────
+use_thin_lto            = true     # Link-Time Optimization (mejora ~10-20% de rendimiento)
+optimize_webui          = true     # Minifica recursos de la UI web interna
 
-# 2. Eliminación de Telemetría, Métricas y Rastreo de Google
-enable_google_now = false
+# NOTA: AVX2 se habilita vía flags de compilador en el GYP/GN del toolchain.
+# Para habilitar AVX2 explícitamente en el código de Chromium, agregar al BUILD.gn
+# del target: cflags = [ "-mavx2" ]  (Linux/Mac) o /arch:AVX2 (Windows)
+# chrome_pgo_phase = 2  # Phase 2 PGO (requiere datos de perfil previos)
+
+# ── 3. Eliminación de Telemetría y Rastreo ─────────────────────────────────
+enable_google_now                = false
 enable_hangout_services_extension = false
-enable_mdns = false
-enable_reporting = false
-enable_service_discovery = false
-google_api_key = ""
-google_default_client_id = ""
+enable_mdns                      = false   # mDNS: descubrimiento de dispositivos locales
+enable_reporting                 = false   # API de Reporting a servidores remotos
+enable_service_discovery         = false
+enable_vr                        = false   # WebVR/WebXR (reducir superficie de ataque)
+safe_browsing_mode               = 0       # 0 = desactivado completamente
+
+# Eliminar claves de API de Google (sin ellas, el navegador no puede autenticarse)
+google_api_key            = ""
+google_default_client_id  = ""
 google_default_client_secret = ""
 
-# 3. Desactivación de Sync y Cuentas en la Nube
-# Toda la información (historial, contraseñas, marcadores) se gestiona de forma estrictamente local
+# Desactivar Safe Browsing (envía URLs a Google)
+safe_browsing_mode = 0
+
+# ── 4. Desactivación de Sync y Cuentas en la Nube ──────────────────────────
+# Toda la información (historial, contraseñas, marcadores) se gestiona localmente
 enable_signin_service = false
+# enable_dice_support = false  # DICE = Device ID-based sign-in
+# brave_sync_v2 = false
 
-# 4. Privacidad y Seguridad en Red
-# Prevención de fugas de IP en WebRTC
-rtc_use_h264 = true
-media_use_ffmpeg = true
-media_use_libvpx = true
+# ── 5. Privacidad de Red ────────────────────────────────────────────────────
+# Soporte de codecs de video para aceleración hardware y WebRTC
+rtc_use_h264            = true    # H.264 en WebRTC
+media_use_ffmpeg        = true    # Decodificación de video acelerada
+media_use_libvpx        = true    # VP8/VP9
 
-# 5. Extensiones y Motor Web
-enable_extensions = true
-enable_plugins = true
-enable_pdf = true
+# ── 6. Funcionalidades del Navegador ───────────────────────────────────────
+enable_extensions       = true    # Soporte para extensiones de Chrome Web Store
+enable_plugins          = true
+enable_pdf              = true    # Visor de PDF integrado
 
-# 6. Integración del Motor de Bloqueo Nativo (Aegis Shields)
-enable_aegis_shields = true
+# ── 7. Motor de Bloqueo Nativo (Aegis Shields) ─────────────────────────────
+# FASE 0: Desactivado durante la compilación vanilla de verificación.
+# Se activa en Fase 2 una vez integrada la librería Rust.
+# enable_aegis_shields = true
+
+# ── 8. Optimizaciones de Tamaño y Arranque ─────────────────────────────────
+# Excluir herramientas de testing y utilidades de desarrollo del build final
+exclude_unwind_tables   = true
+use_debug_fission       = false
