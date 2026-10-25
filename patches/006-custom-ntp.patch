@@ -1,0 +1,25 @@
+diff --git a/chrome/browser/ui/webui/new_tab_page/new_tab_page_ui.cc b/chrome/browser/ui/webui/new_tab_page/new_tab_page_ui.cc
+index 44a1b2c..88d3e4f 100644
+--- a/chrome/browser/ui/webui/new_tab_page/new_tab_page_ui.cc
++++ b/chrome/browser/ui/webui/new_tab_page/new_tab_page_ui.cc
+@@ -35,6 +35,10 @@
+ #include "content/public/browser/web_ui_data_source.h"
+ 
++namespace aegis {
++const char kAegisNewTabPageResourcePath[] = "src/ui/ntp/index.html";
++}
++
+ namespace {
+ 
+ content::WebUIDataSource* CreateNewTabPageUiHtmlSource(Profile* profile) {
+@@ -48,6 +52,10 @@ content::WebUIDataSource* CreateNewTabPageUiHtmlSource(Profile* profile) {
+   source->AddResourcePath("style.css", IDR_AEGIS_NTP_CSS);
+   source->AddResourcePath("app.js", IDR_AEGIS_NTP_JS);
+   source->AddResourcePath("assets/aegis-logo.svg", IDR_AEGIS_LOGO_SVG);
++  
++  // Establecer index.html de Aegis como documento principal de Nueva Pestaña
++  source->SetDefaultResource(IDR_AEGIS_NTP_HTML);
++  return source;
+ }
+ 
+ }  // namespace

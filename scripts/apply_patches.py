@@ -25,6 +25,7 @@ PATCH_ORDER = [
     "003-vertical-tabs.patch",
     "004-shields-throttle.patch",
     "005-branding-identity.patch",
+    "006-custom-ntp.patch",
 ]
 
 PATCHES_DIR = Path(__file__).parent.parent / "patches"

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nueva Pestaña — Aegis Browser</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Barra Superior -->
+  <header class="top-bar">
+    <div class="shields-badge" title="Aegis Shields activo: bloqueando rastreadores a nivel de socket">
+      <div class="shield-dot"></div>
+      <span>Aegis Shields:</span>
+      <span id="trackers-count" class="shields-stat-num">0</span>
+      <span>bloqueados</span>
+    </div>
+
+    <div class="actions-bar">
+      <button id="theme-toggle" class="icon-btn" title="Alternar tema oscuro / claro">
+        🌓
+      </button>
+      <button id="open-settings" class="icon-btn" title="Configuración de Aegis">
+        ⚙️
+      </button>
+    </div>
+  </header>
+
+  <!-- Núcleo Central -->
+  <main class="main-container">
+    <div class="brand-section">
+      <img src="../assets/aegis-logo.svg" alt="Aegis Logo" class="brand-logo">
+      <h1 class="brand-title">Aegis</h1>
+      <p class="brand-subtitle">Navegador web de alto rendimiento y privacidad nativa</p>
+    </div>
+
+    <!-- Barra de Búsqueda -->
+    <div class="search-wrapper">
+      <form id="search-form" class="search-box">
+        <input 
+          type="text" 
+          id="search-input" 
+          class="search-input" 
+          placeholder="Buscar con DuckDuckGo o escribir URL..." 
+          autocomplete="off"
+          autofocus
+        >
+        <button type="button" id="engine-selector" class="engine-selector" title="Clic para cambiar motor">
+          DuckDuckGo (:d)
+        </button>
+      </form>
+    </div>
+
+    <!-- Cuadrícula de Accesos Directos -->
+    <section class="shortcuts-section">
+      <div id="shortcuts-grid" class="shortcuts-grid">
+        <!-- Generado dinámicamente por app.js -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal de Configuración Rápida -->
+  <div id="settings-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">Configuración de Aegis</h2>
+        <button id="close-settings" class="icon-btn" style="width: 32px; height: 32px;">✕</button>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-label">Pestañas Verticales</span>
+          <span class="setting-desc">Alternar entre pestañas horizontales clásicas y panel vertical</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="vertical-tabs-toggle">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-label">Protección Aegis Shields</span>
+          <span class="setting-desc">Filtrado nativo de red en Rust (Brave Shields)</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="shields-toggle" checked disabled>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-label">Descarte de Pestañas (RAM Saver)</span>
+          <span class="setting-desc">Suspende pestañas inactivas para ahorrar 35% de memoria</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="ram-saver-toggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
