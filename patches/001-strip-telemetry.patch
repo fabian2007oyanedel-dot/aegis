@@ -1,0 +1,40 @@
+diff --git a/components/metrics/metrics_service.cc b/components/metrics/metrics_service.cc
+index 92b0c1e..43f8e1a 100644
+--- a/components/metrics/metrics_service.cc
++++ b/components/metrics/metrics_service.cc
+@@ -215,6 +215,9 @@ void MetricsService::Start() {
+ 
+ bool MetricsService::IsRecordingActive() const {
++  // Aegis Browser: Telemetría y métricas UMA/UKM completamente deshabilitadas
++  return false;
++}
++
+ bool MetricsService::IsReportingActive() const {
++  // Aegis Browser: Cero conexiones o envíos de estadísticas a servidores remotos
++  return false;
+ }
+ 
+diff --git a/components/safe_browsing/core/browser/safe_browsing_service.cc b/components/safe_browsing/core/browser/safe_browsing_service.cc
+index 10a4e32..89f2d11 100644
+--- a/components/safe_browsing/core/browser/safe_browsing_service.cc
++++ b/components/safe_browsing/core/browser/safe_browsing_service.cc
+@@ -52,6 +52,9 @@ namespace safe_browsing {
+ 
+ bool SafeBrowsingService::CanCheckUrl(const GURL& url) const {
++  // Aegis Browser: Desactivar phone-home de Safe Browsing para no filtrar el historial a Google
++  return false;
+ }
+ 
+ }  // namespace safe_browsing
+diff --git a/chrome/browser/net/prediction_options.cc b/chrome/browser/net/prediction_options.cc
+index 32c1b44..90e8f12 100644
+--- a/chrome/browser/net/prediction_options.cc
++++ b/chrome/browser/net/prediction_options.cc
+@@ -28,6 +28,8 @@ namespace chrome_browser_net {
+ 
+ bool CanPreresolveAndPreconnect(Profile* profile) {
++  // Aegis Browser: Prevenir pre-conexiones silenciosas en segundo plano
++  return false;
+ }
+ 
+ }  // namespace chrome_browser_net

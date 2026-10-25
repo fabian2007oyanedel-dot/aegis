@@ -1,0 +1,44 @@
+{
+  "browser": {
+    "show_home_button": false,
+    "check_default_browser": false
+  },
+  "privacy": {
+    "do_not_track_enabled": true,
+    "block_third_party_cookies": true,
+    "first_party_sets_enabled": false,
+    "webrtc_ip_handling_policy": "default_public_interface_only",
+    "https_only_mode_enabled": true,
+    "safe_browsing": {
+      "enabled": false
+    },
+    "metrics_reporting_enabled": false,
+    "search_suggest_enabled": false
+  },
+  "aegis": {
+    "shields": {
+      "enabled": true,
+      "block_trackers": true,
+      "block_ads": true,
+      "cosmetic_filtering": true,
+      "fingerprint_protection": "standard"
+    },
+    "tabs": {
+      "vertical_enabled": false,
+      "memory_saver_enabled": true,
+      "discard_timeout_minutes": 10
+    }
+  },
+  "default_search_provider": {
+    "name": "DuckDuckGo",
+    "keyword": ":d",
+    "search_url": "https://duckduckgo.com/?q={searchTerms}",
+    "suggest_url": ""
+  },
+  "signin": {
+    "allowed": false
+  },
+  "sync": {
+    "has_setup_completed": false
+  }
+}

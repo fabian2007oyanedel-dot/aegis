@@ -1,0 +1,28 @@
+diff --git a/components/sync/service/sync_service_impl.cc b/components/sync/service/sync_service_impl.cc
+index 45b8e91..12c7f33 100644
+--- a/components/sync/service/sync_service_impl.cc
++++ b/components/sync/service/sync_service_impl.cc
+@@ -102,6 +102,9 @@ namespace syncer {
+ 
+ bool SyncServiceImpl::IsSyncFeatureEnabled() const {
++  // Aegis Browser: Cero sincronización en la nube. Toda la información se guarda estrictamente local
++  return false;
+ }
+ 
+ bool SyncServiceImpl::CanSyncFeatureStart() const {
++  return false;
+ }
+ 
+ }  // namespace syncer
+diff --git a/chrome/browser/signin/signin_util.cc b/chrome/browser/signin/signin_util.cc
+index 89a2b10..55c3d44 100644
+--- a/chrome/browser/signin/signin_util.cc
++++ b/chrome/browser/signin/signin_util.cc
+@@ -40,6 +40,9 @@ namespace signin_util {
+ 
+ bool IsSigninAllowed(Profile* profile) {
++  // Aegis Browser: No permitir inicio de sesión corporativo de Google
++  return false;
+ }
+ 
+ }  // namespace signin_util
