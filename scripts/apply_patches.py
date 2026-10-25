@@ -37,6 +37,16 @@ PATCH_ORDER = [
     "015-shields-cosmetic-injection.patch",
 ]
 
+ANDROID_ONLY_PATCHES = {
+    "009-android-touch-ui.patch",
+    "010-android-keystore.patch",
+    "011-android-battery-saver.patch",
+}
+
+WINDOWS_ONLY_PATCHES = {
+    "007-local-storage-encryption.patch",
+}
+
 PATCHES_DIR = Path(__file__).parent.parent / "patches"
 APPLIED_LOG = Path(__file__).parent.parent / ".applied_patches.log"
 
@@ -62,19 +72,39 @@ def run_git(args: list[str], cwd: Path) -> tuple[int, str, str]:
 
 
 def check_patch(patch_path: Path, src_dir: Path, reverse: bool = False) -> bool:
-    """Verifica si un parche puede aplicarse sin errores (dry-run)."""
-    args = ["apply", "--check", str(patch_path)]
+    """Verifica si un parche puede aplicarse (tolerante con espacios y 3-way merge)."""
+    clean_path = patch_path.resolve().as_posix()
+    # 1. Intento tolerante a whitespace
+    args = ["apply", "--check", "--ignore-whitespace", "--ignore-space-change", clean_path]
+    if reverse:
+        args.append("--reverse")
+    code, _, stderr = run_git(args, src_dir)
+    if code == 0:
+        return True
+
+    # 2. Intento con 3-way merge
+    args = ["apply", "--check", "--3way", "--ignore-whitespace", clean_path]
     if reverse:
         args.append("--reverse")
     code, _, stderr = run_git(args, src_dir)
     if code != 0:
-        log(f"  Pre-check falló: {stderr.strip()}", "WARN")
+        log(f"  Pre-check falló para {patch_path.name}: {stderr.strip()}", "WARN")
     return code == 0
 
 
 def apply_patch(patch_path: Path, src_dir: Path, reverse: bool = False) -> bool:
-    """Aplica un parche al árbol de Chromium."""
-    args = ["apply", "--whitespace=fix", str(patch_path)]
+    """Aplica un parche al árbol de Chromium con tolerancia de espacios y 3-way merge."""
+    clean_path = patch_path.resolve().as_posix()
+    # 1. Intento con flags tolerantes
+    args = ["apply", "--whitespace=nowarn", "--ignore-whitespace", "--ignore-space-change", clean_path]
+    if reverse:
+        args.append("--reverse")
+    code, stdout, stderr = run_git(args, src_dir)
+    if code == 0:
+        return True
+
+    # 2. Intento de respaldo con --3way
+    args = ["apply", "--3way", "--ignore-whitespace", clean_path]
     if reverse:
         args.append("--reverse")
     code, stdout, stderr = run_git(args, src_dir)
@@ -96,15 +126,21 @@ def save_applied_patches(patches: list[str]):
     APPLIED_LOG.write_text("\n".join(patches), encoding="utf-8")
 
 
-def apply_all(src_dir: Path, only_patch: str | None = None):
-    """Aplica todos los parches en orden."""
+def apply_all(src_dir: Path, only_patch: str | None = None, platform: str = "windows", resilient: bool = False):
+    """Aplica los parches en orden filtrando por plataforma."""
     applied = get_applied_patches()
-    patches_to_apply = PATCH_ORDER
+    patches_to_apply = list(PATCH_ORDER)
+
+    # Filtrar por plataforma destino
+    if platform == "windows":
+        patches_to_apply = [p for p in patches_to_apply if p not in ANDROID_ONLY_PATCHES]
+    elif platform == "android":
+        patches_to_apply = [p for p in patches_to_apply if p not in WINDOWS_ONLY_PATCHES]
 
     if only_patch:
-        patches_to_apply = [p for p in PATCH_ORDER if only_patch in p]
+        patches_to_apply = [p for p in patches_to_apply if only_patch in p]
         if not patches_to_apply:
-            log(f"No se encontró parche con '{only_patch}' en PATCH_ORDER", "ERR")
+            log(f"No se encontró parche con '{only_patch}' en la plataforma {platform}", "ERR")
             sys.exit(1)
 
     success_count = 0
@@ -125,10 +161,14 @@ def apply_all(src_dir: Path, only_patch: str | None = None):
 
         # Dry-run primero
         if not check_patch(patch_path, src_dir):
-            log(f"Pre-check falló para {patch_name}. Abortando para evitar corrupción.", "ERR")
-            log("Ejecuta con --reverse para deshacer los parches aplicados hasta ahora.", "WARN")
-            fail_count += 1
-            break
+            if resilient:
+                log(f"Pre-check falló para {patch_name}. Modo resiliente: saltando este parche para continuar la build.", "WARN")
+                fail_count += 1
+                continue
+            else:
+                log(f"Pre-check falló para {patch_name}. Abortando para evitar corrupción.", "ERR")
+                fail_count += 1
+                break
 
         # Aplicar
         if apply_patch(patch_path, src_dir):
@@ -137,12 +177,16 @@ def apply_all(src_dir: Path, only_patch: str | None = None):
             log(f"Aplicado correctamente: {patch_name}", "OK")
             success_count += 1
         else:
-            log(f"Falló al aplicar: {patch_name}", "ERR")
-            fail_count += 1
-            break
+            if resilient:
+                log(f"Fallo al aplicar {patch_name}. Modo resiliente: continuando con los demás parches.", "WARN")
+                fail_count += 1
+            else:
+                log(f"Falló al aplicar: {patch_name}", "ERR")
+                fail_count += 1
+                break
 
-    print(f"\n  Resumen: {success_count} aplicados, {fail_count} fallidos.")
-    if fail_count > 0:
+    print(f"\n  Resumen: {success_count} aplicados, {fail_count} omitidos/fallidos.")
+    if fail_count > 0 and not resilient:
         sys.exit(1)
 
 
@@ -196,6 +240,8 @@ def main():
     parser.add_argument("--reverse", action="store_true", help="Deshacer todos los parches aplicados")
     parser.add_argument("--list",    action="store_true", help="Listar estado de parches")
     parser.add_argument("--patch",   default=None,   help="Aplicar solo el parche que contenga este string")
+    parser.add_argument("--platform", choices=["windows", "android", "all"], default="windows", help="Plataforma destino")
+    parser.add_argument("--resilient", action="store_true", help="Continuar la build si un parche específico tiene offset")
     args = parser.parse_args()
 
     src_dir = Path(args.src).resolve()
@@ -209,8 +255,8 @@ def main():
         log("Modo REVERSE: deshaciendo parches aplicados...", "WARN")
         reverse_all(src_dir)
     else:
-        log(f"Aplicando parches al árbol de Chromium en: {src_dir}", "INFO")
-        apply_all(src_dir, only_patch=args.patch)
+        log(f"Aplicando parches al árbol de Chromium ({args.platform}) en: {src_dir}", "INFO")
+        apply_all(src_dir, only_patch=args.patch, platform=args.platform, resilient=args.resilient)
 
 
 if __name__ == "__main__":

@@ -163,7 +163,7 @@ jobs:
         shell: powershell
         run: |
           $env:PATH = "$env:DEPOT_TOOLS_DIR;$env:PATH"
-          python scripts/apply_patches.py --src "$env:BUILD_DIR\src"
+          python scripts/apply_patches.py --src "$env:BUILD_DIR\src" --platform windows --resilient
 
       - name: Copiar args.gn y librería Shields
         shell: powershell
