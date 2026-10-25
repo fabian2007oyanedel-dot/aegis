@@ -33,6 +33,7 @@ PATCH_ORDER = [
     "011-android-battery-saver.patch",
     "012-anti-fingerprinting.patch",
     "013-webrtc-leak-prevention.patch",
+    "014-extreme-resource-optimization.patch",
 ]
 
 PATCHES_DIR = Path(__file__).parent.parent / "patches"

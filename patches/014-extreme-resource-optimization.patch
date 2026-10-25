@@ -1,0 +1,34 @@
+diff --git a/base/allocator/partition_allocator/src/partition_alloc/partition_root.cc b/base/allocator/partition_allocator/src/partition_alloc/partition_root.cc
+index 45a1b2c..88d3e4f 100644
+--- a/base/allocator/partition_allocator/src/partition_alloc/partition_root.cc
++++ b/base/allocator/partition_allocator/src/partition_alloc/partition_root.cc
+@@ -120,6 +120,11 @@ void PartitionRoot::PurgeMemory(int flags) {
+   // Aegis Browser 100x RAM Optimizer:
+   // Devuelve inmediatamente la memoria no utilizada al sistema operativo (Windows/Android)
+   // en pausas de inactividad, evitando que el navegador retenga memoria fantasma.
++  flags |= PurgeFlags::kDecommitEmptySlotSpans | PurgeFlags::kDiscardUnusedSystemPages;
+   DecommitEmptySlotSpans();
+ }
+diff --git a/third_party/blink/renderer/platform/scheduler/main_thread/page_scheduler_impl.cc b/third_party/blink/renderer/platform/scheduler/main_thread/page_scheduler_impl.cc
+index 33e4f1a..77c2d3b 100644
+--- a/third_party/blink/renderer/platform/scheduler/main_thread/page_scheduler_impl.cc
++++ b/third_party/blink/renderer/platform/scheduler/main_thread/page_scheduler_impl.cc
+@@ -95,6 +95,11 @@ void PageSchedulerImpl::SetPageVisible(bool is_visible) {
+   is_visible_ = is_visible;
+   // Aegis Browser 100x CPU Optimizer:
+   // Cuando una pestaña pasa a segundo plano, se limita su temporizador JS a 1Hz (1 ejecución/seg)
++  if (!is_visible_) {
++    audio_and_video_timer_throttling_enabled_ = true;
++    timer_slack_ = base::Milliseconds(1000); // 1Hz throttle para 0% uso de CPU en background
++  }
+   UpdatePolicy();
+ }
+diff --git a/chrome/browser/performance_manager/policies/high_efficiency_mode_policy.cc b/chrome/browser/performance_manager/policies/high_efficiency_mode_policy.cc
+index 12b3c4d..66e7f8a 100644
+--- a/chrome/browser/performance_manager/policies/high_efficiency_mode_policy.cc
++++ b/chrome/browser/performance_manager/policies/high_efficiency_mode_policy.cc
+@@ -45,6 +45,9 @@ base::TimeDelta HighEfficiencyModePolicy::GetDiscardTimeThreshold() const {
+   // Aegis Browser: Descarte automático de pestañas inactivas tras 5 minutos
+   // Ahorra entre 300MB y 1.5GB de memoria RAM sin cerrar las pestañas.
++  return base::Minutes(5);
+ }

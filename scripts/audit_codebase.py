@@ -15,16 +15,19 @@ import subprocess
 import sys
 from pathlib import Path
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 SCRIPTS_DIR = Path(__file__).parent
 
 def run_check(title: str, cmd: list[str]) -> bool:
-    print(f"\n▶ Ejecutando {title}...")
+    print(f"\n[>] Ejecutando {title}...")
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode == 0:
-        print(f"  ✅ {title}: PASÓ")
+        print(f"  [OK] {title}: PASO")
         return True
     else:
-        print(f"  ❌ {title}: FALLÓ")
+        print(f"  [FALLO] {title}: FALLO")
         print(result.stdout)
         print(result.stderr)
         return False
@@ -51,13 +54,16 @@ def main():
     # 5. Auditoría Fase 6
     results.append(run_check("Auditoría Fase 6 (Anti-Fingerprinting & Release v1.0)", [sys.executable, str(SCRIPTS_DIR / "verify_phase6.py")]))
 
+    # 6. Auditoría Optimizaciones 100x & Supercharged UI
+    results.append(run_check("Auditoría Ultra Rendimiento 100x & UI Completa", [sys.executable, str(SCRIPTS_DIR / "verify_ultra_enhancements.py")]))
+
     print("\n" + "=" * 60)
     if all(results):
-        print("  🎉 AUDITORÍA COMPLETA: 0 ERRORES ENCONTRADOS")
+        print("  [EXITO] AUDITORIA COMPLETA: 0 ERRORES ENCONTRADOS")
         print("=" * 60)
         sys.exit(0)
     else:
-        print("  ⚠️ AUDITORÍA: ALGUNAS COMPROBACIONES FALLARON")
+        print("  [ALERTA] AUDITORIA: ALGUNAS COMPROBACIONES FALLARON")
         print("=" * 60)
         sys.exit(1)
 

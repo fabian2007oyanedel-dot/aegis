@@ -1,104 +1,295 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="theme-cyber">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nueva Pestaña — Aegis Browser</title>
+  <title>Aegis Browser — Rendimiento Puro</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Barra Superior -->
-  <header class="top-bar">
-    <div class="shields-badge" title="Aegis Shields activo: bloqueando rastreadores a nivel de socket">
-      <div class="shield-dot"></div>
+  <!-- Barra Superior de Control -->
+  <header class="top-nav">
+    <button id="open-shields-btn" class="shields-pill-btn" title="Ver panel de Aegis Shields">
+      <div class="shield-pulse-dot"></div>
       <span>Aegis Shields:</span>
-      <span id="trackers-count" class="shields-stat-num">0</span>
-      <span>bloqueados</span>
-    </div>
+      <span id="nav-trackers-stat" style="color: var(--accent); font-weight: 700;">142</span>
+      <span style="color: var(--text-muted); font-size: 0.75rem;">bloqueados</span>
+    </button>
 
-    <div class="actions-bar">
-      <button id="theme-toggle" class="icon-btn" title="Alternar tema oscuro / claro">
-        🌓
-      </button>
-      <button id="open-settings" class="icon-btn" title="Configuración de Aegis">
-        ⚙️
-      </button>
+    <div class="nav-actions">
+      <button id="toggle-bookmarks-btn" class="nav-btn" title="Mostrar/ocultar marcadores">🔖</button>
+      <button id="toggle-notes-btn" class="nav-btn" title="Bloc de notas rápido privado">📝</button>
+      <select id="theme-selector-dropdown" class="select-styled" title="Cambiar tema visual">
+        <option value="cyber">Cyber Dark</option>
+        <option value="midnight">Midnight Blue</option>
+        <option value="oled">Pure OLED Black</option>
+        <option value="light">Clean Snow Light</option>
+      </select>
+      <button id="open-settings-btn" class="nav-btn" title="Configuración de Aegis">⚙️</button>
     </div>
   </header>
 
-  <!-- Núcleo Central -->
-  <main class="main-container">
-    <div class="brand-section">
-      <img src="../assets/aegis-logo.svg" alt="Aegis Logo" class="brand-logo">
-      <h1 class="brand-title">Aegis</h1>
-      <p class="brand-subtitle">Navegador web de alto rendimiento y privacidad nativa</p>
+  <!-- Barra Rápida de Marcadores -->
+  <nav id="bookmarks-bar" class="bookmarks-bar">
+    <span style="font-size: 0.8rem; color: var(--text-muted); margin-right: 0.25rem;">Favoritos:</span>
+    <a href="https://github.com" class="bookmark-item">🐙 GitHub</a>
+    <a href="https://duckduckgo.com" class="bookmark-item">🦆 DuckDuckGo</a>
+    <a href="https://wikipedia.org" class="bookmark-item">📚 Wikipedia</a>
+    <a href="https://news.ycombinator.com" class="bookmark-item">⚡ Hacker News</a>
+    <a href="https://reddit.com" class="bookmark-item">🤖 Reddit</a>
+    <button id="add-bookmark-btn" class="add-bookmark-btn">+ Marcador</button>
+  </nav>
+
+  <!-- Núcleo Central Hero -->
+  <main class="hero-hub">
+    <!-- Reloj Digital y Fecha -->
+    <div class="clock-display">
+      <div id="live-clock" class="clock-time">12:00</div>
+      <div id="live-date" class="clock-date">Cargando fecha...</div>
     </div>
 
-    <!-- Barra de Búsqueda -->
-    <div class="search-wrapper">
-      <form id="search-form" class="search-box">
+    <!-- Marca Oficial -->
+    <div class="brand-row">
+      <img src="../assets/aegis-logo.svg" alt="Aegis Logo" class="aegis-badge-logo">
+      <h1 class="brand-text-title">Aegis</h1>
+    </div>
+
+    <!-- Barra de Búsqueda Inteligente (Omnibox) -->
+    <div class="omnibox-container">
+      <form id="omnibox-form" class="omnibox-form">
         <input 
           type="text" 
-          id="search-input" 
-          class="search-input" 
-          placeholder="Buscar con DuckDuckGo o escribir URL..." 
+          id="omnibox-input" 
+          class="omnibox-input" 
+          placeholder="Buscar con DuckDuckGo o ingresar URL..." 
           autocomplete="off"
           autofocus
         >
-        <button type="button" id="engine-selector" class="engine-selector" title="Clic para cambiar motor">
+        <button type="button" id="engine-chip" class="engine-pill" title="Clic para cambiar buscador">
           DuckDuckGo (:d)
         </button>
       </form>
+
+      <!-- Chips de atajos rápidos -->
+      <div class="search-chips">
+        <button class="chip-btn" data-prefix=":d">DuckDuckGo :d</button>
+        <button class="chip-btn" data-prefix=":b">Brave :b</button>
+        <button class="chip-btn" data-prefix=":w">Wikipedia :w</button>
+        <button class="chip-btn" data-prefix=":gh">GitHub :gh</button>
+        <button class="chip-btn" data-prefix=":yt">YouTube :yt</button>
+      </div>
     </div>
 
     <!-- Cuadrícula de Accesos Directos -->
-    <section class="shortcuts-section">
+    <section class="shortcuts-grid-wrap">
       <div id="shortcuts-grid" class="shortcuts-grid">
-        <!-- Generado dinámicamente por app.js -->
+        <!-- Renderizado dinámico desde app.js -->
       </div>
     </section>
   </main>
 
-  <!-- Modal de Configuración Rápida -->
-  <div id="settings-modal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 class="modal-title">Configuración de Aegis</h2>
-        <button id="close-settings" class="icon-btn" style="width: 32px; height: 32px;">✕</button>
+  <!-- Drawer Lateral: Bloc de Notas Privado -->
+  <aside id="notes-drawer" class="drawer">
+    <div class="drawer-header">
+      <h3 style="font-size: 1.1rem; font-weight: 700;">📝 Notas Privadas</h3>
+      <button id="close-notes-btn" class="nav-btn" style="width: 30px; height: 30px;">✕</button>
+    </div>
+    <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+      Tus notas se guardan de forma 100% local y cifrada en tu navegador.
+    </p>
+    <textarea id="scratchpad-text" class="scratchpad-textarea" placeholder="Escribe notas, enlaces o recordatorios aquí..."></textarea>
+  </aside>
+
+  <!-- Modal: Inspector Aegis Shields -->
+  <div id="shields-modal" class="modal-overlay">
+    <div class="hub-window" style="max-width: 520px;">
+      <div class="hub-header">
+        <div class="hub-title">🛡️ Aegis Shields — Inspector Nativo</div>
+        <button class="nav-btn close-modal-btn" style="width: 32px; height: 32px;">✕</button>
+      </div>
+      <div class="hub-body" style="gap: 1rem; display: flex; flex-direction: column;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; text-align: center;">
+          <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem;">
+            <div id="stat-ads-blocked" style="font-size: 1.75rem; font-weight: 800; color: var(--accent);">284</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Anuncios y Trackers</div>
+          </div>
+          <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem;">
+            <div id="stat-bandwidth-saved" style="font-size: 1.75rem; font-weight: 800; color: var(--shield-green);">52.4 MB</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Ancho de Banda Ahorrado</div>
+          </div>
+        </div>
+
+        <div class="setting-card">
+          <div class="setting-meta">
+            <span class="setting-name">Bloqueo de Rastreadores a Nivel Socket</span>
+            <span class="setting-desc">Intercepta y aborta peticiones en microsegundos con adblock-rust</span>
+          </div>
+          <label class="switch"><input type="checkbox" id="shield-network-block" checked><span class="slider"></span></label>
+        </div>
+
+        <div class="setting-card">
+          <div class="setting-meta">
+            <span class="setting-name">Filtrado Cosmético de Anuncios</span>
+            <span class="setting-desc">Oculta los espacios en blanco donde antes había publicidad</span>
+          </div>
+          <label class="switch"><input type="checkbox" id="shield-cosmetic" checked><span class="slider"></span></label>
+        </div>
+
+        <div class="setting-card">
+          <div class="setting-meta">
+            <span class="setting-name">Bloqueo de Avisos de Cookies Molestos</span>
+            <span class="setting-desc">Elimina automáticamente los banners de consentimiento GDPR</span>
+          </div>
+          <label class="switch"><input type="checkbox" id="shield-cookie-banners" checked><span class="slider"></span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Centro de Configuración & Funciones (100x Features) -->
+  <div id="settings-modal" class="modal-overlay">
+    <div class="hub-window">
+      <div class="hub-header">
+        <div class="hub-title">⚙️ Configuración & Herramientas de Aegis</div>
+        <button class="nav-btn close-modal-btn" style="width: 32px; height: 32px;">✕</button>
       </div>
 
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Pestañas Verticales</span>
-          <span class="setting-desc">Alternar entre pestañas horizontales clásicas y panel vertical</span>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="vertical-tabs-toggle">
-          <span class="slider"></span>
-        </label>
-      </div>
+      <!-- Pestañas de Navegación del Hub -->
+      <nav class="hub-nav-tabs">
+        <button class="tab-btn active" data-tab="tab-performance">⚡ Rendimiento & RAM</button>
+        <button class="tab-btn" data-tab="tab-appearance">🎨 Apariencia & Pestañas</button>
+        <button class="tab-btn" data-tab="tab-passwords">🔑 Contraseñas DPAPI</button>
+        <button class="tab-btn" data-tab="tab-history">📜 Historial & Descargas</button>
+        <button class="tab-btn" data-tab="tab-about">ℹ️ Acerca de</button>
+      </nav>
 
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Protección Aegis Shields</span>
-          <span class="setting-desc">Filtrado nativo de red en Rust (Brave Shields)</span>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="shields-toggle" checked disabled>
-          <span class="slider"></span>
-        </label>
-      </div>
+      <div class="hub-body">
+        <!-- TAB 1: RENDIMIENTO EXTREMO (100X) -->
+        <div id="tab-performance" class="tab-pane active">
+          <div class="setting-card">
+            <div class="setting-meta">
+              <span class="setting-name">Descarte Automático de Pestañas Inactivas (Memory Saver)</span>
+              <span class="setting-desc">Libera entre 35% y 50% de RAM suspendiendo pestañas sin uso</span>
+            </div>
+            <select id="discard-timeout-select" class="select-styled">
+              <option value="2">Tras 2 minutos (Ultra Ahorro)</option>
+              <option value="5" selected>Tras 5 minutos (Recomendado)</option>
+              <option value="10">Tras 10 minutos</option>
+              <option value="0">Desactivado</option>
+            </select>
+          </div>
 
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Descarte de Pestañas (RAM Saver)</span>
-          <span class="setting-desc">Suspende pestañas inactivas para ahorrar 35% de memoria</span>
+          <div class="setting-card">
+            <div class="setting-meta">
+              <span class="setting-name">Purga Agresiva de Memoria PartitionAlloc</span>
+              <span class="setting-desc">Devuelve la memoria libre al SO (Windows/Android) en pausas de inactividad</span>
+            </div>
+            <label class="switch"><input type="checkbox" id="perf-purge-memory" checked><span class="slider"></span></label>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-meta">
+              <span class="setting-name">Límite de CPU en Segundo Plano (1Hz Throttle)</span>
+              <span class="setting-desc">Detiene los bucles JS parásitos en pestañas ocultas (0% CPU background)</span>
+            </div>
+            <label class="switch"><input type="checkbox" id="perf-throttle-cpu" checked><span class="slider"></span></label>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-meta">
+              <span class="setting-name">Aceleración por Hardware GPU y Rasterización Vulkan/D3D11</span>
+              <span class="setting-desc">Delega la decodificación de video a la GPU para que la CPU duerma</span>
+            </div>
+            <label class="switch"><input type="checkbox" id="perf-hardware-accel" checked><span class="slider"></span></label>
+          </div>
         </div>
-        <label class="switch">
-          <input type="checkbox" id="ram-saver-toggle" checked>
-          <span class="slider"></span>
-        </label>
+
+        <!-- TAB 2: APARIENCIA & PESTAÑAS -->
+        <div id="tab-appearance" class="tab-pane">
+          <div class="setting-card">
+            <div class="setting-meta">
+              <span class="setting-name">Disposición de Pestañas</span>
+              <span class="setting-desc">Alternar entre pestañas clásicas superiores o panel vertical plegable</span>
+            </div>
+            <select id="tabs-layout-select" class="select-styled">
+              <option value="horizontal" selected>Horizontal Clásico (Superior)</option>
+              <option value="vertical">Pestañas Verticales Plegables</option>
+            </select>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-meta">
+              <span class="setting-name">Tema Visual Principal</span>
+              <span class="setting-desc">Elige la estética que mejor se adapte a tu pantalla</span>
+            </div>
+            <select id="theme-modal-select" class="select-styled">
+              <option value="cyber">Cyber Dark (Cian & Azul)</option>
+              <option value="midnight">Midnight Blue (Púrpura Profundo)</option>
+              <option value="oled">Pure OLED Black (#000000)</option>
+              <option value="light">Clean Snow Light</option>
+            </select>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-meta">
+              <span class="setting-name">Mostrar Barra de Marcadores</span>
+              <span class="setting-desc">Acceso rápido a tus páginas favoritas bajo la barra de direcciones</span>
+            </div>
+            <label class="switch"><input type="checkbox" id="show-bookmarks-toggle" checked><span class="slider"></span></label>
+          </div>
+        </div>
+
+        <!-- TAB 3: GESTOR DE CONTRASEÑAS CIFRADO LOCAL -->
+        <div id="tab-passwords" class="tab-pane">
+          <div class="password-box">
+            <span style="font-weight: 700; font-size: 1rem;">🔐 Generador de Contraseñas de Alta Entropía</span>
+            <div class="generated-pass-row">
+              <input type="text" id="generated-password-output" class="pass-display" readonly value="Cargando...">
+              <button id="copy-pass-btn" class="action-btn">Copiar</button>
+              <button id="regen-pass-btn" class="nav-btn" title="Generar otra">🔄</button>
+            </div>
+            <div style="display: flex; gap: 1.5rem; align-items: center; font-size: 0.85rem; color: var(--text-muted);">
+              <label>Longitud: <span id="pass-length-val">20</span>
+                <input type="range" id="pass-length-slider" min="12" max="48" value="20" style="vertical-align: middle;">
+              </label>
+              <label><input type="checkbox" id="pass-symbols-check" checked> Símbolos (!@#$)</label>
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-meta">
+              <span class="setting-name">Cifrado de Credenciales con Clave del Sistema (DPAPI)</span>
+              <span class="setting-desc">Tus contraseñas se cifran con la clave de tu cuenta de Windows/Android sin cuentas en la nube</span>
+            </div>
+            <span style="color: var(--shield-green); font-size: 0.85rem; font-weight: 700;">ACTIVO (DPAPI Local)</span>
+          </div>
+        </div>
+
+        <!-- TAB 4: HISTORIAL & DESCARGAS -->
+        <div id="tab-history" class="tab-pane">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <input type="text" id="history-search-input" class="select-styled" style="width: 70%;" placeholder="Buscar en historial local...">
+            <button id="clear-history-btn" class="action-btn" style="background: var(--danger); color: white;">Borrar Todo</button>
+          </div>
+          <div id="history-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem;">
+            <!-- Elementos de historial generados dinámicamente -->
+          </div>
+        </div>
+
+        <!-- TAB 5: ACERCA DE -->
+        <div id="tab-about" class="tab-pane">
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <img src="../assets/aegis-logo.svg" style="width: 64px; height: 64px;" alt="Aegis">
+            <div>
+              <h2 style="font-size: 1.4rem; font-weight: 800;">Aegis Browser v1.0.0</h2>
+              <p style="color: var(--text-muted); font-size: 0.85rem;">Motor Brave Shields en Rust • Base Chromium De-Googled</p>
+            </div>
+          </div>
+          <p style="font-size: 0.9rem; line-height: 1.6; color: var(--text-muted); margin-top: 1rem;">
+            Aegis Browser está diseñado para ofrecer la máxima velocidad de respuesta de la industria con un consumo de recursos radicalmente menor. Sin cripto, sin telemetría corporativa y con privacidad nativa en cada byte.
+          </p>
+        </div>
       </div>
     </div>
   </div>
