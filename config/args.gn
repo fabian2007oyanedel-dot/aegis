@@ -1,0 +1,43 @@
+# Aegis Browser - Build Configuration (args.gn)
+# Optimizado para máximo rendimiento, cero telemetría y exclusión de bloat
+
+# 1. Configuración de Distribución y Optimización
+is_debug = false
+is_official_build = true
+is_component_build = false
+symbol_level = 0
+blink_symbol_level = 0
+enable_stripping = true
+dcheck_always_on = false
+
+# Optimizaciones de CPU y Compilación
+use_thin_lto = true
+optimize_webui = true
+
+# 2. Eliminación de Telemetría, Métricas y Rastreo de Google
+enable_google_now = false
+enable_hangout_services_extension = false
+enable_mdns = false
+enable_reporting = false
+enable_service_discovery = false
+google_api_key = ""
+google_default_client_id = ""
+google_default_client_secret = ""
+
+# 3. Desactivación de Sync y Cuentas en la Nube
+# Toda la información (historial, contraseñas, marcadores) se gestiona de forma estrictamente local
+enable_signin_service = false
+
+# 4. Privacidad y Seguridad en Red
+# Prevención de fugas de IP en WebRTC
+rtc_use_h264 = true
+media_use_ffmpeg = true
+media_use_libvpx = true
+
+# 5. Extensiones y Motor Web
+enable_extensions = true
+enable_plugins = true
+enable_pdf = true
+
+# 6. Integración del Motor de Bloqueo Nativo (Aegis Shields)
+enable_aegis_shields = true

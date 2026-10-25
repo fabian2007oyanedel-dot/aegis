@@ -1,0 +1,22 @@
+diff --git a/chrome/browser/ui/views/tabs/tab_strip.cc b/chrome/browser/ui/views/tabs/tab_strip.cc
+index 45a1b2c..89d3e4f 100644
+--- a/chrome/browser/ui/views/tabs/tab_strip.cc
++++ b/chrome/browser/ui/views/tabs/tab_strip.cc
+@@ -20,6 +20,10 @@
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/common/pref_names.h"
+ 
++// Aegis: Soporte para alternar diseño de pestañas (Horizontal clásico por defecto vs Vertical)
++namespace aegis {
++const char kVerticalTabsEnabledPref[] = "aegis.tabs.vertical_enabled";
++}
++
+ namespace {
+ // Configuración dinámica de layout según la preferencia en aegis://settings
+ bool IsVerticalTabsActive(Profile* profile) {
++  if (!profile || !profile->GetPrefs()) {
++    return false; // Por defecto: Horizontal clásico
++  }
++  return profile->GetPrefs()->GetBoolean(aegis::kVerticalTabsEnabledPref);
+ }
+ }  // namespace

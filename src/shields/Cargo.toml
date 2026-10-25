@@ -1,0 +1,20 @@
+[package]
+name = "aegis_shields"
+version = "0.1.0"
+edition = "2021"
+description = "Motor de filtrado de red para Aegis Browser basado en brave/adblock-rust con enlaces FFI para C++"
+
+[lib]
+name = "aegis_shields"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+adblock = { git = "https://github.com/brave/adblock-rust", branch = "master" }
+libc = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

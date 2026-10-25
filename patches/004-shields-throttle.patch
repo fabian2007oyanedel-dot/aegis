@@ -1,0 +1,43 @@
+diff --git a/chrome/browser/net/aegis_url_loader_throttle.cc b/chrome/browser/net/aegis_url_loader_throttle.cc
+new file mode 100644
+index 0000000..7c93a12
+--- /dev/null
++++ b/chrome/browser/net/aegis_url_loader_throttle.cc
+@@ -0,0 +1,41 @@
++#include "chrome/browser/net/aegis_url_loader_throttle.h"
++#include "aegis_shields.h"
++#include "net/base/net_errors.h"
++
++namespace aegis {
++
++AegisURLLoaderThrottle::AegisURLLoaderThrottle(AegisShieldsEngine* engine)
++    : engine_(engine) {}
++
++AegisURLLoaderThrottle::~AegisURLLoaderThrottle() = default;
++
++void AegisURLLoaderThrottle::WillStartRequest(
++    network::ResourceRequest* request,
++    bool* defer) {
++  if (!engine_ || !request) {
++    return;
++  }
++
++  const std::string url = request->url.spec();
++  const std::string source_url = request->site_for_cookies.RepresentativeUrl().spec();
++  const std::string request_type = RequestDestinationToString(request->destination);
++
++  // Verificación en microsegundos con el motor adblock-rust de Brave
++  bool should_block = aegis_shields_should_block(
++      engine_,
++      url.c_str(),
++      source_url.c_str(),
++      request_type.c_str()
++  );
++
++  if (should_block) {
++    // Cancela la petición antes de abrir el socket de red
++    delegate_->CancelWithError(net::ERR_BLOCKED_BY_CLIENT, "Aegis Shields Blocker");
++  }
++}
++
++}  // namespace aegis
