@@ -1,29 +1,18 @@
 # ==============================================================================
-# Aegis Browser - Lanzador Standalone Ultra Ligero (PowerShell)
+# Aegis Browser - Lanzador de Aplicación Nativa (PowerShell)
 # ==============================================================================
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$NtpPath = (Join-Path $ScriptDir "src\ui\ntp\index.html").Replace("\", "/")
-$ProfileDir = Join-Path $env:TEMP "aegis_isolated_profile"
+$AppScript = Join-Path $ScriptDir "src\desktop\aegis_app.py"
+$PythonExe = "C:\Users\PC\AppData\Local\Python\bin\pythonw.exe"
 
-Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host "                     INICIANDO AEGIS BROWSER v1.2.0" -ForegroundColor White
-Write-Host "            (Navegador Seguro, Ultra Optimizado y Sin Telemetria)" -ForegroundColor DarkGray
-Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host ""
-
-$EdgePath = (Get-Command msedge.exe -ErrorAction SilentlyContinue)?.Source
-$ChromePath = (Get-Command chrome.exe -ErrorAction SilentlyContinue)?.Source
-
-if ($EdgePath) {
-    Write-Host "[>] Iniciando Aegis Browser en modo Standalone (Chromium Engine)..." -ForegroundColor Green
-    Start-Process msedge.exe -ArgumentList "--app=`"file:///$NtpPath`"", "--user-data-dir=`"$ProfileDir`"", "--no-first-run", "--disable-default-apps"
-} elseif ($ChromePath) {
-    Write-Host "[>] Iniciando Aegis Browser en modo Standalone (Chrome Engine)..." -ForegroundColor Green
-    Start-Process chrome.exe -ArgumentList "--app=`"file:///$NtpPath`"", "--user-data-dir=`"$ProfileDir`"", "--no-first-run"
-} else {
-    Write-Host "[>] Abriendo Aegis Browser en el navegador predeterminado..." -ForegroundColor Yellow
-    Start-Process "file:///$NtpPath"
+if (-not (Test-Path $PythonExe)) {
+    $PythonExe = (Get-Command pythonw.exe -ErrorAction SilentlyContinue)?.Source
+    if (-not $PythonExe) {
+        $PythonExe = "C:\Users\PC\AppData\Local\Python\bin\python.exe"
+    }
 }
 
-Write-Host "[OK] Aegis Browser ejecutandose con exito." -ForegroundColor Cyan
+Write-Host "[>] Iniciando Aegis Browser Nativo (Chromium + Rust Shields)..." -ForegroundColor Cyan
+Start-Process $PythonExe -ArgumentList "`"$AppScript`"" -WorkingDirectory $ScriptDir
+Write-Host "[OK] Aegis Browser ejecutandose." -ForegroundColor Green
