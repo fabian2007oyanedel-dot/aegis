@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+    paths:
+      - 'src/shields/**'
+      - '.github/workflows/build-android.yml'
 
 jobs:
   build-android:
@@ -13,10 +16,13 @@ jobs:
       - name: Checkout Código Fuente
         uses: actions/checkout@v4
 
-      - name: Configurar Rust para Android NDK
+      - name: Configurar Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
+
+      - name: Instalar cargo-ndk
+        run: cargo install cargo-ndk
 
       - name: Configurar Java / Android SDK
         uses: actions/setup-java@v4
@@ -24,13 +30,14 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Compilar Shields para Android (aarch64)
+      - name: Compilar Shields para Android ARM64
         working-directory: src/shields
         run: |
-          cargo build --target aarch64-linux-android --release
+          cargo ndk -t arm64-v8a build --release
 
-      - name: Publicar APK de Aegis Browser
+      - name: Subir Binario Shields Android
         uses: actions/upload-artifact@v4
         with:
-          name: aegis-browser-android-arm64
-          path: README.md
+          name: aegis-shields-android-arm64
+          path: src/shields/target/aarch64-linux-android/release/libaegis_shields.a
+          retention-days: 14

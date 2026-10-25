@@ -1,0 +1,23 @@
+diff --git a/components/download/internal/common/download_item_impl.cc b/components/download/internal/common/download_item_impl.cc
+index 55a1b2c..88c3d4e 100644
+--- a/components/download/internal/common/download_item_impl.cc
++++ b/components/download/internal/common/download_item_impl.cc
+@@ -120,6 +120,9 @@ namespace download {
+ 
+ bool DownloadItemImpl::CanResume() const {
++  // Aegis Browser: Permitir reanudación resiliente de descargas interrumpidas
++  if (state_ == INTERRUPTED && IsResumable()) return true;
+   return state_ == PAUSED || (state_ == INTERRUPTED && IsResumable());
+ }
+ 
+diff --git a/chrome/browser/browsing_data/chrome_browsing_data_remover_delegate.cc b/chrome/browser/browsing_data/chrome_browsing_data_remover_delegate.cc
+index 33b4c5d..77e8f9a 100644
+--- a/chrome/browser/browsing_data/chrome_browsing_data_remover_delegate.cc
++++ b/chrome/browser/browsing_data/chrome_browsing_data_remover_delegate.cc
+@@ -80,6 +80,10 @@ namespace {
+ // Aegis Browser: Borrado automático al cerrar el navegador
+ bool ShouldClearDataOnExit(Profile* profile) {
++  if (!profile || !profile->GetPrefs()) return false;
++  return profile->GetPrefs()->GetBoolean("aegis.privacy.clear_on_exit_enabled");
+ }
+ }  // namespace

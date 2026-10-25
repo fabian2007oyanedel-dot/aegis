@@ -19,6 +19,10 @@ pub extern "C" fn aegis_shields_create() -> *mut AegisShieldsEngine {
     }))
 }
 
+/// # Safety
+///
+/// `engine` debe ser un puntero válido obtenido previamente mediante `aegis_shields_create()`,
+/// o ser un puntero nulo (en cuyo caso no realiza ninguna operación).
 #[no_mangle]
 pub unsafe extern "C" fn aegis_shields_destroy(engine: *mut AegisShieldsEngine) {
     if !engine.is_null() {
@@ -26,6 +30,10 @@ pub unsafe extern "C" fn aegis_shields_destroy(engine: *mut AegisShieldsEngine) 
     }
 }
 
+/// # Safety
+///
+/// `engine` debe apuntar a una instancia válida de `AegisShieldsEngine`.
+/// `rules_text` debe ser una cadena C válida terminada en byte nulo (`\0`).
 #[no_mangle]
 pub unsafe extern "C" fn aegis_shields_load_rules(
     engine: *mut AegisShieldsEngine,
@@ -52,6 +60,11 @@ pub unsafe extern "C" fn aegis_shields_load_rules(
     }
 }
 
+/// # Safety
+///
+/// `engine` debe ser un puntero válido y no nulo.
+/// `url` debe ser una cadena C válida terminada en byte nulo.
+/// `source_url` y `request_type` pueden ser nulos o cadenas C válidas.
 #[no_mangle]
 pub unsafe extern "C" fn aegis_shields_should_block(
     engine: *mut AegisShieldsEngine,
@@ -93,6 +106,9 @@ pub unsafe extern "C" fn aegis_shields_should_block(
     }
 }
 
+/// # Safety
+///
+/// `s` debe ser una cadena asignada previamente por Rust vía `CString::into_raw()`, o ser nula.
 #[no_mangle]
 pub unsafe extern "C" fn aegis_shields_free_string(s: *mut c_char) {
     if !s.is_null() {

@@ -7,13 +7,29 @@
     "do_not_track_enabled": true,
     "block_third_party_cookies": true,
     "first_party_sets_enabled": false,
+    "dynamic_first_party_isolation": true,
     "webrtc_ip_handling_policy": "default_public_interface_only",
     "https_only_mode_enabled": true,
     "safe_browsing": {
       "enabled": false
     },
     "metrics_reporting_enabled": false,
-    "search_suggest_enabled": false
+    "search_suggest_enabled": false,
+    "clear_on_exit": {
+      "enabled": true,
+      "cookies": true,
+      "cache": true,
+      "history": false
+    }
+  },
+  "profile": {
+    "password_manager_enabled": true,
+    "password_manager_leak_detection": false,
+    "password_encryption": "system_local_dpapi"
+  },
+  "download": {
+    "prompt_for_download": true,
+    "resilient_resumption_enabled": true
   },
   "aegis": {
     "shields": {

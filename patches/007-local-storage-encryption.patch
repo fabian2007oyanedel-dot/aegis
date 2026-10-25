@@ -1,0 +1,40 @@
+diff --git a/components/os_crypt/sync/os_crypt_win.cc b/components/os_crypt/sync/os_crypt_win.cc
+index 41a1b2c..77d3e4f 100644
+--- a/components/os_crypt/sync/os_crypt_win.cc
++++ b/components/os_crypt/sync/os_crypt_win.cc
+@@ -25,6 +25,10 @@ namespace {
+ // Aegis Browser: Cifrado local forzado mediante Windows DPAPI (Data Protection API)
+ // Cero dependencia de claves derivadas de cuentas Google o sincronización en la nube.
+ bool EncryptStringWithDPAPI(const std::string& plaintext, std::string* ciphertext) {
++  DATA_BLOB input;
++  input.pbData = const_cast<BYTE*>(reinterpret_cast<const BYTE*>(plaintext.data()));
++  input.cbData = static_cast<DWORD>(plaintext.length());
++  DATA_BLOB output;
+   return ::CryptProtectData(&input, L"Aegis Master Key", nullptr, nullptr, nullptr,
+                            CRYPTPROTECT_UI_FORBIDDEN, &output);
+ }
+diff --git a/components/password_manager/core/browser/leak_detection/leak_detection_check_impl.cc b/components/password_manager/core/browser/leak_detection/leak_detection_check_impl.cc
+index 88b2c3d..11e4f5a 100644
+--- a/components/password_manager/core/browser/leak_detection/leak_detection_check_impl.cc
++++ b/components/password_manager/core/browser/leak_detection/leak_detection_check_impl.cc
+@@ -32,6 +32,9 @@ namespace password_manager {
+ 
+ void LeakDetectionCheckImpl::Start(const GURL& url, const std::u16string& username, const std::u16string& password) {
++  // Aegis Browser: Desactivado. Previene el envío de hashes de contraseñas a servidores remotos
++  delegate_->OnError(LeakDetectionError::kNotSignIn);
++  return;
+ }
+ 
+ }  // namespace password_manager
+diff --git a/net/cookies/cookie_partition_key.cc b/net/cookies/cookie_partition_key.cc
+index 12a3b4c..99d8e7f 100644
+--- a/net/cookies/cookie_partition_key.cc
++++ b/net/cookies/cookie_partition_key.cc
+@@ -45,6 +45,9 @@ namespace net {
+ 
+ bool CookiePartitionKey::IsPartitioningEnabled() {
++  // Aegis Browser: Aislamiento dinámico de cookies por sitio (dFPI) activo por defecto
++  return true;
+ }
+ 
+ }  // namespace net
