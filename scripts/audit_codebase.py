@@ -45,6 +45,9 @@ def main():
     # 3. Auditoría Fase 4
     results.append(run_check("Auditoría Fase 4 (Cifrado Local & Datos)", [sys.executable, str(SCRIPTS_DIR / "verify_phase4.py")]))
 
+    # 4. Auditoría Fase 5
+    results.append(run_check("Auditoría Fase 5 (Adaptación Android APK)", [sys.executable, str(SCRIPTS_DIR / "verify_phase5.py")]))
+
     print("\n" + "=" * 60)
     if all(results):
         print("  🎉 AUDITORÍA COMPLETA: 0 ERRORES ENCONTRADOS")

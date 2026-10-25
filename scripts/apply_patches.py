@@ -28,6 +28,9 @@ PATCH_ORDER = [
     "006-custom-ntp.patch",
     "007-local-storage-encryption.patch",
     "008-data-retention-clearing.patch",
+    "009-android-touch-ui.patch",
+    "010-android-keystore.patch",
+    "011-android-battery-saver.patch",
 ]
 
 PATCHES_DIR = Path(__file__).parent.parent / "patches"

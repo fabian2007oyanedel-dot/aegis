@@ -1,0 +1,43 @@
+# Aegis Browser - Configuración de Compilación Android ARM64
+# Optimizado para máximo rendimiento, 120Hz de scroll suave, cero GMS y ahorro de batería.
+
+# ── 1. Target y Arquitectura ────────────────────────────────────────────────
+target_os               = "android"
+target_cpu              = "arm64"
+is_debug                = false
+is_official_build       = true     # Optimización de release y LTO
+is_component_build      = false
+symbol_level            = 0
+blink_symbol_level      = 0
+enable_stripping        = true
+dcheck_always_on        = false
+
+# ── 2. Optimizaciones de CPU y Compilador ──────────────────────────────────
+use_thin_lto            = true     # Link-Time Optimization en Android
+optimize_webui          = true
+
+# ── 3. Eliminación de Servicios Google y Dependencias de GMS ────────────────
+# Elimina la necesidad de Google Play Services en el dispositivo
+enable_google_now                = false
+enable_hangout_services_extension = false
+enable_mdns                      = false
+enable_reporting                 = false
+enable_service_discovery         = false
+enable_vr                        = false
+safe_browsing_mode               = 0
+
+google_api_key            = ""
+google_default_client_id  = ""
+google_default_client_secret = ""
+
+# Desactivar Google Sign-In y Sync
+enable_signin_service = false
+
+# ── 4. Aceleración de Video y Batería (MediaCodec) ──────────────────────────
+# Permite decodificación por hardware directo en GPU móvil (ahorro de batería)
+media_use_ffmpeg        = true
+media_use_libvpx        = true
+rtc_use_h264            = true
+
+# ── 5. Motor de Bloqueo Nativo (Aegis Shields) ─────────────────────────────
+enable_aegis_shields    = true

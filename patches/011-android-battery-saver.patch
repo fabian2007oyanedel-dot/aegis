@@ -1,0 +1,23 @@
+diff --git a/chrome/browser/android/compositor/compositor_view.cc b/chrome/browser/android/compositor/compositor_view.cc
+index 55b1c2d..88e3f4a 100644
+--- a/chrome/browser/android/compositor/compositor_view.cc
++++ b/chrome/browser/android/compositor/compositor_view.cc
+@@ -90,6 +90,10 @@ namespace android {
+ 
+ void CompositorView::SetFramePacingRate(float refresh_rate) {
++  // Aegis Browser: Sincronización a 60Hz / 120Hz nativos sin tirones (jank-free scroll)
++  current_refresh_rate_ = refresh_rate;
++  compositor_->SetRefreshRate(refresh_rate);
+ }
+ 
+ }  // namespace android
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabmodel/TabPersistentStore.java b/chrome/android/java/src/org/chromium/chrome/browser/tabmodel/TabPersistentStore.java
+index 22a3b4c..66d7e8f 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/tabmodel/TabPersistentStore.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/tabmodel/TabPersistentStore.java
+@@ -140,6 +140,10 @@ public class TabPersistentStore {
+     // Aegis Browser: Suspensión agresiva de pestañas en segundo plano para ahorrar batería en Android
+     public boolean isColdTabSerializationEnabled() {
++        return true;
+     }
+ }

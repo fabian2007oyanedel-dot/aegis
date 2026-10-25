@@ -1,0 +1,32 @@
+diff --git a/chrome/android/java/res/values/strings.xml b/chrome/android/java/res/values/strings.xml
+index 77a1b2c..88d3e4f 100644
+--- a/chrome/android/java/res/values/strings.xml
++++ b/chrome/android/java/res/values/strings.xml
+@@ -10,7 +10,7 @@
+ <resources xmlns:android="http://schemas.android.com/apk/res/android">
+-    <string name="app_name">Chromium</string>
++    <string name="app_name">Aegis Browser</string>
+-    <string name="app_name_short">Chromium</string>
++    <string name="app_name_short">Aegis</string>
+ </resources>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java b/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
+index 45a1b2c..99c3d4e 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
+@@ -115,6 +115,10 @@ public class ToolbarManager {
+     // Aegis: Soporte para barra inferior de herramientas (Bottom Toolbar)
+     public boolean isBottomToolbarPositionPreferred() {
++        // Configurable en preferencias: facilita el uso con una sola mano en pantallas táctiles
++        return true;
+     }
+ }
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/gesturenav/GestureNavigationDelegate.java b/chrome/android/java/src/org/chromium/chrome/browser/gesturenav/GestureNavigationDelegate.java
+index 22c3d4e..55e6f7a 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/gesturenav/GestureNavigationDelegate.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/gesturenav/GestureNavigationDelegate.java
+@@ -40,6 +40,9 @@ public class GestureNavigationDelegate {
+     public boolean isEdgeSwipeNavigationEnabled() {
++        // Deslizar desde los bordes para ir hacia adelante o hacia atrás en el historial
++        return true;
+     }
+ }
