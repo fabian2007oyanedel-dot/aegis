@@ -34,6 +34,7 @@ PATCH_ORDER = [
     "012-anti-fingerprinting.patch",
     "013-webrtc-leak-prevention.patch",
     "014-extreme-resource-optimization.patch",
+    "015-shields-cosmetic-injection.patch",
 ]
 
 PATCHES_DIR = Path(__file__).parent.parent / "patches"

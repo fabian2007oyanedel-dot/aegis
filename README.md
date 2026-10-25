@@ -12,7 +12,7 @@
 ## ⚡ Características Principales
 
 1. **Cero Bloatware y Cero Criptomonedas:** Sin billeteras, sin tokens BAT, sin programas de recompensas, sin telemetría P3A ni rastreadores de Google Analytics.
-2. **Motor de Bloqueo Nativo (Rust):** Utiliza el motor oficial de `adblock-rust` de Brave. Las peticiones a publicidad se cancelan en microsegundos antes de abrir sockets de red.
+2. **Aegis Shields 100x (Motor Rust + Defusers):** Utiliza `adblock-rust` nativo con un conjunto de reglas Zero-Day precargado para sitios populares: salto automático y bloqueo de anuncios de YouTube sin modales de aviso, protección contra anuncios en directos de Twitch (Amazon IVS), eliminación de publicaciones patrocinadas en Facebook/Instagram/Twitter/Reddit, neutralización de muros anti-adblock (Admiral, DetectAdblock) y bloqueo agresivo de popups/popunders. Incluye inyección de estilos cosméticos para evitar espacios en blanco.
 3. **Anti-Fingerprinting Avanzado (*Farbling*):** Inyección de ruido en APIs de Canvas y AudioContext para impedir que los rastreadores perfilen tu máquina.
 4. **Pestañas a tu Medida:** Pestañas clásicas horizontales por defecto, con interruptor en Configuración para activar **Pestañas Verticales Plegables**.
 5. **Cifrado 100% Local:** Contraseñas e historial cifrados mediante la clave del sistema operativo (**Windows DPAPI / Android Keystore**). Cero dependencia de cuentas en la nube.
@@ -49,11 +49,14 @@ aegis-browser/
 │   ├── 011-android-battery-saver.patch    # Sincronización a 120Hz y ahorro de batería
 │   ├── 012-anti-fingerprinting.patch      # Protección Farbling en Canvas, WebGL y Audio
 │   ├── 013-webrtc-leak-prevention.patch   # Prevención de fuga de IP local y VPN en WebRTC
-│   └── 014-extreme-resource-optimization.patch # Purga de RAM en reposo (PartitionAlloc) y estrangulación de CPU 1Hz
+│   ├── 014-extreme-resource-optimization.patch # Purga de RAM en reposo (PartitionAlloc) y estrangulación de CPU 1Hz
+│   └── 015-shields-cosmetic-injection.patch # Inyección de estilos cosméticos y defusers anti-adblock en Blink
 ├── src/
 │   ├── shields/                    # Motor de bloqueo nativo en Rust (adblock-rust FFI)
 │   │   ├── Cargo.toml
 │   │   ├── src/lib.rs              # Puente FFI C/C++ <-> Rust con tests unitarios
+│   │   ├── src/default_rules.rs    # Reglas nativas Zero-Day para YouTube, Twitch, Redes, Noticias
+│   │   ├── src/defusers.rs         # Scriptlets defusers (Anti-Adblock bypass, Popunders)
 │   │   └── include/aegis_shields.h # Cabecera C++ para el motor de Chromium
 │   └── ui/                         # Interfaz gráfica propia
 │       ├── assets/aegis-logo.svg   # Logo vectorizado oficial
@@ -66,7 +69,8 @@ aegis-browser/
 │   ├── verify_phase4.py            # Suite de pruebas de cifrado y retención
 │   ├── verify_phase5.py            # Suite de pruebas de Android ARM64
 │   ├── verify_phase6.py            # Suite de pruebas de release y anti-fingerprinting
-│   └── verify_ultra_enhancements.py # Suite de validación de optimizaciones 100x y UI Hub
+│   ├── verify_ultra_enhancements.py # Suite de validación de optimizaciones 100x y UI Hub
+│   └── verify_ultra_shields.py     # Suite de validación de Aegis Shields 100x para sitios populares
 └── README.md
 ```
 

@@ -1,0 +1,108 @@
+diff --git a/chrome/renderer/aegis_cosmetic_injector.h b/chrome/renderer/aegis_cosmetic_injector.h
+new file mode 100644
+index 0000000..8a91c23
+--- /dev/null
++++ b/chrome/renderer/aegis_cosmetic_injector.h
+@@ -0,0 +1,33 @@
++#ifndef CHROME_RENDERER_AEGIS_COSMETIC_INJECTOR_H_
++#define CHROME_RENDERER_AEGIS_COSMETIC_INJECTOR_H_
++
++#include "content/public/renderer/render_frame_observer.h"
++#include "aegis_shields.h"
++
++namespace aegis {
++
++// Inyector cosmético y defuser anti-adblock en el proceso de renderizado (Blink)
++class AegisCosmeticInjector : public content::RenderFrameObserver {
++ public:
++  AegisCosmeticInjector(content::RenderFrame* render_frame, AegisShieldsEngine* engine);
++  ~AegisCosmeticInjector() override;
++
++  // RenderFrameObserver:
++  void DidCreateDocumentElement() override;
++  void DidDispatchDOMContentLoadedEvent() override;
++  void OnDestruct() override;
++
++ private:
++  void InjectCosmeticStyle();
++  void InjectDefuserScriptlets();
++
++  AegisShieldsEngine* engine_;
++  bool injected_styles_ = false;
++  bool injected_scripts_ = false;
++};
++
++}  // namespace aegis
++
++#endif  // CHROME_RENDERER_AEGIS_COSMETIC_INJECTOR_H_
+diff --git a/chrome/renderer/aegis_cosmetic_injector.cc b/chrome/renderer/aegis_cosmetic_injector.cc
+new file mode 100644
+index 0000000..9b12d34
+--- /dev/null
++++ b/chrome/renderer/aegis_cosmetic_injector.cc
+@@ -0,0 +1,65 @@
++#include "chrome/renderer/aegis_cosmetic_injector.h"
++#include "content/public/renderer/render_frame.h"
++#include "third_party/blink/public/web/web_local_frame.h"
++#include "third_party/blink/public/web/web_document.h"
++#include "third_party/blink/public/web/web_script_source.h"
++#include "third_party/blink/public/platform/web_string.h"
++
++namespace aegis {
++
++AegisCosmeticInjector::AegisCosmeticInjector(
++    content::RenderFrame* render_frame,
++    AegisShieldsEngine* engine)
++    : content::RenderFrameObserver(render_frame),
++      engine_(engine) {}
++
++AegisCosmeticInjector::~AegisCosmeticInjector() = default;
++
++void AegisCosmeticInjector::DidCreateDocumentElement() {
++  // Inyectar defusers de anti-adblock en document_start para neutralizar modales antes de que ejecuten
++  InjectDefuserScriptlets();
++  InjectCosmeticStyle();
++}
++
++void AegisCosmeticInjector::DidDispatchDOMContentLoadedEvent() {
++  // Reforzar la inyección de estilos para single-page applications dinámicas (YouTube, Twitch, Reddit)
++  InjectCosmeticStyle();
++}
++
++void AegisCosmeticInjector::InjectCosmeticStyle() {
++  if (!engine_ || !render_frame()) return;
++  blink::WebLocalFrame* web_frame = render_frame()->GetWebFrame();
++  if (!web_frame) return;
++
++  std::string url = web_frame->GetDocument().Url().GetString().Utf8();
++  char* css = aegis_shields_get_cosmetic_stylesheet(engine_, url.c_str());
++  if (css) {
++    if (strlen(css) > 0) {
++      web_frame->GetDocument().InsertStyleSheet(blink::WebString::FromUtf8(css));
++    }
++    aegis_shields_free_string(css);
++  }
++}
++
++void AegisCosmeticInjector::InjectDefuserScriptlets() {
++  if (!engine_ || !render_frame() || injected_scripts_) return;
++  blink::WebLocalFrame* web_frame = render_frame()->GetWebFrame();
++  if (!web_frame) return;
++
++  std::string url = web_frame->GetDocument().Url().GetString().Utf8();
++  char* js = aegis_shields_get_injected_scripts(engine_, url.c_str());
++  if (js) {
++    if (strlen(js) > 0) {
++      web_frame->ExecuteScript(blink::WebScriptSource(blink::WebString::FromUtf8(js)));
++      injected_scripts_ = true;
++    }
++    aegis_shields_free_string(js);
++  }
++}
++
++void AegisCosmeticInjector::OnDestruct() {
++  delete this;
++}
++
++}  // namespace aegis
++

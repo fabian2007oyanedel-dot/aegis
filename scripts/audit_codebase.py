@@ -57,6 +57,9 @@ def main():
     # 6. Auditoría Optimizaciones 100x & Supercharged UI
     results.append(run_check("Auditoría Ultra Rendimiento 100x & UI Completa", [sys.executable, str(SCRIPTS_DIR / "verify_ultra_enhancements.py")]))
 
+    # 7. Auditoría Aegis Shields 100x (Sitios Populares & Anti-Adblock)
+    results.append(run_check("Auditoría Aegis Shields 100x (Sitios Populares)", [sys.executable, str(SCRIPTS_DIR / "verify_ultra_shields.py")]))
+
     print("\n" + "=" * 60)
     if all(results):
         print("  [EXITO] AUDITORIA COMPLETA: 0 ERRORES ENCONTRADOS")

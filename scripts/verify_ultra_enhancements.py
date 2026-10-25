@@ -63,12 +63,12 @@ def test_webui_complete_suite():
     assert "initBookmarksBar" in js, "app.js debe implementar la gestión de marcadores rápidos"
     print("  [OK] Interfaz WebUI (NTP 100x): Reloj en vivo, Marcadores, Bloc de notas, 4 Temas y Hub completo.")
 
-def test_all_14_patches_registered():
+def test_all_patches_registered():
     apply_script = (ROOT_DIR / "scripts" / "apply_patches.py").read_text(encoding="utf-8")
-    for i in range(1, 15):
+    for i in range(1, 16):
         num_str = f"{i:03d}"
         assert any(num_str in line for line in apply_script.splitlines()), f"Falta parche {num_str} en apply_patches.py"
-    print("  [OK] Pipeline de parches: Los 14 parches están debidamente enlazados y secuenciados.")
+    print("  [OK] Pipeline de parches: Los 15 parches están debidamente enlazados y secuenciados.")
 
 def main():
     print()
@@ -80,7 +80,7 @@ def main():
         test_ultra_performance_args()
         test_extreme_optimization_patch()
         test_webui_complete_suite()
-        test_all_14_patches_registered()
+        test_all_patches_registered()
         print()
         print("  --------------------------------------------------------------------------")
         print("  [EXITO] TODAS LAS OPTIMIZACIONES Y MEJORAS 100X VERIFICADAS CON EXCELENCIA")

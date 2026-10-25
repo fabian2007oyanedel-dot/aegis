@@ -234,6 +234,16 @@ function initShieldsModal() {
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.classList.remove('active');
   });
+
+  // Guardar estado de los interruptores de escudos especializados
+  ['shield-network-block', 'shield-cosmetic', 'shield-youtube-defuser', 'shield-twitch', 'shield-popunder', 'shield-cookie-banners'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      const saved = localStorage.getItem(`aegis_${id}`);
+      if (saved !== null) el.checked = saved === 'true';
+      el.addEventListener('change', () => localStorage.setItem(`aegis_${id}`, el.checked));
+    }
+  });
 }
 
 // 7. Centro de Configuración & Funciones (100x Hub)
@@ -272,6 +282,16 @@ function initSettingsHub() {
   closeBtns.forEach((b) => b.addEventListener('click', () => modal.classList.remove('active')));
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.classList.remove('active');
+  });
+
+  // Guardar estado de los interruptores de escudos especializados
+  ['shield-network-block', 'shield-cosmetic', 'shield-youtube-defuser', 'shield-twitch', 'shield-popunder', 'shield-cookie-banners'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      const saved = localStorage.getItem(`aegis_${id}`);
+      if (saved !== null) el.checked = saved === 'true';
+      el.addEventListener('change', () => localStorage.setItem(`aegis_${id}`, el.checked));
+    }
   });
 }
 
