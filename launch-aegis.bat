@@ -9,17 +9,17 @@ echo            (Navegador Nativo con Chromium Engine y Rust Shields)
 echo ==============================================================================
 echo.
 
-:: 1. Prioridad: Ejecutable nativo compilado Aegis.exe
+:: 1. Prioridad: Ejecutable nativo en dist\Aegis (con directorio de trabajo correcto)
 if exist "%~dp0dist\Aegis\Aegis.exe" (
-    echo [OK] Iniciando Aegis.exe binario nativo...
-    start "" "%~dp0dist\Aegis\Aegis.exe"
+    echo [OK] Iniciando Aegis.exe desde dist\Aegis...
+    start "" /D "%~dp0dist\Aegis" "%~dp0dist\Aegis\Aegis.exe"
     exit /b 0
 )
 
-:: 2. Respaldo: Lanzar vía PythonW (sin consola negra)
+:: 2. Respaldo: Lanzar vía PythonW
 set "PYTHON_EXE=C:\Users\PC\AppData\Local\Python\bin\pythonw.exe"
 if exist "%PYTHON_EXE%" (
-    echo [OK] Iniciando Aegis Browser (PythonW Chromium Runtime)...
+    echo [OK] Iniciando Aegis Browser (PythonW)...
     start "" "%PYTHON_EXE%" "%~dp0src\desktop\aegis_app.py"
     exit /b 0
 )
@@ -32,6 +32,6 @@ if %ERRORLEVEL% equ 0 (
     exit /b 0
 )
 
-echo [ERROR] No se encontro ni Aegis.exe ni Python en el sistema.
+echo [ERROR] No se pudo iniciar el navegador.
 pause
 exit /b 1

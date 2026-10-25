@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # ==============================================================================
-# Aegis Browser - Aplicación de Escritorio Nativa (Chromium + Rust Shields FFI)
+# Aegis Browser - Minimalist, High-Performance Native Desktop Browser
 # ==============================================================================
-# Navegador web completo con pestañas reales, omnibox para cualquier sitio web,
-# historial, marcadores y el motor de bloqueo nativo en Rust (adblock-rust).
+# Clean, modern architecture: Top Tab Strip, Floating Capsule Omnibox,
+# Chromium Engine (PyQt6-WebEngine), and Brave Shields (adblock-rust) FFI.
 # ==============================================================================
 
 import os
@@ -11,42 +11,76 @@ import sys
 import ctypes
 from pathlib import Path
 
-from PyQt6.QtCore import QUrl, Qt, pyqtSignal, QObject
-from PyQt6.QtGui import QIcon, QAction, QKeySequence
+from PyQt6.QtCore import QUrl, Qt, QSize
+from PyQt6.QtGui import QIcon, QAction, QKeySequence, QFont
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QTabWidget, QToolBar, QLabel, QMenu,
-    QProgressBar, QStatusBar
+    QLineEdit, QPushButton, QTabBar, QStackedWidget, QLabel,
+    QProgressBar, QSizePolicy
 )
 from PyQt6.QtWebEngineCore import (
     QWebEngineProfile, QWebEnginePage, QWebEngineUrlRequestInterceptor,
-    QWebEngineScript, QWebEngineSettings
+    QWebEngineSettings
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
-# Rutas del proyecto (Compatible con desarrollo y con PyInstaller .exe)
-if getattr(sys, "frozen", False):
-    APP_DIR = Path(sys.executable).resolve().parent
-    BASE_DIR = APP_DIR.parent.parent
-else:
-    APP_DIR = Path(__file__).resolve().parent
-    BASE_DIR = APP_DIR.parent.parent
+# ==============================================================================
+# LOCALIZACIÓN RESILIENTE DE RECURSOS
+# ==============================================================================
+def find_project_root() -> Path:
+    candidates = [
+        Path(sys.executable).resolve().parent,
+        Path(sys.executable).resolve().parent.parent,
+        Path(sys.executable).resolve().parent.parent.parent,
+        Path(__file__).resolve().parent,
+        Path(__file__).resolve().parent.parent.parent,
+        Path.cwd(),
+    ]
+    for c in candidates:
+        if (c / "src" / "ui" / "ntp" / "index.html").exists():
+            return c
+        if (c / "ntp" / "index.html").exists():
+            return c
+    return Path(__file__).resolve().parent.parent.parent
 
-if (APP_DIR / "ntp" / "index.html").exists():
-    NTP_PATH = APP_DIR / "ntp" / "index.html"
-else:
-    NTP_PATH = BASE_DIR / "src" / "ui" / "ntp" / "index.html"
+ROOT_DIR = find_project_root()
 
-NTP_URL = QUrl.fromLocalFile(str(NTP_PATH))
-LOGO_PATH = BASE_DIR / "src" / "ui" / "assets" / "aegis-logo.svg"
+def get_ntp_html_content() -> str:
+    possible_paths = [
+        ROOT_DIR / "src" / "ui" / "ntp" / "index.html",
+        ROOT_DIR / "ntp" / "index.html",
+        Path.cwd() / "src" / "ui" / "ntp" / "index.html",
+        Path.cwd() / "dist" / "Aegis" / "ntp" / "index.html",
+    ]
+    for p in possible_paths:
+        if p.exists():
+            try:
+                html = p.read_text(encoding="utf-8")
+                # Incrustar CSS si existe al lado
+                css_p = p.parent / "style.css"
+                if css_p.exists():
+                    css_content = css_p.read_text(encoding="utf-8")
+                    html = html.replace('<link rel="stylesheet" href="style.css">', f"<style>{css_content}</style>")
+                return html
+            except Exception:
+                pass
+    return MINIMAL_EMBEDDED_NTP
 
-if (APP_DIR / "aegis_shields.dll").exists():
-    RUST_DLL_PATH = APP_DIR / "aegis_shields.dll"
-else:
-    RUST_DLL_PATH = BASE_DIR / "src" / "shields" / "target" / "release" / "aegis_shields.dll"
+def find_rust_dll() -> Path | None:
+    possible = [
+        ROOT_DIR / "src" / "shields" / "target" / "release" / "aegis_shields.dll",
+        ROOT_DIR / "aegis_shields.dll",
+        Path(sys.executable).resolve().parent / "aegis_shields.dll",
+        Path.cwd() / "dist" / "Aegis" / "aegis_shields.dll",
+        Path.cwd() / "src" / "shields" / "target" / "release" / "aegis_shields.dll",
+    ]
+    for p in possible:
+        if p.exists():
+            return p
+    return None
 
 # ==============================================================================
-# ENLACE FFI CON EL MOTOR RUST (aegis_shields.dll)
+# ENLACE CON EL MOTOR RUST (adblock-rust FFI)
 # ==============================================================================
 class AegisShieldsRustCore:
     def __init__(self):
@@ -54,9 +88,10 @@ class AegisShieldsRustCore:
         self.engine = None
         self.total_blocked = 0
 
-        if RUST_DLL_PATH.exists():
+        dll_path = find_rust_dll()
+        if dll_path and dll_path.exists():
             try:
-                self.dll = ctypes.CDLL(str(RUST_DLL_PATH))
+                self.dll = ctypes.CDLL(str(dll_path))
                 self.dll.aegis_shields_create.restype = ctypes.c_void_p
                 self.dll.aegis_shields_destroy.argtypes = [ctypes.c_void_p]
                 self.dll.aegis_shields_should_block.argtypes = [
@@ -70,9 +105,9 @@ class AegisShieldsRustCore:
                 self.dll.aegis_shields_free_string.argtypes = [ctypes.c_void_p]
 
                 self.engine = self.dll.aegis_shields_create()
-                print("  [OK] Motor nativo Aegis Shields (Rust FFI) inicializado correctamente.")
+                print("  [OK] Aegis Shields Core (Rust) cargado con éxito.")
             except Exception as e:
-                print(f"  [AVISO] No se pudo enlazar DLL de Rust: {e}")
+                print(f"  [AVISO] No se pudo vincular la DLL Rust: {e}")
 
     def should_block(self, url: str, source_url: str = "", req_type: str = "other") -> bool:
         if not self.dll or not self.engine:
@@ -116,39 +151,34 @@ class AegisShieldsRustCore:
             pass
         return ""
 
-# Instancia global del motor Rust
 SHIELDS_CORE = AegisShieldsRustCore()
 
 # ==============================================================================
-# INTERCEPTOR DE PETICIONES DE RED (URLLoaderThrottle en Chromium)
+# INTERCEPTOR DE RED DE CHROMIUM
 # ==============================================================================
 class AegisRequestInterceptor(QWebEngineUrlRequestInterceptor):
-    def __init__(self, update_callback=None):
+    def __init__(self, callback=None):
         super().__init__()
-        self.update_callback = update_callback
+        self.callback = callback
 
     def interceptRequest(self, info):
         url = info.requestUrl().toString()
         source = info.firstPartyUrl().toString()
-        req_type = "other"
-
-        # Comprobar contra el motor adblock-rust
-        if SHIELDS_CORE.should_block(url, source, req_type):
+        if SHIELDS_CORE.should_block(url, source, "other"):
             info.block(True)
-            if self.update_callback:
-                self.update_callback()
+            if self.callback:
+                self.callback()
 
 # ==============================================================================
-# VENTANA PRINCIPAL DEL NAVEGADOR
+# VENTANA PRINCIPAL (DISEÑO MINIMALISTA Y ELEGANTE)
 # ==============================================================================
 class AegisBrowserWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Aegis Browser — Privado, Rápido y Sin Anuncios")
-        self.resize(1280, 800)
-        self.shields_enabled = True
+        self.setWindowTitle("Aegis")
+        self.resize(1300, 840)
 
-        # Configurar Perfil de Chromium
+        # Configurar Perfil Chromium
         self.profile = QWebEngineProfile.defaultProfile()
         self.profile.setHttpUserAgent(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3"
@@ -157,322 +187,548 @@ class AegisBrowserWindow(QMainWindow):
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, False)
 
-        # Enlazar interceptor de red
-        self.interceptor = AegisRequestInterceptor(self.on_ad_blocked)
+        # Interceptor de red
+        self.interceptor = AegisRequestInterceptor(self.on_shield_block)
         self.profile.setUrlRequestInterceptor(self.interceptor)
 
-        # Inicializar UI
-        self.init_ui()
+        self.views = []
+        self.init_modern_ui()
 
-    def init_ui(self):
-        # Estilos oscuros modernos
+    def init_modern_ui(self):
+        # ── Estilos CSS de Clase Mundial (Paleta Obsidian & Soft Titanium) ─────
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #0b0f17;
+                background-color: #0b0e14;
             }
-            QToolBar {
-                background-color: #121824;
-                border-bottom: 1px solid rgba(0, 242, 254, 0.2);
-                padding: 4px;
-                spacing: 6px;
+            QWidget#TabHeader {
+                background-color: #0b0e14;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             }
-            QPushButton {
-                background-color: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 6px;
-                color: #e6edf3;
-                padding: 5px 10px;
-                font-weight: bold;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: rgba(0, 242, 254, 0.15);
-                border-color: #00f2fe;
-            }
-            QLineEdit {
-                background-color: #06090f;
-                border: 1px solid rgba(0, 242, 254, 0.3);
-                border-radius: 8px;
-                color: #f0f6fc;
-                padding: 6px 14px;
-                font-size: 13px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #00f2fe;
-                background-color: #0c131f;
-            }
-            QTabWidget::pane {
+            QTabBar {
+                background: transparent;
                 border: none;
-                background-color: #06090f;
             }
             QTabBar::tab {
-                background-color: #0e1522;
-                color: #8b949e;
-                border: 1px solid rgba(255, 255, 255, 0.06);
+                background-color: #0e1219;
+                color: #7d8590;
+                border: 1px solid rgba(255, 255, 255, 0.04);
                 border-bottom: none;
-                padding: 8px 16px;
+                padding: 6px 14px;
                 border-top-left-radius: 8px;
                 border-top-right-radius: 8px;
-                margin-right: 2px;
+                margin-right: 3px;
                 font-size: 12px;
-            }
-            QTabBar::tab:selected {
-                background-color: #162032;
-                color: #00f2fe;
-                font-weight: bold;
-                border-top: 2px solid #00f2fe;
+                font-family: 'Segoe UI', -apple-system, sans-serif;
+                min-width: 90px;
+                max-width: 220px;
             }
             QTabBar::tab:hover {
-                background-color: #121c2d;
+                background-color: #141923;
+                color: #c9d1d9;
             }
-            QStatusBar {
-                background-color: #0a0e16;
+            QTabBar::tab:selected {
+                background-color: #161c28;
+                color: #f0f6fc;
+                border: 1px solid rgba(56, 189, 248, 0.25);
+                border-bottom: none;
+                border-top: 2px solid #38bdf8;
+            }
+            QPushButton#NewTabBtn {
+                background: transparent;
+                border: none;
+                color: #7d8590;
+                font-size: 16px;
+                font-weight: 300;
+                border-radius: 12px;
+                width: 24px;
+                height: 24px;
+            }
+            QPushButton#NewTabBtn:hover {
+                background-color: rgba(255, 255, 255, 0.08);
+                color: #f0f6fc;
+            }
+            QWidget#Toolbar {
+                background-color: #101520;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            }
+            QPushButton.nav-icon-btn {
+                background: transparent;
+                border: none;
                 color: #8b949e;
-                font-size: 11px;
-                border-top: 1px solid rgba(255, 255, 255, 0.05);
+                font-size: 15px;
+                border-radius: 14px;
+                width: 30px;
+                height: 30px;
+            }
+            QPushButton.nav-icon-btn:hover {
+                background-color: rgba(255, 255, 255, 0.08);
+                color: #f0f6fc;
+            }
+            QPushButton.nav-icon-btn:pressed {
+                background-color: rgba(255, 255, 255, 0.12);
+            }
+            QLineEdit#Omnibox {
+                background-color: #07090e;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 16px;
+                color: #f0f6fc;
+                padding: 5px 16px;
+                font-size: 12.5px;
+                font-family: 'Segoe UI', sans-serif;
+                selection-background-color: #1d4ed8;
+            }
+            QLineEdit#Omnibox:focus {
+                border: 1px solid rgba(56, 189, 248, 0.6);
+                background-color: #090d14;
+            }
+            QPushButton#ShieldPill {
+                background-color: rgba(16, 185, 129, 0.08);
+                border: 1px solid rgba(16, 185, 129, 0.25);
+                border-radius: 13px;
+                color: #10b981;
+                font-size: 11.5px;
+                font-weight: 600;
+                padding: 4px 11px;
+            }
+            QPushButton#ShieldPill:hover {
+                background-color: rgba(16, 185, 129, 0.16);
+                border-color: #10b981;
+            }
+            QProgressBar#MicroProgress {
+                border: none;
+                background: transparent;
+                height: 2px;
+            }
+            QProgressBar#MicroProgress::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #38bdf8, stop:1 #818cf8);
             }
         """)
 
-        # Barra de navegación
-        toolbar = QToolBar("Navegación")
-        toolbar.setMovable(False)
-        self.addToolBar(toolbar)
+        # Contenedor Maestro
+        container = QWidget()
+        self.setCentralWidget(container)
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # Botón Atrás
-        self.btn_back = QPushButton("◀")
+        # ── 1. Fila Superior: Tiras de Pestañas (Tab Strip) ─────────────────────
+        tab_header = QWidget()
+        tab_header.setObjectName("TabHeader")
+        tab_header_layout = QHBoxLayout(tab_header)
+        tab_header_layout.setContentsMargins(10, 6, 10, 0)
+        tab_header_layout.setSpacing(4)
+
+        self.tab_bar = QTabBar()
+        self.tab_bar.setTabsClosable(True)
+        self.tab_bar.setMovable(True)
+        self.tab_bar.currentChanged.connect(self.on_tab_changed)
+        self.tab_bar.tabCloseRequested.connect(self.close_tab)
+        tab_header_layout.addWidget(self.tab_bar)
+
+        self.btn_new_tab = QPushButton("+")
+        self.btn_new_tab.setObjectName("NewTabBtn")
+        self.btn_new_tab.setToolTip("Nueva Pestaña (Ctrl+T)")
+        self.btn_new_tab.clicked.connect(lambda: self.add_new_tab())
+        tab_header_layout.addWidget(self.btn_new_tab)
+
+        tab_header_layout.addStretch()
+        main_layout.addWidget(tab_header)
+
+        # ── 2. Fila Media: Barra de Navegación y Omnibox Flotante ─────────────
+        toolbar = QWidget()
+        toolbar.setObjectName("Toolbar")
+        toolbar_layout = QHBoxLayout(toolbar)
+        toolbar_layout.setContentsMargins(10, 6, 10, 6)
+        toolbar_layout.setSpacing(6)
+
+        # Botones de navegación
+        self.btn_back = QPushButton("←")
+        self.btn_back.setProperty("class", "nav-icon-btn")
         self.btn_back.setToolTip("Atrás")
         self.btn_back.clicked.connect(self.navigate_back)
-        toolbar.addWidget(self.btn_back)
+        toolbar_layout.addWidget(self.btn_back)
 
-        # Botón Adelante
-        self.btn_forward = QPushButton("▶")
+        self.btn_forward = QPushButton("→")
+        self.btn_forward.setProperty("class", "nav-icon-btn")
         self.btn_forward.setToolTip("Adelante")
         self.btn_forward.clicked.connect(self.navigate_forward)
-        toolbar.addWidget(self.btn_forward)
+        toolbar_layout.addWidget(self.btn_forward)
 
-        # Botón Recargar
-        self.btn_reload = QPushButton("🔄")
+        self.btn_reload = QPushButton("↻")
+        self.btn_reload.setProperty("class", "nav-icon-btn")
         self.btn_reload.setToolTip("Recargar")
         self.btn_reload.clicked.connect(self.reload_page)
-        toolbar.addWidget(self.btn_reload)
+        toolbar_layout.addWidget(self.btn_reload)
 
-        # Botón Home (NTP)
-        self.btn_home = QPushButton("🏠")
-        self.btn_home.setToolTip("Página Principal (Nueva Pestaña)")
+        self.btn_home = QPushButton("⌂")
+        self.btn_home.setProperty("class", "nav-icon-btn")
+        self.btn_home.setToolTip("Inicio (Nueva Pestaña)")
         self.btn_home.clicked.connect(self.navigate_home)
-        toolbar.addWidget(self.btn_home)
+        toolbar_layout.addWidget(self.btn_home)
 
-        # Barra de direcciones (Omnibox)
+        # Omnibox Cápsula
         self.url_bar = QLineEdit()
-        self.url_bar.setPlaceholderText("Escribe una URL (ej. youtube.com, animeflv.net, cuevana.biz) o busca...")
+        self.url_bar.setObjectName("Omnibox")
+        self.url_bar.setPlaceholderText("Buscar en la web o ingresar dirección...")
         self.url_bar.returnPressed.connect(self.navigate_to_url)
-        toolbar.addWidget(self.url_bar)
+        toolbar_layout.addWidget(self.url_bar)
 
-        # Botón Escudos Aegis Shields (con contador en vivo)
-        self.btn_shields = QPushButton(f"🛡️ {SHIELDS_CORE.total_blocked} Bloqueados")
-        self.btn_shields.setToolTip("Aegis Shields Activo (Click para ver detalles)")
-        self.btn_shields.setStyleSheet("color: #00f2fe; font-weight: bold;")
-        self.btn_shields.clicked.connect(self.show_shields_info)
-        toolbar.addWidget(self.btn_shields)
+        # Píldora de Aegis Shields
+        self.shield_pill = QPushButton("🛡️ 0")
+        self.shield_pill.setObjectName("ShieldPill")
+        self.shield_pill.setToolTip("Aegis Shields Activo (adblock-rust FFI)")
+        toolbar_layout.addWidget(self.shield_pill)
 
-        # Botón Nueva Pestaña
-        self.btn_new_tab = QPushButton("➕")
-        self.btn_new_tab.setToolTip("Abrir Nueva Pestaña (Ctrl+T)")
-        self.btn_new_tab.clicked.connect(lambda: self.add_new_tab())
-        toolbar.addWidget(self.btn_new_tab)
+        main_layout.addWidget(toolbar)
 
-        # Contenedor de pestañas
-        self.tab_widget = QTabWidget()
-        self.tab_widget.setTabsClosable(True)
-        self.tab_widget.tabCloseRequested.connect(self.close_tab)
-        self.tab_widget.currentChanged.connect(self.on_tab_changed)
-        self.setCentralWidget(self.tab_widget)
+        # ── 3. Micro Barra de Progreso (2px) ──────────────────────────────────
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setObjectName("MicroProgress")
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setFixedHeight(2)
+        self.progress_bar.hide()
+        main_layout.addWidget(self.progress_bar)
 
-        # Barra de estado inferior
-        self.status_bar = QStatusBar()
-        self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("🛡️ Aegis Shields ACTIVO: Protección contra anuncios, popups y rastreadores activada.")
+        # ── 4. Pila de Vistas Web (QStackedWidget) ────────────────────────────
+        self.stack = QStackedWidget()
+        main_layout.addWidget(self.stack)
 
-        # Atajos de teclado
         self.setup_shortcuts()
 
         # Abrir pestaña inicial
         self.add_new_tab()
 
     def setup_shortcuts(self):
-        # Ctrl+T: Nueva pestaña
-        t_action = QAction(self)
-        t_action.setShortcut(QKeySequence("Ctrl+T"))
-        t_action.triggered.connect(lambda: self.add_new_tab())
-        self.addAction(t_action)
+        QAction(self, shortcut=QKeySequence("Ctrl+T"), triggered=lambda: self.add_new_tab())
+        QAction(self, shortcut=QKeySequence("Ctrl+W"), triggered=lambda: self.close_tab(self.tab_bar.currentIndex()))
+        QAction(self, shortcut=QKeySequence("Ctrl+R"), triggered=self.reload_page)
+        QAction(self, shortcut=QKeySequence("F5"), triggered=self.reload_page)
+        QAction(self, shortcut=QKeySequence("Ctrl+L"), triggered=lambda: (self.url_bar.setFocus(), self.url_bar.selectAll()))
 
-        # Ctrl+W: Cerrar pestaña
-        w_action = QAction(self)
-        w_action.setShortcut(QKeySequence("Ctrl+W"))
-        w_action.triggered.connect(lambda: self.close_tab(self.tab_widget.currentIndex()))
-        self.addAction(w_action)
-
-        # Ctrl+R / F5: Recargar
-        r_action = QAction(self)
-        r_action.setShortcut(QKeySequence("Ctrl+R"))
-        r_action.triggered.connect(self.reload_page)
-        self.addAction(r_action)
-
-        # Ctrl+L: Enfocar barra de direcciones
-        l_action = QAction(self)
-        l_action.setShortcut(QKeySequence("Ctrl+L"))
-        l_action.triggered.connect(lambda: (self.url_bar.setFocus(), self.url_bar.selectAll()))
-        self.addAction(l_action)
-
-    def add_new_tab(self, url: QUrl | None = None, label: str = "Nueva Pestaña"):
-        if url is None:
-            url = NTP_URL
-
+    def add_new_tab(self, url_str: str | None = None, label: str = "Nueva Pestaña"):
         view = QWebEngineView()
         page = QWebEnginePage(self.profile, view)
         view.setPage(page)
 
-        # Conectar eventos de la vista
         view.urlChanged.connect(lambda qurl: self.on_url_changed(qurl, view))
         view.loadProgress.connect(self.on_load_progress)
         view.loadFinished.connect(lambda ok: self.on_load_finished(ok, view))
 
-        # Cargar URL
-        view.load(url)
+        self.views.append(view)
+        stack_idx = self.stack.addWidget(view)
+        tab_idx = self.tab_bar.addTab(label)
 
-        index = self.tab_widget.addTab(view, label)
-        self.tab_widget.setCurrentIndex(index)
+        if url_str:
+            view.load(QUrl(url_str))
+        else:
+            # Cargar HTML seguro de la New Tab Page
+            html = get_ntp_html_content()
+            view.setHtml(html, QUrl("aegis://start"))
+
+        self.tab_bar.setCurrentIndex(tab_idx)
+        self.stack.setCurrentIndex(stack_idx)
         return view
 
     def close_tab(self, index: int):
-        if self.tab_widget.count() > 1:
-            widget = self.tab_widget.widget(index)
-            self.tab_widget.removeTab(index)
-            widget.deleteLater()
+        if self.tab_bar.count() > 1:
+            view = self.views.pop(index)
+            self.tab_bar.removeTab(index)
+            self.stack.removeWidget(view)
+            view.deleteLater()
         else:
-            # Si es la última pestaña, reiniciarla en la página de inicio
-            current_view = self.current_view()
-            if current_view:
-                current_view.load(NTP_URL)
+            current = self.current_view()
+            if current:
+                html = get_ntp_html_content()
+                current.setHtml(html, QUrl("aegis://start"))
+                self.tab_bar.setTabText(0, "Nueva Pestaña")
 
     def current_view(self) -> QWebEngineView | None:
-        widget = self.tab_widget.currentWidget()
-        if isinstance(widget, QWebEngineView):
-            return widget
+        idx = self.tab_bar.currentIndex()
+        if 0 <= idx < len(self.views):
+            return self.views[idx]
         return None
+
+    def on_tab_changed(self, index: int):
+        if 0 <= index < len(self.views):
+            self.stack.setCurrentIndex(index)
+            view = self.views[index]
+            self.on_url_changed(view.url(), view)
 
     def navigate_to_url(self):
         text = self.url_bar.text().strip()
         if not text:
             return
 
-        if text.startswith("http://") or text.startswith("https://") or text.startswith("file:///"):
-            url = QUrl(text)
+        if text.startswith("http://") or text.startswith("https://") or text.startswith("file://") or text.startswith("aegis://"):
+            target_url = QUrl(text)
         elif "." in text and " " not in text:
-            url = QUrl("https://" + text)
+            target_url = QUrl("https://" + text)
         else:
-            # Búsqueda privada con DuckDuckGo
-            url = QUrl(f"https://duckduckgo.com/?q={text}")
+            target_url = QUrl(f"https://duckduckgo.com/?q={text}")
 
-        current_view = self.current_view()
-        if current_view:
-            current_view.load(url)
+        view = self.current_view()
+        if view:
+            view.load(target_url)
 
     def navigate_back(self):
-        view = self.current_view()
-        if view:
-            view.back()
+        v = self.current_view()
+        if v: v.back()
 
     def navigate_forward(self):
-        view = self.current_view()
-        if view:
-            view.forward()
+        v = self.current_view()
+        if v: v.forward()
 
     def reload_page(self):
-        view = self.current_view()
-        if view:
-            view.reload()
+        v = self.current_view()
+        if v: v.reload()
 
     def navigate_home(self):
-        view = self.current_view()
-        if view:
-            view.load(NTP_URL)
+        v = self.current_view()
+        if v:
+            html = get_ntp_html_content()
+            v.setHtml(html, QUrl("aegis://start"))
 
     def on_url_changed(self, qurl: QUrl, view: QWebEngineView):
         if view == self.current_view():
             url_str = qurl.toString()
-            if url_str == NTP_URL.toString():
+            if url_str == "aegis://start" or url_str == "about:blank":
                 self.url_bar.setText("")
-                self.url_bar.setPlaceholderText("Escribe una URL o busca en la web...")
+                self.url_bar.setPlaceholderText("Buscar en la web o ingresar dirección...")
             else:
                 self.url_bar.setText(url_str)
 
     def on_load_progress(self, progress: int):
-        self.status_bar.showMessage(f"Cargando página: {progress}%...")
+        if progress < 100:
+            self.progress_bar.show()
+            self.progress_bar.setValue(progress)
+        else:
+            self.progress_bar.hide()
 
     def on_load_finished(self, ok: bool, view: QWebEngineView):
+        self.progress_bar.hide()
         current_url = view.url().toString()
         title = view.title() or "Página"
-        idx = self.tab_widget.indexOf(view)
+
+        if current_url == "aegis://start":
+            title = "Nueva Pestaña"
+
+        idx = self.views.index(view) if view in self.views else -1
         if idx != -1:
-            self.tab_widget.setTabText(idx, title[:18] + ("..." if len(title) > 18 else ""))
+            display_title = title if len(title) <= 16 else title[:14] + "…"
+            self.tab_bar.setTabText(idx, display_title)
 
-        if ok and current_url != NTP_URL.toString():
-            self.status_bar.showMessage(f"✓ {title} cargado con éxito. Aegis Shields activo.", 4000)
-
-            # Inyectar filtrado cosmético de Rust (ocultar anuncios en YouTube, Twitch, AnimeFLV, Cuevana, etc.)
-            cosmetic_css = SHIELDS_CORE.get_cosmetic_css(current_url)
-            if cosmetic_css:
-                js_inject_css = f"""
+        if ok and current_url != "aegis://start":
+            # Inyección cosmética de Rust
+            css = SHIELDS_CORE.get_cosmetic_css(current_url)
+            if css:
+                inject_css = f"""
                 (() => {{
                     try {{
-                        let style = document.getElementById('_aegis_cosmetic_style');
-                        if (!style) {{
-                            style = document.createElement('style');
-                            style.id = '_aegis_cosmetic_style';
-                            document.head.appendChild(style);
+                        let s = document.getElementById('_aegis_css');
+                        if (!s) {{
+                            s = document.createElement('style');
+                            s.id = '_aegis_css';
+                            document.head.appendChild(s);
                         }}
-                        style.textContent = `{cosmetic_css}`;
-                    }} catch (e) {{}}
+                        s.textContent = `{css}`;
+                    }} catch(e) {{}}
                 }})();
                 """
-                view.page().runJavaScript(js_inject_css)
+                view.page().runJavaScript(inject_css)
 
-            # Inyectar defusers de anti-adblock y bypass de cuentas atrás
-            defusers_js = SHIELDS_CORE.get_injected_scripts(current_url)
-            if defusers_js:
-                view.page().runJavaScript(defusers_js)
-        else:
-            self.status_bar.showMessage("Listo.", 2000)
+            # Inyección de defusers de anti-adblock
+            js = SHIELDS_CORE.get_injected_scripts(current_url)
+            if js:
+                view.page().runJavaScript(js)
 
-    def on_tab_changed(self, index: int):
-        view = self.current_view()
-        if view:
-            self.on_url_changed(view.url(), view)
-
-    def on_ad_blocked(self):
-        self.btn_shields.setText(f"🛡️ {SHIELDS_CORE.total_blocked} Bloqueados")
-
-    def show_shields_info(self):
-        view = self.current_view()
-        current_site = view.url().host() if view else "esta página"
-        self.status_bar.showMessage(
-            f"🛡️ Aegis Shields: {SHIELDS_CORE.total_blocked} anuncios y rastreadores neutralizados en {current_site}.",
-            6000
-        )
+    def on_shield_block(self):
+        self.shield_pill.setText(f"🛡️ {SHIELDS_CORE.total_blocked}")
 
 # ==============================================================================
-# PUNTO DE ENTRADA
+# PLANTILLA HTML ELEGANTE Y MINIMALISTA INCORPORADA (FAIL-SAFE)
 # ==============================================================================
+MINIMAL_EMBEDDED_NTP = """
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Aegis</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at 50% 15%, #121824 0%, #080a0f 65%, #05060a 100%);
+      color: #f0f6fc;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      user-select: none;
+    }
+    .hero {
+      text-align: center;
+      max-width: 680px;
+      width: 100%;
+    }
+    .clock {
+      font-size: 4.8rem;
+      font-weight: 200;
+      letter-spacing: -2px;
+      color: #f8fafc;
+      margin-bottom: 0.25rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .date {
+      font-size: 0.95rem;
+      color: #8b949e;
+      font-weight: 400;
+      margin-bottom: 2.5rem;
+      letter-spacing: 0.5px;
+      text-transform: capitalize;
+    }
+    .search-box {
+      position: relative;
+      width: 100%;
+      margin-bottom: 2.5rem;
+    }
+    .search-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      padding: 14px 24px;
+      font-size: 15px;
+      color: #f0f6fc;
+      outline: none;
+      backdrop-filter: blur(12px);
+      transition: all 0.25s ease;
+    }
+    .search-input:focus {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(56, 189, 248, 0.5);
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.15);
+    }
+    .shortcuts-grid {
+      display: flex;
+      gap: 1.25rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .shortcut-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+      color: #c9d1d9;
+      font-size: 0.8rem;
+      padding: 12px 16px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      transition: all 0.2s ease;
+      min-width: 82px;
+    }
+    .shortcut-card:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+      transform: translateY(-2px);
+      color: #ffffff;
+    }
+    .shortcut-icon {
+      font-size: 1.6rem;
+    }
+    .footer-badge {
+      position: fixed;
+      bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      color: #6e7681;
+    }
+    .shield-dot {
+      width: 7px;
+      height: 7px;
+      background: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #10b981;
+    }
+  </style>
+</head>
+<body>
+  <main class="hero">
+    <div id="clock" class="clock">12:00</div>
+    <div id="date" class="date">Cargando...</div>
+
+    <form class="search-box" action="https://duckduckgo.com" method="GET">
+      <input type="text" name="q" class="search-input" placeholder="Buscar con DuckDuckGo o ingresar URL..." autofocus autocomplete="off">
+    </form>
+
+    <div class="shortcuts-grid">
+      <a href="https://youtube.com" class="shortcut-card">
+        <span class="shortcut-icon">▶</span>
+        <span>YouTube</span>
+      </a>
+      <a href="https://twitch.tv" class="shortcut-card">
+        <span class="shortcut-icon">🟣</span>
+        <span>Twitch</span>
+      </a>
+      <a href="https://animeflv.net" class="shortcut-card">
+        <span class="shortcut-icon">⚡</span>
+        <span>AnimeFLV</span>
+      </a>
+      <a href="https://cuevana.biz" class="shortcut-card">
+        <span class="shortcut-icon">🎬</span>
+        <span>Cuevana</span>
+      </a>
+      <a href="https://curseforge.com" class="shortcut-card">
+        <span class="shortcut-icon">🔨</span>
+        <span>CurseForge</span>
+      </a>
+      <a href="https://reddit.com" class="shortcut-card">
+        <span class="shortcut-icon">🤖</span>
+        <span>Reddit</span>
+      </a>
+      <a href="https://github.com" class="shortcut-card">
+        <span class="shortcut-icon">🐙</span>
+        <span>GitHub</span>
+      </a>
+    </div>
+  </main>
+
+  <div class="footer-badge">
+    <div class="shield-dot"></div>
+    <span>Aegis Shields Activo · adblock-rust FFI · Cero Telemetría</span>
+  </div>
+
+  <script>
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      document.getElementById('clock').textContent = `${h}:${m}`;
+
+      const options = { weekday: 'long', month: 'long', day: 'numeric' };
+      document.getElementById('date').textContent = now.toLocaleDateString('es-ES', options);
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+  </script>
+</body>
+</html>
+"""
+
 def main():
-    # Habilitar soporte de renderizado acelerado por GPU
     os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
         "--enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist "
         "--enable-features=VaapiVideoDecoder,CanvasOopRasterization"
     )
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Aegis Browser")
+    app.setApplicationName("Aegis")
     app.setApplicationVersion("1.3.0")
 
     window = AegisBrowserWindow()
