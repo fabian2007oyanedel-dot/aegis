@@ -43,7 +43,18 @@ def test_default_rules():
     # Popups Invasivos
     assert "||propellerads.com^" in content
     assert "||popcash.net^" in content
-    print("  [OK] Reglas nativas Zero-Day para YouTube, Twitch, Redes, Noticias y Popups validadas.")
+
+    # Streaming y Anime (AnimeFLV, Cuevana, Cinecalidad)
+    assert "animeflv.net##.banner-wrapper" in content
+    assert "cuevana*.biz##.ad-banner" in content
+    assert "cinecalidad*.com##.publi" in content
+    assert "||vidoomy.com^" in content
+
+    # Acortadores y Cuentas Atrás
+    assert "||ouo.io/traffic/*" in content
+    assert "||adf.ly/ad/*" in content
+    assert "curseforge.com##.curseforge-ad" in content
+    print("  [OK] Reglas nativas Zero-Day para YouTube, Twitch, AnimeFLV/Cuevana, Acortadores y Popups validadas.")
 
 def test_defusers_and_cosmetics():
     defusers_file = SHIELDS_DIR / "src" / "defusers.rs"
@@ -53,9 +64,11 @@ def test_defusers_and_cosmetics():
     assert "UNIVERSAL_ANTI_ADBLOCK_DEFUSER" in content
     assert "YOUTUBE_AD_AND_ANTI_ADBLOCK_DEFUSER" in content
     assert "ytInitialPlayerResponse" in content
+    assert "STREAMING_OVERLAY_AND_POPUNDER_DEFUSER" in content
+    assert "COUNTDOWN_AND_SHORTENER_BYPASSER" in content
     assert "POPUNDER_PROTECTION_SCRIPTLET" in content
     assert "get_curated_cosmetic_css_for_url" in content
-    print("  [OK] Scriptlets defusers (Anti-Adblock bypass) y CSS cosmético curado validados.")
+    print("  [OK] Scriptlets defusers (Anti-Adblock, Streaming Overlays y FastForward de Cuentas Atrás) validados.")
 
 def test_c_header_and_patch():
     header = (SHIELDS_DIR / "include" / "aegis_shields.h").read_text(encoding="utf-8")

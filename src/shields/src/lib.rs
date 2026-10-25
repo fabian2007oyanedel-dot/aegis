@@ -334,6 +334,41 @@ mod tests {
             );
             assert!(blocked_fb, "Pixel de tracking de Facebook debe ser bloqueado");
 
+            // 11. Probar Sitios de Streaming (AnimeFLV, Cuevana, Cinecalidad)
+            let anime_ad = CString::new("https://vidoomy.com/ad/banner.js").unwrap();
+            let anime_source = CString::new("https://animeflv.net/ver/dragon-ball").unwrap();
+            let blocked_anime = aegis_shields_should_block(
+                engine,
+                anime_ad.as_ptr(),
+                anime_source.as_ptr(),
+                req_type.as_ptr(),
+            );
+            assert!(blocked_anime, "Red de anuncios Vidoomy en AnimeFLV debe ser bloqueada");
+
+            let anime_scripts_ptr = aegis_shields_get_injected_scripts(engine, anime_source.as_ptr());
+            assert!(!anime_scripts_ptr.is_null());
+            let anime_scripts = CStr::from_ptr(anime_scripts_ptr).to_str().unwrap();
+            assert!(anime_scripts.contains("Streaming Clickjack & Popunder Stripper"));
+            aegis_shields_free_string(anime_scripts_ptr);
+
+            // 12. Probar Acortadores y Cuentas Atrás (Adf.ly, CurseForge, ouo.io)
+            let ouo_ad = CString::new("https://ouo.io/traffic/track.js").unwrap();
+            let ouo_source = CString::new("https://ouo.io/1234abc").unwrap();
+            let blocked_ouo = aegis_shields_should_block(
+                engine,
+                ouo_ad.as_ptr(),
+                ouo_source.as_ptr(),
+                req_type.as_ptr(),
+            );
+            assert!(blocked_ouo, "Tráfico publicitario de ouo.io debe ser bloqueado");
+
+            let cf_source = CString::new("https://www.curseforge.com/minecraft/mc-mods/jei/download/123").unwrap();
+            let cf_scripts_ptr = aegis_shields_get_injected_scripts(engine, cf_source.as_ptr());
+            assert!(!cf_scripts_ptr.is_null());
+            let cf_scripts = CStr::from_ptr(cf_scripts_ptr).to_str().unwrap();
+            assert!(cf_scripts.contains("FastForward & Countdown Bypasser"));
+            aegis_shields_free_string(cf_scripts_ptr);
+
             aegis_shields_destroy(engine);
         }
     }

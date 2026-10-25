@@ -129,4 +129,38 @@ forbes.com##fbs-ad
 ||cookielaw.org^
 ||didomi.io^
 ||quantcast.mgr.consensu.org^
+
+! ── 9. Sitios de Streaming y Anime (AnimeFLV, Cuevana, Cinecalidad) ───────────
+animeflv.net##.banner-wrapper
+animeflv.net##.publicidad
+animeflv.net##div[class*="ads"]
+animeflv.net##.CnsntMdl
+animeflv.net##div[style*="z-index: 99999"]
+cuevana*.biz##.ad-banner
+cuevana*.biz##.banner-desktop
+cuevana*.biz##div[class*="dfp-ad"]
+cuevana*.biz##.play-fake
+cinecalidad*.com##.publi
+cinecalidad*.com##.publi-header
+cinecalidad*.com##.fake-player
+||vidoomy.com^
+||ezoic.com^
+||mgid.com^
+||richaudience.com^
+||adtng.com^
+||adk2x.com^
+||streamtape.com/ads*
+||doodstream.com/ad*
+||mixdrop.co/ads*
+
+! ── 10. Acortadores de Enlaces y Cuentas Atrás (Adf.ly, CurseForge, ouo.io) ────
+||ouo.io/traffic/*
+||ouo.press/traffic/*
+||adf.ly/ad/*
+||ay.gy/ad/*
+||linkvertise.com/api/v1/redirect*
+||shrinkme.io/ads*
+||cuty.io/ads*
+curseforge.com##.curseforge-ad
+curseforge.com##div[id*="cf-ad-"]
 "#;
