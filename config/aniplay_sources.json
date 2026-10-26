@@ -1,0 +1,373 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fabian2007oyanedel-dot/aegis/main/config/aniplay_sources_schema.json",
+  "repository": {
+    "name": "Aegis AniPlay Community Source Repository",
+    "id": "org.aegis.aniplay.repo.latin",
+    "version": "1.0.0",
+    "description": "Repositorio modular de fuentes para AniPlay en Aegis Browser con soporte para Anime, Películas y Series en Español y Latino con reglas anti-publicidad integradas.",
+    "author": "Aegis Community",
+    "updatedAt": "2026-10-26T20:45:00Z",
+    "compatibleWith": "Aegis >= 1.3.0",
+    "rawRepoUrl": "https://raw.githubusercontent.com/fabian2007oyanedel-dot/aegis/main/config/aniplay_sources.json"
+  },
+  "extractors": [
+    {
+      "id": "streamwish",
+      "name": "StreamWish",
+      "domains": ["streamwish.to", "streamwish.com", "wishembed.pro", "embedwish.com", "strwish.xyz"],
+      "type": "hls",
+      "regex": "sources:\\s*\\[\\{file:\\s*[\"']([^\"']+\\.m3u8[^\"']*)[\"']",
+      "requiresReferer": true
+    },
+    {
+      "id": "filemoon",
+      "name": "FileMoon",
+      "domains": ["filemoon.sx", "filemoon.to", "filemoon.in"],
+      "type": "hls",
+      "regex": "file:\\s*[\"']([^\"']+\\.m3u8[^\"']*)[\"']",
+      "requiresReferer": true
+    },
+    {
+      "id": "voe",
+      "name": "Voe",
+      "domains": ["voe.sx", "voe-unblock.com", "repackers.link"],
+      "type": "hls_or_mp4",
+      "regex": "[\"']hls[\"']:\\s*[\"']([^\"']+)[\"']|[\"']file[\"']:\\s*[\"']([^\"']+\\.mp4)[\"']",
+      "requiresReferer": false
+    },
+    {
+      "id": "doodstream",
+      "name": "DoodStream",
+      "domains": ["dood.to", "dood.so", "doodstream.com", "ds2play.com"],
+      "type": "mp4",
+      "tokenRegex": "/pass_md5/([^\"']+)",
+      "requiresReferer": true
+    },
+    {
+      "id": "mp4upload",
+      "name": "Mp4Upload",
+      "domains": ["mp4upload.com"],
+      "type": "mp4",
+      "regex": "player\\.src\\([\"']([^\"']+\\.mp4)[\"']",
+      "requiresReferer": true
+    },
+    {
+      "id": "yourupload",
+      "name": "YourUpload",
+      "domains": ["yourupload.com"],
+      "type": "mp4",
+      "regex": "file:\\s*[\"']([^\"']+\\.mp4)[\"']",
+      "requiresReferer": true
+    },
+    {
+      "id": "tomatomatela",
+      "name": "Tomatomatela (Cuevana)",
+      "domains": ["tomatomatela.com", "pelispng.online"],
+      "type": "hls",
+      "regex": "var\\s+url\\s*=\\s*[\"']([^\"']+\\.m3u8)[\"']",
+      "requiresReferer": true
+    }
+  ],
+  "sources": [
+    {
+      "id": "animeflv",
+      "name": "AnimeFLV",
+      "category": "anime",
+      "language": "es-ES",
+      "audio": "Subtitulado",
+      "baseUrl": "https://www3.animeflv.net",
+      "mirrors": ["https://animeflv.net", "https://www.animeflv.net"],
+      "version": "1.3.0",
+      "icon": "https://www3.animeflv.net/favicon.ico",
+      "status": "online",
+      "description": "El portal de anime subtitulado en español más popular y completo.",
+      "endpoints": {
+        "popular": "/browse?order=rating",
+        "latest": "/browse?order=added",
+        "airing": "/browse?status=1&order=rating",
+        "search": "/browse?q={query}",
+        "genre": "/browse?genre={genre}"
+      },
+      "selectors": {
+        "itemList": "ul.ListAnimes li article.Anime",
+        "title": "h3.Title",
+        "link": "a",
+        "poster": "div.Image figure img",
+        "type": "span.Type",
+        "rating": "span.Vote span.vtprmd",
+        "description": "div.Description p",
+        "genres": "nav.Genres a",
+        "episodeScriptRegex": "var\\s+episodes\\s*=\\s*(\\[\\[.*?\\]\\]);",
+        "videoServersRegex": "var\\s+videos\\s*=\\s*(\\{.*?\\});"
+      },
+      "supportedExtractors": ["streamwish", "filemoon", "mega", "yourupload", "mp4upload"],
+      "headers": {
+        "Referer": "https://www3.animeflv.net/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+      },
+      "shieldRules": [
+        "*://*.adkeeper.co/*",
+        "*://*.adsterra.com/*",
+        "*://*.propellerads.com/*",
+        "*://*.clksite.com/*",
+        "*://*.creativecdn.com/*",
+        "*://*.effectivecpmcontent.com/*",
+        "*://*.onclickbright.com/*"
+      ]
+    },
+    {
+      "id": "jkanime",
+      "name": "JKAnime",
+      "category": "anime",
+      "language": "es-LA",
+      "audio": "Subtitulado / Latino",
+      "baseUrl": "https://jkanime.net",
+      "mirrors": ["https://jkanime.vip"],
+      "version": "1.2.0",
+      "icon": "https://jkanime.net/assets/images/favicon.ico",
+      "status": "online",
+      "description": "Extenso catálogo de anime clásico, estrenos de temporada y doblaje latino.",
+      "endpoints": {
+        "popular": "/top/",
+        "latest": "/",
+        "airing": "/horario/",
+        "search": "/buscar/{query}/",
+        "genre": "/genero/{genre}/"
+      },
+      "selectors": {
+        "itemList": "div.anime__item",
+        "title": "div.anime__item__text h5 a",
+        "link": "div.anime__item__text h5 a",
+        "poster": "div.anime__item__pic",
+        "rating": "div.ep",
+        "episodeContainer": "div.anime__pagination a",
+        "serverIframe": "div.player_conteiner iframe"
+      },
+      "supportedExtractors": ["voe", "filemoon", "streamwish", "doodstream"],
+      "headers": {
+        "Referer": "https://jkanime.net/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+      },
+      "shieldRules": [
+        "*://*.coinhive.com/*",
+        "*://*.popcash.net/*",
+        "*://*.popads.net/*",
+        "*://*.trafficjunky.com/*"
+      ]
+    },
+    {
+      "id": "monoschinos",
+      "name": "MonosChinos",
+      "category": "anime",
+      "language": "es-LA",
+      "audio": "Subtitulado / Latino",
+      "baseUrl": "https://monoschinos2.com",
+      "mirrors": ["https://monoschinos.com"],
+      "version": "1.1.0",
+      "icon": "https://monoschinos2.com/public/favicon.ico",
+      "status": "online",
+      "description": "Actualización inmediata de episodios de temporada y estrenos en alta definición.",
+      "endpoints": {
+        "popular": "/animes?categoria=anime&orden=puntuacion",
+        "latest": "/emision",
+        "search": "/buscar?q={query}",
+        "genre": "/genero/{genre}"
+      },
+      "selectors": {
+        "itemList": "div.col-6.col-sm-4.col-md-3.col-lg-2",
+        "title": "h3.title",
+        "link": "a",
+        "poster": "div.series-card img",
+        "episodeList": "div.chapter-list a"
+      },
+      "supportedExtractors": ["streamwish", "filemoon", "voe", "mp4upload"],
+      "headers": {
+        "Referer": "https://monoschinos2.com/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+      },
+      "shieldRules": [
+        "*://*.exdynsrv.com/*",
+        "*://*.a-ads.com/*"
+      ]
+    },
+    {
+      "id": "cuevana3",
+      "name": "Cuevana 3 Pro",
+      "category": "movies_and_series",
+      "language": "es-LA",
+      "audio": "Latino / Castellano / Subtitulado",
+      "baseUrl": "https://cuevana.biz",
+      "mirrors": ["https://ww3.cuevana3.ch", "https://cuevana3.me"],
+      "version": "1.4.0",
+      "icon": "https://cuevana.biz/favicon.ico",
+      "status": "online",
+      "description": "Líder en streaming de películas de cartelera, estrenos de cine y series completas en español latino.",
+      "endpoints": {
+        "popular": "/peliculas-mas-vistas",
+        "latest": "/estrenos",
+        "movies": "/peliculas",
+        "series": "/series",
+        "search": "/search?q={query}",
+        "genre": "/genero/{genre}"
+      },
+      "selectors": {
+        "itemList": "ul.MovieList li.TPostMv",
+        "title": "h2.Title",
+        "link": "a",
+        "poster": "div.Image figure img",
+        "year": "span.Year",
+        "rating": "span.Vote",
+        "playerTabs": "ul.TPlayerNv li.open_submenu",
+        "playerContainer": "div.TPlayer iframe, div.TPlayer embed"
+      },
+      "supportedExtractors": ["tomatomatela", "voe", "filemoon", "streamwish", "doodstream"],
+      "headers": {
+        "Referer": "https://cuevana.biz/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+      },
+      "shieldRules": [
+        "*://*.cpmstar.com/*",
+        "*://*.realsrv.com/*",
+        "*://*.exoclick.com/*",
+        "*://*.yllix.com/*",
+        "*://*.zergnet.com/*"
+      ]
+    },
+    {
+      "id": "repelis",
+      "name": "RePelis / RePelisPlus",
+      "category": "movies_and_series",
+      "language": "es-LA",
+      "audio": "Español Latino / Castellano",
+      "baseUrl": "https://repelisplus.lat",
+      "mirrors": ["https://repelis.net", "https://www.repelisplus.lat"],
+      "version": "1.2.0",
+      "icon": "https://repelisplus.lat/favicon.ico",
+      "status": "online",
+      "description": "Extenso catálogo de cine independiente, taquilla mundial y series televisivas.",
+      "endpoints": {
+        "popular": "/peliculas-mas-vistas/",
+        "latest": "/estrenos/",
+        "movies": "/peliculas/",
+        "series": "/series/",
+        "search": "/?s={query}",
+        "genre": "/generos/{genre}/"
+      },
+      "selectors": {
+        "itemList": "div.items article.item",
+        "title": "div.data h3 a",
+        "link": "div.poster a",
+        "poster": "div.poster img",
+        "rating": "div.rating",
+        "year": "span.year"
+      },
+      "supportedExtractors": ["streamwish", "filemoon", "voe", "turbovid"],
+      "headers": {
+        "Referer": "https://repelisplus.lat/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+      },
+      "shieldRules": [
+        "*://*.bet365.com/*",
+        "*://*.1xbet.com/*",
+        "*://*.propellerads.com/*"
+      ]
+    },
+    {
+      "id": "pelisplus",
+      "name": "PelisPlus HD",
+      "category": "movies_and_series",
+      "language": "es-LA",
+      "audio": "Latino / Castellano",
+      "baseUrl": "https://pelisplus.lat",
+      "mirrors": ["https://pelisplushd.lat", "https://pelisplus.so"],
+      "version": "1.2.0",
+      "icon": "https://pelisplus.lat/favicon.ico",
+      "status": "online",
+      "description": "Películas y series en calidad 1080p con audio latino y múltiples servidores rápidos.",
+      "endpoints": {
+        "popular": "/peliculas?order=rating",
+        "latest": "/peliculas",
+        "series": "/series",
+        "search": "/buscar?s={query}",
+        "genre": "/genero/{genre}"
+      },
+      "selectors": {
+        "itemList": "div.item-pelicula",
+        "title": "div.item-detail h2",
+        "link": "a",
+        "poster": "div.item-thumb img",
+        "rating": "div.rating-value"
+      },
+      "supportedExtractors": ["streamwish", "filemoon", "voe", "doodstream"],
+      "headers": {
+        "Referer": "https://pelisplus.lat/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+      },
+      "shieldRules": [
+        "*://*.adnxs.com/*",
+        "*://*.adservice.google.com/*"
+      ]
+    },
+    {
+      "id": "gnula",
+      "name": "Gnula",
+      "category": "movies",
+      "language": "es-ES",
+      "audio": "Castellano / Latino / VOSE",
+      "baseUrl": "https://gnula.nu",
+      "mirrors": ["https://gnula.cc"],
+      "version": "1.0.0",
+      "icon": "https://gnula.nu/favicon.ico",
+      "status": "online",
+      "description": "Sitio pionero y clásico para películas en estreno, subtituladas y en castellano con enlaces directos.",
+      "endpoints": {
+        "popular": "/peliculas-recomendadas/",
+        "latest": "/",
+        "search": "/?s={query}",
+        "genre": "/genero/{genre}/"
+      },
+      "selectors": {
+        "itemList": "div.post",
+        "title": "div.title h2 a",
+        "link": "div.title h2 a",
+        "poster": "div.entry img",
+        "synopsis": "div.entry p"
+      },
+      "supportedExtractors": ["filemoon", "voe", "yourupload"],
+      "headers": {
+        "Referer": "https://gnula.nu/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+      },
+      "shieldRules": [
+        "*://*.monetag.com/*",
+        "*://*.hilltopads.net/*"
+      ]
+    },
+    {
+      "id": "crunchyroll-free",
+      "name": "Crunchyroll (Free Public Catalog)",
+      "category": "anime",
+      "language": "multi",
+      "audio": "Original Japonés / Doblajes",
+      "baseUrl": "https://www.crunchyroll.com",
+      "version": "1.1.0",
+      "icon": "https://www.crunchyroll.com/favicon.ico",
+      "status": "online",
+      "description": "Catálogo gratuito de transmisión oficial con subtítulos oficiales multilingües.",
+      "endpoints": {
+        "popular": "/videos/anime/popular",
+        "simulcasts": "/simulcasts",
+        "search": "/search?q={query}"
+      },
+      "supportedExtractors": ["hls_direct"],
+      "headers": {
+        "Referer": "https://www.crunchyroll.com/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+      },
+      "shieldRules": [
+        "*://*.doubleclick.net/*",
+        "*://*.googlesyndication.com/*"
+      ]
+    }
+  ]
+}
