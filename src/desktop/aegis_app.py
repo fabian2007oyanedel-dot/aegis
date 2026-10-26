@@ -163,7 +163,7 @@ from PyQt6.QtWebEngineCore import (
     QWebEngineDownloadRequest, QWebEngineScript, QWebEnginePage
 )
 from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer, QByteArray, QBuffer, QIODevice, QSize, QStringListModel, pyqtSignal
-from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QIcon, QPixmap, QShortcut, QKeySequence
+from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QIcon, QPixmap, QShortcut, QKeySequence, QPalette
 from PyQt6.QtSvg import QSvgRenderer
 
 BASE_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent.parent
@@ -176,6 +176,157 @@ READING_LIST_FILE = Path.home() / ".aegis_reading_list.json"
 USERSCRIPTS_DIR = Path.home() / ".aegis_userscripts"
 EXTENSIONS_DIR = Path.home() / ".aegis_extensions"
 PROFILE_DIR = Path.home() / ".aegis_profile"
+
+def ensure_builtin_userscripts(scripts_dir: Path):
+    """Pre-instala extensiones populares integradas y ligeras en Aegis (Steam Helper, SponsorBlock, Smart Dark, AdBlock Zapper)."""
+    try:
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        steam_script = scripts_dir / "steam_helper.js"
+        if not steam_script.exists():
+            steam_script.write_text("""// ==UserScript==
+// @name         Aegis Steam Helper
+// @description  Potencia Steam Community y Tienda: SteamDB, conversor de tasas, calculadora de comisión de Valve (-15%) y protección contra estafas
+// @match        *://store.steampowered.com/*
+// @match        *://steamcommunity.com/*
+// ==/UserScript==
+(function() {
+    'use strict';
+    const host = window.location.hostname;
+    if (host.includes('store.steampowered.com')) {
+        const appMatch = window.location.pathname.match(/\\/app\\/(\\d+)/);
+        if (appMatch) {
+            const appId = appMatch[1];
+            const btnContainer = document.querySelector('.page_content_actions') || document.querySelector('.game_area_purchase_game');
+            if (btnContainer && !document.getElementById('aegis-steamdb-btn')) {
+                const sdbBtn = document.createElement('a');
+                sdbBtn.id = 'aegis-steamdb-btn';
+                sdbBtn.href = `https://steamdb.info/app/${appId}/`;
+                sdbBtn.target = '_blank';
+                sdbBtn.innerText = '📊 Ver en SteamDB (Historial de Precios)';
+                sdbBtn.style.cssText = 'display:inline-block; margin: 8px 0; padding: 6px 14px; background: #0072CE; color: #fff; font-weight: 600; border-radius: 4px; text-decoration: none; font-size: 12px; border: 1px solid #1b9bf0;';
+                btnContainer.prepend(sdbBtn);
+            }
+        }
+    }
+    if (host.includes('steamcommunity.com')) {
+        const marketInput = document.getElementById('market_sell_buyercurrency_input');
+        if (marketInput) {
+            marketInput.addEventListener('input', function() {
+                const val = parseFloat(this.value.replace(',', '.'));
+                const youReceive = document.getElementById('market_sell_currency_input');
+                if (!isNaN(val) && youReceive) {
+                    const net = (val / 1.15).toFixed(2);
+                    console.log('Aegis Steam Helper: Neto recibido: ' + net);
+                }
+            });
+        }
+        if (window.location.pathname.includes('/tradeoffer/')) {
+            const warningBox = document.createElement('div');
+            warningBox.id = 'aegis-trade-guard';
+            warningBox.style.cssText = 'background: #161b22; border: 1px solid #388bfd; color: #f0f6fc; padding: 10px 14px; border-radius: 8px; margin: 10px 0; font-size: 12px; display: flex; align-items: center; gap: 8px;';
+            warningBox.innerHTML = '<strong style="color:#58a6ff;">🛡️ Aegis Steam Guard:</strong> Verifica que el nivel y fecha del perfil coincidan antes de confirmar.';
+            const container = document.getElementById('trade_offer_header') || document.body;
+            container.prepend(warningBox);
+        }
+    }
+})();
+""", encoding="utf-8")
+
+        sponsor_script = scripts_dir / "sponsor_block.js"
+        if not sponsor_script.exists():
+            sponsor_script.write_text("""// ==UserScript==
+// @name         Aegis SponsorBlock Lite
+// @description  Salto inteligente de segmentos patrocinados y recordatorios en YouTube
+// @match        *://*.youtube.com/*
+// ==/UserScript==
+(function() {
+    'use strict';
+    let lastUrl = '';
+    let segments = [];
+    async function fetchSegments(videoId) {
+        try {
+            const resp = await fetch(`https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=["sponsor","intro","outro","selfpromo"]`);
+            if (resp.ok) segments = await resp.json();
+            else segments = [];
+        } catch (e) { segments = []; }
+    }
+    setInterval(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const vId = urlParams.get('v');
+        if (vId && vId !== lastUrl) {
+            lastUrl = vId;
+            fetchSegments(vId);
+        }
+        const video = document.querySelector('video');
+        if (!video || !segments.length) return;
+        const curTime = video.currentTime;
+        for (const seg of segments) {
+            const [start, end] = seg.segment;
+            if (curTime >= start && curTime < end - 0.5) {
+                video.currentTime = end;
+                break;
+            }
+        }
+    }, 800);
+})();
+""", encoding="utf-8")
+
+        dark_script = scripts_dir / "dark_reader.js"
+        if not dark_script.exists():
+            dark_script.write_text("""// ==UserScript==
+// @name         Aegis Smart Dark Mode
+// @description  Modo oscuro inteligente para sitios web sin tema nativo
+// @match        *://*/*
+// ==/UserScript==
+(function() {
+    'use strict';
+    if (window._aegisDarkInjected) return;
+    window._aegisDarkInjected = true;
+    const host = window.location.hostname;
+    if (host.includes('youtube.com') || host.includes('github.com') || host.includes('reddit.com') || host.includes('netflix.com')) return;
+    const style = document.createElement('style');
+    style.id = 'aegis-smart-dark';
+    style.textContent = `
+        html { filter: invert(90%) hue-rotate(180deg) !important; background: #111 !important; }
+        img, video, canvas, iframe, svg, [style*="background-image"] { filter: invert(110%) hue-rotate(180deg) !important; }
+    `;
+    if (localStorage.getItem('aegis_force_dark') === '1') {
+        document.documentElement.appendChild(style);
+    }
+})();
+""", encoding="utf-8")
+
+        ublock_script = scripts_dir / "ublock_lite.js"
+        if not ublock_script.exists():
+            ublock_script.write_text("""// ==UserScript==
+// @name         Aegis AdBlock & Tracker Zapper
+// @description  Bloqueo de banners intrusivos, popups de suscripción y rastreadores
+// @match        *://*/*
+// ==/UserScript==
+(function() {
+    'use strict';
+    const annoyingSelectors = [
+        '.ad-banner', '.adsbygoogle', '.advertisement', '#cookie-banner',
+        '.cookie-notice', '.cmp-container', '#qc-cmp2-container',
+        '.tp-modal', '.tp-backdrop', '.paywall-overlay'
+    ];
+    function zap() {
+        annoyingSelectors.forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => {
+                el.style.setProperty('display', 'none', 'important');
+            });
+        });
+        if (document.body && document.body.style.overflow === 'hidden') {
+            document.body.style.overflow = 'auto';
+        }
+    }
+    zap();
+    window.addEventListener('DOMContentLoaded', zap);
+    setInterval(zap, 2000);
+})();
+""", encoding="utf-8")
+    except Exception:
+        pass
 
 # ── 2. Gestor de Sitios Frecuentes e Historial Real ───────────────────────────
 class HistoryManager:
@@ -763,10 +914,11 @@ def create_settings_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
     return svg_to_icon(svg, size)
 
 def create_download_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
+    """Icono de descargas moderno: flecha hacia bandeja abierta con trazo limpio de alta visibilidad."""
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="7 10 12 15 17 10"/>
-      <line x1="12" y1="15" x2="12" y2="3"/>
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+      <polyline points="7 11 12 16 17 11"/>
+      <line x1="12" y1="4" x2="12" y2="16"/>
     </svg>"""
     return svg_to_icon(svg, size)
 
@@ -778,8 +930,25 @@ def create_history_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
     return svg_to_icon(svg, size)
 
 def create_extension_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
+    """Icono de extensión universal: pieza de rompecabezas clásica y nítida como en Chrome y Brave."""
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20.5 11H19V7a2 2 0 0 0-2-2h-4v-1.5a2.5 2.5 0 0 0-5 0V5H4a2 2 0 0 0-2 2v3.8h1.5a2.5 2.5 0 0 1 0 5H2V20a2 2 0 0 0 2 2h3.8v-1.5a2.5 2.5 0 0 1 5 0V22H17a2 2 0 0 0 2-2v-4h1.5a2.5 2.5 0 0 0 0-5z"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_aniplay_icon(color_hex: str = "#ff5370", size: int = 16) -> QIcon:
+    """Icono de AniPlay Anime Hub: pantalla con botón play central."""
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+      <rect x="2" y="4" width="20" height="13" rx="2" ry="2"/>
+      <polygon points="10 8 16 10.5 10 13 10 8" fill="{color_hex}"/>
+      <line x1="8" y1="20" x2="16" y2="20"/>
+      <line x1="12" y1="17" x2="12" y2="20"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_star_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
     </svg>"""
     return svg_to_icon(svg, size)
 
@@ -1003,6 +1172,28 @@ THEMES = {
     }
 }
 
+def get_qt_palette_for_theme(theme_name: str) -> QPalette:
+    """Garantiza que la paleta global del sistema Qt tenga texto blanco/claro en modo oscuro y negro en modo claro, erradicando letras negras ilegibles."""
+    t = THEMES.get(theme_name, THEMES["Oscuro"])
+    palette = QPalette()
+    bg = QColor(t["bg"])
+    surface = QColor(t["surface"])
+    text = QColor(t["text"])
+    accent = QColor(t["accent"])
+    palette.setColor(QPalette.ColorRole.Window, bg)
+    palette.setColor(QPalette.ColorRole.WindowText, text)
+    palette.setColor(QPalette.ColorRole.Base, surface)
+    palette.setColor(QPalette.ColorRole.AlternateBase, bg)
+    palette.setColor(QPalette.ColorRole.ToolTipBase, surface)
+    palette.setColor(QPalette.ColorRole.ToolTipText, text)
+    palette.setColor(QPalette.ColorRole.Text, text)
+    palette.setColor(QPalette.ColorRole.Button, surface)
+    palette.setColor(QPalette.ColorRole.ButtonText, text)
+    palette.setColor(QPalette.ColorRole.BrightText, QColor("#ffffff"))
+    palette.setColor(QPalette.ColorRole.Highlight, accent)
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+    return palette
+
 # ── 9. Switch Interactivo Moderno (Estilo Brave) ──────────────────────────────
 class ToggleSwitch(QAbstractButton):
     def __init__(self, checked=True, parent=None, accent_color="#388bfd", bg_color="#0d1117"):
@@ -1177,6 +1368,9 @@ class AegisShieldsPopup(QFrame):
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
+        if hasattr(self, "btn_tool_aniplay"):
+            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
+            self.btn_tool_aniplay.setVisible(enabled)
         self.main_switch.update_colors(accent_color=t["accent"], bg_color=t["bg"])
 
         qss = f"""
@@ -1245,12 +1439,58 @@ class AegisShieldsPopup(QFrame):
         self.setStyleSheet(qss)
         self.update()
 
-# ── 10.1 Menú Principal de la Aplicación (Estilo Brave ⋮ Frameless Dropdown) ───
+# ── 10.1 Menú Principal de la Aplicación (Estilo Limpio y Sin Emojis ⋮) ────────
+class AegisAppMenuItem(QPushButton):
+    def __init__(self, item_id: str, text: str, shortcut: str, callback, parent_menu):
+        super().__init__()
+        self.item_id = item_id
+        self.menu_text = text
+        self.parent_menu = parent_menu
+        self.setProperty("class", "menu-item-btn")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.on_context_menu)
+
+        h_box = QHBoxLayout(self)
+        h_box.setContentsMargins(10, 6, 10, 6)
+        h_box.setSpacing(8)
+
+        self.lbl_txt = QLabel(text)
+        self.lbl_txt.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.lbl_txt.setObjectName("MenuItemText")
+        h_box.addWidget(self.lbl_txt)
+        h_box.addStretch()
+
+        if shortcut:
+            self.lbl_sc = QLabel(shortcut)
+            self.lbl_sc.setProperty("class", "menu-shortcut-lbl")
+            self.lbl_sc.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            h_box.addWidget(self.lbl_sc)
+
+        self.clicked.connect(lambda: (self.parent_menu.hide(), callback()))
+
+    def on_context_menu(self, pos):
+        if not self.item_id or not self.parent_menu or not self.parent_menu.parent_win:
+            return
+        p_win = self.parent_menu.parent_win
+        pinned_list = p_win.config.get("pinned_toolbar_buttons", [])
+        is_pinned = self.item_id in pinned_list
+
+        menu = QMenu(self)
+        menu.setStyleSheet(p_win.current_qss)
+        if is_pinned:
+            act = menu.addAction("Desanclar de la barra de herramientas")
+            act.triggered.connect(lambda: p_win.unpin_toolbar_button(self.item_id))
+        else:
+            act = menu.addAction("Anclar a la barra de herramientas")
+            act.triggered.connect(lambda: p_win.pin_toolbar_button(self.item_id))
+        menu.exec(self.mapToGlobal(pos))
+
 class AegisAppMenu(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.setObjectName("AegisAppMenu")
-        self.setFixedWidth(260)
+        self.setFixedWidth(270)
         self.parent_win = parent
         self.init_ui()
 
@@ -1264,27 +1504,8 @@ class AegisAppMenu(QFrame):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(2)
 
-        def add_item(text: str, shortcut: str, callback):
-            btn = QPushButton()
-            btn.setProperty("class", "menu-item-btn")
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            h_box = QHBoxLayout(btn)
-            h_box.setContentsMargins(10, 6, 10, 6)
-            h_box.setSpacing(8)
-
-            lbl_txt = QLabel(text)
-            lbl_txt.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-            lbl_txt.setStyleSheet("background: transparent; border: none; font-size: 12.5px; font-weight: 500;")
-            h_box.addWidget(lbl_txt)
-            h_box.addStretch()
-
-            if shortcut:
-                lbl_sc = QLabel(shortcut)
-                lbl_sc.setProperty("class", "menu-shortcut-lbl")
-                lbl_sc.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-                h_box.addWidget(lbl_sc)
-
-            btn.clicked.connect(lambda: (self.hide(), callback()))
+        def add_item(item_id: str, text: str, shortcut: str, callback):
+            btn = AegisAppMenuItem(item_id, text, shortcut, callback, self)
             layout.addWidget(btn)
             return btn
 
@@ -1294,30 +1515,36 @@ class AegisAppMenu(QFrame):
             sep.setFixedHeight(1)
             layout.addWidget(sep)
 
-        add_item("➕ Nueva pestaña", "Ctrl+T", lambda: self.parent_win.add_new_tab())
-        add_item("🗂️ Nueva ventana", "Ctrl+N", lambda: self.parent_win.open_new_window())
-        add_item("🕶️ Ventana privada", "Ctrl+Shift+N", lambda: self.parent_win.open_incognito_window())
-        add_item("↩️ Reabrir pestaña cerrada", "Ctrl+Shift+T", lambda: self.parent_win.reopen_closed_tab())
-        add_item("🔎 Buscar pestañas", "Ctrl+Shift+A", lambda: self.parent_win.toggle_tab_search_popup())
+        add_item("new_tab", "Nueva pestaña", "Ctrl+T", lambda: self.parent_win.add_new_tab())
+        add_item("new_window", "Nueva ventana", "Ctrl+N", lambda: self.parent_win.open_new_window())
+        add_item("incognito", "Nueva ventana privada", "Ctrl+Shift+N", lambda: self.parent_win.open_incognito_window())
+        add_item("reopen_tab", "Reabrir pestaña cerrada", "Ctrl+Shift+T", lambda: self.parent_win.reopen_closed_tab())
+        add_item("tab_search", "Buscar pestañas", "Ctrl+Shift+A", lambda: self.parent_win.toggle_tab_search_popup())
         add_separator()
-        add_item("📑 Barra lateral", "Ctrl+B", lambda: self.parent_win.toggle_sidebar())
-        add_item("⭐ Barra de marcadores", "Ctrl+Shift+B", lambda: self.parent_win.toggle_bookmarks_bar())
-        add_item("📥 Descargas", "Ctrl+J", lambda: self.parent_win.open_internal_page("aegis://downloads"))
-        add_item("🕒 Historial", "Ctrl+H", lambda: self.parent_win.open_internal_page("aegis://history"))
-        add_item("🧩 Extensiones", "Ctrl+Shift+E", lambda: self.parent_win.open_internal_page("aegis://extensions"))
+
+        add_item("downloads", "Descargas", "Ctrl+J", lambda: self.parent_win.open_internal_page("aegis://downloads"))
+        add_item("history", "Historial", "Ctrl+H", lambda: self.parent_win.open_internal_page("aegis://history"))
+        add_item("extensions", "Extensiones", "Ctrl+Shift+E", lambda: self.parent_win.open_internal_page("aegis://extensions"))
+        add_item("sidebar", "Barra lateral", "Ctrl+B", lambda: self.parent_win.toggle_sidebar())
+        add_item("bookmarks_bar", "Barra de marcadores", "Ctrl+Shift+B", lambda: self.parent_win.toggle_bookmarks_bar())
+        if self.parent_win and self.parent_win.config.get("enable_aniplay", False):
+            add_item("aniplay", "AniPlay Anime Hub", "", lambda: self.parent_win.open_internal_page("aegis://aniplay"))
         add_separator()
-        add_item("📖 Modo lectura", "F9", lambda: self.parent_win.toggle_reader_mode())
-        add_item("🧹 Copiar enlace limpio", "", lambda: self.parent_win.copy_clean_url())
-        add_item("📸 Capturar pantalla", "Ctrl+Shift+S", lambda: self.parent_win.capture_page_screenshot())
-        add_item("🖨️ Guardar como PDF", "Ctrl+P", lambda: self.parent_win.print_to_pdf())
-        add_item("🔍 Buscar en la página", "Ctrl+F", lambda: self.parent_win.find_bar.show_find())
-        add_item("🔇 Silenciar pestaña", "Ctrl+M", lambda: self.parent_win.toggle_mute_current_tab())
-        add_item("🖼️ Imagen en imagen (PiP)", "Alt+P", lambda: self.parent_win.toggle_picture_in_picture())
-        add_item("🎵 Control multimedia", "", lambda: self.parent_win.toggle_media_popup())
-        add_item("🛠️ DevTools / Inspeccionar", "F12", lambda: self.parent_win.open_devtools())
+
+        add_item("reader_mode", "Modo lectura", "F9", lambda: self.parent_win.toggle_reader_mode())
+        add_item("clean_copy", "Copiar enlace limpio", "", lambda: self.parent_win.copy_clean_url())
+        add_item("screenshot", "Capturar pantalla", "Ctrl+Shift+S", lambda: self.parent_win.capture_page_screenshot())
+        add_item("print_pdf", "Guardar como PDF", "Ctrl+P", lambda: self.parent_win.print_to_pdf())
+        add_item("find_in_page", "Buscar en la página", "Ctrl+F", lambda: self.parent_win.find_bar.show_find())
+        add_item("mute_tab", "Silenciar pestaña", "Ctrl+M", lambda: self.parent_win.toggle_mute_current_tab())
+        add_item("pip", "Imagen en imagen (PiP)", "Alt+P", lambda: self.parent_win.toggle_picture_in_picture())
+        add_item("media_control", "Control multimedia", "", lambda: self.parent_win.toggle_media_popup())
+        add_item("theme_toggle", "Cambiar tema", "", lambda: self.parent_win.toggle_theme())
+        add_item("devtools", "Herramientas de desarrollo", "F12", lambda: self.parent_win.open_devtools())
         add_separator()
-        add_item("🗑️ Borrar datos de navegación", "Ctrl+Shift+Del", lambda: self.parent_win.open_clear_data_dialog())
-        add_item("⚙️ Configuración", "Alt+S", lambda: self.parent_win.open_internal_page("aegis://settings"))
+
+        add_item("clear_data", "Borrar datos de navegación", "Ctrl+Shift+Del", lambda: self.parent_win.open_clear_data_dialog())
+        add_item("settings", "Configuración", "Alt+S", lambda: self.parent_win.open_internal_page("aegis://settings"))
         add_separator()
 
         # Fila de Zoom
@@ -1326,9 +1553,9 @@ class AegisAppMenu(QFrame):
         zoom_layout.setContentsMargins(10, 4, 10, 4)
         zoom_layout.setSpacing(8)
 
-        lbl_zoom = QLabel("Zoom")
-        lbl_zoom.setStyleSheet("font-size: 12px; font-weight: 500;")
-        zoom_layout.addWidget(lbl_zoom)
+        self.lbl_zoom = QLabel("Zoom")
+        self.lbl_zoom.setObjectName("ZoomLabel")
+        zoom_layout.addWidget(self.lbl_zoom)
         zoom_layout.addStretch()
 
         btn_zoom_out = QPushButton("−")
@@ -1349,10 +1576,13 @@ class AegisAppMenu(QFrame):
         layout.addWidget(zoom_widget)
         add_separator()
 
-        add_item("ℹ️ Acerca de Aegis v1.3.5", "", lambda: self.parent_win.open_internal_page("aegis://settings"))
+        add_item("about", "Acerca de Aegis v1.3.5", "", lambda: self.parent_win.open_internal_page("aegis://settings"))
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
+        if hasattr(self, "btn_tool_aniplay"):
+            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
+            self.btn_tool_aniplay.setVisible(enabled)
         qss = f"""
             QFrame#AegisAppMenu {{
                 background-color: {t['surface']};
@@ -1371,8 +1601,15 @@ class AegisAppMenu(QFrame):
                 background-color: {t['bg']};
                 color: {t['accent']};
             }}
+            QLabel#MenuItemText {{
+                color: {t['text']};
+                background: transparent;
+                border: none;
+                font-size: 12.5px;
+                font-weight: 500;
+            }}
             QLabel.menu-shortcut-lbl {{
-                color: rgba({rgb_text}, 0.45);
+                color: rgba({rgb_text}, 0.50);
                 font-size: 11px;
                 font-family: -apple-system, 'Segoe UI', monospace;
                 background: transparent;
@@ -1382,6 +1619,11 @@ class AegisAppMenu(QFrame):
                 background-color: rgba({rgb_text}, 0.08);
                 border: none;
                 margin: 3px 6px;
+            }}
+            QLabel#ZoomLabel {{
+                color: {t['text']};
+                font-size: 12px;
+                font-weight: 500;
             }}
             QPushButton.zoom-btn {{
                 background-color: {t['bg']};
@@ -1401,6 +1643,142 @@ class AegisAppMenu(QFrame):
                 color: {t['text']};
                 font-size: 11.5px;
                 min-width: 38px;
+            }}
+        """
+        self.setStyleSheet(qss)
+        self.update()
+
+# ── 10.1.1 Cuadro Desplegable de Ajuste Interactivo de Zoom ──────────────────
+class AegisZoomPopup(QFrame):
+    """Widget flotante moderno que se despliega al interactuar con el zoom para un control cómodo."""
+    def __init__(self, parent=None):
+        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setObjectName("AegisZoomPopup")
+        self.setFixedWidth(210)
+        self.parent_win = parent
+        self.init_ui()
+
+    def hideEvent(self, event):
+        if self.parent_win:
+            self.parent_win._last_zoom_close_time = time.time()
+        super().hideEvent(event)
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
+
+        lbl_title = QLabel("Zoom de la página")
+        lbl_title.setObjectName("ZoomPopupTitle")
+        layout.addWidget(lbl_title)
+
+        h_box = QHBoxLayout()
+        h_box.setSpacing(6)
+
+        self.btn_zoom_out = QPushButton("−")
+        self.btn_zoom_out.setObjectName("ZoomPopupBtn")
+        self.btn_zoom_out.setFixedSize(28, 28)
+        self.btn_zoom_out.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_zoom_out.setToolTip("Alejar zoom")
+        self.btn_zoom_out.clicked.connect(self.on_zoom_out)
+        h_box.addWidget(self.btn_zoom_out)
+
+        self.lbl_zoom_val = QLabel("100%")
+        self.lbl_zoom_val.setObjectName("ZoomPopupVal")
+        self.lbl_zoom_val.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h_box.addWidget(self.lbl_zoom_val, stretch=1)
+
+        self.btn_zoom_in = QPushButton("+")
+        self.btn_zoom_in.setObjectName("ZoomPopupBtn")
+        self.btn_zoom_in.setFixedSize(28, 28)
+        self.btn_zoom_in.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_zoom_in.setToolTip("Acercar zoom")
+        self.btn_zoom_in.clicked.connect(self.on_zoom_in)
+        h_box.addWidget(self.btn_zoom_in)
+
+        layout.addLayout(h_box)
+
+        self.btn_reset = QPushButton("Restablecer (100%)")
+        self.btn_reset.setObjectName("ZoomPopupResetBtn")
+        self.btn_reset.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_reset.clicked.connect(self.on_zoom_reset)
+        layout.addWidget(self.btn_reset)
+
+    def on_zoom_out(self):
+        if self.parent_win:
+            self.parent_win.zoom_out()
+            self.update_val()
+
+    def on_zoom_in(self):
+        if self.parent_win:
+            self.parent_win.zoom_in()
+            self.update_val()
+
+    def on_zoom_reset(self):
+        if self.parent_win:
+            self.parent_win.zoom_reset()
+            self.update_val()
+            self.hide()
+
+    def update_val(self):
+        if not self.parent_win:
+            return
+        v = self.parent_win.current_view()
+        if v:
+            zf = round(v.zoomFactor(), 2)
+            pct = int(zf * 100)
+            self.lbl_zoom_val.setText(f"{pct}%")
+            self.btn_reset.setEnabled(abs(zf - 1.0) > 0.02)
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        if hasattr(self, "btn_tool_aniplay"):
+            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
+            self.btn_tool_aniplay.setVisible(enabled)
+        qss = f"""
+            QFrame#AegisZoomPopup {{
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.16);
+                border-radius: 10px;
+            }}
+            QLabel#ZoomPopupTitle {{
+                color: {t['text']};
+                font-size: 11.5px;
+                font-weight: 600;
+            }}
+            QLabel#ZoomPopupVal {{
+                color: {t['text']};
+                font-size: 14px;
+                font-weight: 700;
+            }}
+            QPushButton#ZoomPopupBtn {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 6px;
+                color: {t['text']};
+                font-size: 15px;
+                font-weight: bold;
+            }}
+            QPushButton#ZoomPopupBtn:hover {{
+                border-color: {t['accent']};
+                color: {t['accent']};
+            }}
+            QPushButton#ZoomPopupResetBtn {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 6px;
+                color: {t['text']};
+                padding: 5px 8px;
+                font-size: 11.5px;
+                font-weight: 500;
+            }}
+            QPushButton#ZoomPopupResetBtn:hover {{
+                background-color: {t['accent']};
+                color: #ffffff;
+            }}
+            QPushButton#ZoomPopupResetBtn:disabled {{
+                opacity: 0.5;
+                color: rgba({rgb_text}, 0.35);
             }}
         """
         self.setStyleSheet(qss)
@@ -1427,7 +1805,7 @@ class AegisDownloadsPopup(QFrame):
 
         header = QHBoxLayout()
         lbl_title = QLabel("Descargas recientes")
-        lbl_title.setStyleSheet("font-weight: 700; font-size: 13.5px;")
+        lbl_title.setStyleSheet("font-weight: 700; font-size: 13.5px; color: #f0f6fc;")
         header.addWidget(lbl_title)
         header.addStretch()
 
@@ -1485,7 +1863,7 @@ class AegisDownloadsPopup(QFrame):
         if not downloads:
             lbl_empty = QLabel("No hay descargas recientes")
             lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl_empty.setStyleSheet("padding: 16px; opacity: 0.6; font-size: 12px;")
+            lbl_empty.setStyleSheet("padding: 16px; color: #8b949e; font-size: 12px;")
             self.list_container.addWidget(lbl_empty)
             return
 
@@ -1500,7 +1878,7 @@ class AegisDownloadsPopup(QFrame):
             fname = d.get("filename", "Descarga")
             display_name = fname if len(fname) <= 24 else fname[:22] + "…"
             lbl_name = QLabel(display_name)
-            lbl_name.setStyleSheet("font-weight: 600; font-size: 12px;")
+            lbl_name.setStyleSheet("font-weight: 600; font-size: 12px; color: #f0f6fc;")
             top_row.addWidget(lbl_name)
             top_row.addStretch()
 
@@ -1509,7 +1887,7 @@ class AegisDownloadsPopup(QFrame):
             sz_str = format_bytes(total) if total > 0 else ""
             status_text = f"{sz_str} · Completado" if state == "completed" else ("Descargando..." if state == "downloading" else "Cancelado")
             lbl_status = QLabel(status_text)
-            lbl_status.setStyleSheet("font-size: 11px; opacity: 0.7;")
+            lbl_status.setStyleSheet("font-size: 11px; color: #8b949e;")
             top_row.addWidget(lbl_status)
             c_layout.addLayout(top_row)
 
@@ -1550,6 +1928,9 @@ class AegisDownloadsPopup(QFrame):
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
+        if hasattr(self, "btn_tool_aniplay"):
+            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
+            self.btn_tool_aniplay.setVisible(enabled)
         qss = f"""
             QFrame#AegisDownloadsPopup {{
                 background-color: {t['surface']};
@@ -1619,7 +2000,7 @@ class AegisExtensionsPopup(QFrame):
 
         header = QHBoxLayout()
         lbl_title = QLabel("Extensiones y Complementos")
-        lbl_title.setStyleSheet("font-weight: 700; font-size: 13.5px;")
+        lbl_title.setStyleSheet("font-weight: 700; font-size: 13.5px; color: #f0f6fc;")
         header.addWidget(lbl_title)
         layout.addLayout(header)
 
@@ -1640,9 +2021,9 @@ class AegisExtensionsPopup(QFrame):
         info_l = QVBoxLayout()
         info_l.setSpacing(2)
         lbl_s_title = QLabel("Aegis Shields Core")
-        lbl_s_title.setStyleSheet("font-weight: 600; font-size: 12.5px;")
+        lbl_s_title.setStyleSheet("font-weight: 600; font-size: 12.5px; color: #f0f6fc;")
         lbl_s_sub = QLabel("Bloqueador nativo en Rust (Adblock + Minería)")
-        lbl_s_sub.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        lbl_s_sub.setStyleSheet("font-size: 11px; color: #8b949e;")
         info_l.addWidget(lbl_s_title)
         info_l.addWidget(lbl_s_sub)
         sc_layout.addLayout(info_l)
@@ -1718,7 +2099,7 @@ class AegisExtensionsPopup(QFrame):
                 w.deleteLater()
 
         lbl_c = QLabel("Extensiones Chrome Web Store")
-        lbl_c.setStyleSheet("font-weight: 600; font-size: 12.5px;")
+        lbl_c.setStyleSheet("font-weight: 600; font-size: 12.5px; color: #f0f6fc;")
         self.chrome_inner_layout.addWidget(lbl_c)
 
         exts = self.parent_win.extensions_mgr.get_installed_extensions() if (self.parent_win and hasattr(self.parent_win, "extensions_mgr")) else []
@@ -1738,7 +2119,7 @@ class AegisExtensionsPopup(QFrame):
                 self.chrome_inner_layout.addWidget(lbl_more)
         else:
             lbl_none_c = QLabel("Sin extensiones de Chrome instaladas")
-            lbl_none_c.setStyleSheet("font-size: 11px; opacity: 0.6;")
+            lbl_none_c.setStyleSheet("font-size: 11px; color: #8b949e;")
             self.chrome_inner_layout.addWidget(lbl_none_c)
 
         # 2. UserScripts
@@ -1749,7 +2130,7 @@ class AegisExtensionsPopup(QFrame):
                 w.deleteLater()
 
         lbl_s = QLabel("Scripts de Usuario (UserScripts)")
-        lbl_s.setStyleSheet("font-weight: 600; font-size: 12.5px;")
+        lbl_s.setStyleSheet("font-weight: 600; font-size: 12.5px; color: #f0f6fc;")
         self.sc_inner_layout.addWidget(lbl_s)
 
         scripts = list(USERSCRIPTS_DIR.glob("*.js")) if USERSCRIPTS_DIR.exists() else []
@@ -1763,11 +2144,14 @@ class AegisExtensionsPopup(QFrame):
                 self.sc_inner_layout.addWidget(lbl_name)
         else:
             lbl_none = QLabel("No hay scripts instalados aún")
-            lbl_none.setStyleSheet("font-size: 11px; opacity: 0.6;")
+            lbl_none.setStyleSheet("font-size: 11px; color: #8b949e;")
             self.sc_inner_layout.addWidget(lbl_none)
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
+        if hasattr(self, "btn_tool_aniplay"):
+            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
+            self.btn_tool_aniplay.setVisible(enabled)
         qss = f"""
             QFrame#AegisExtensionsPopup {{
                 background-color: {t['surface']};
@@ -1837,12 +2221,12 @@ class AegisMediaPopup(QFrame):
         cl.setSpacing(6)
 
         self.lbl_track = QLabel("No hay audio reproduciéndose")
-        self.lbl_track.setStyleSheet("font-weight: 600; font-size: 12px;")
+        self.lbl_track.setStyleSheet("font-weight: 600; font-size: 12px; color: #f0f6fc;")
         self.lbl_track.setWordWrap(True)
         cl.addWidget(self.lbl_track)
 
         self.lbl_site = QLabel("")
-        self.lbl_site.setStyleSheet("font-size: 11px; opacity: 0.65;")
+        self.lbl_site.setStyleSheet("font-size: 11px; color: #8b949e;")
         cl.addWidget(self.lbl_site)
 
         ctrl_l = QHBoxLayout()
@@ -1955,6 +2339,9 @@ class AegisMediaPopup(QFrame):
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
+        if hasattr(self, "btn_tool_aniplay"):
+            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
+            self.btn_tool_aniplay.setVisible(enabled)
         qss = f"""
             QFrame#AegisMediaPopup {{
                 background-color: {t['surface']};
@@ -2024,9 +2411,9 @@ class AegisSiteInfoPopup(QFrame):
 
         domain_v = QVBoxLayout()
         self.lbl_domain = QLabel("dominio.com")
-        self.lbl_domain.setStyleSheet("font-weight: 700; font-size: 13.5px;")
+        self.lbl_domain.setStyleSheet("font-weight: 700; font-size: 13.5px; color: #f0f6fc;")
         self.lbl_status = QLabel("Conexión segura")
-        self.lbl_status.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        self.lbl_status.setStyleSheet("font-size: 11px; color: #8b949e;")
         domain_v.addWidget(self.lbl_domain)
         domain_v.addWidget(self.lbl_status)
         self.header_layout.addLayout(domain_v)
@@ -2046,9 +2433,9 @@ class AegisSiteInfoPopup(QFrame):
         sec_l.setContentsMargins(10, 8, 10, 8)
         sec_l.setSpacing(4)
         self.lbl_cert_info = QLabel("Certificado válido (TLS 1.3 / HTTPS)")
-        self.lbl_cert_info.setStyleSheet("font-size: 11.5px; font-weight: 600;")
+        self.lbl_cert_info.setStyleSheet("font-size: 11.5px; font-weight: 600; color: #f0f6fc;")
         self.lbl_cert_desc = QLabel("Tu información (contraseñas, mensajes) es privada.")
-        self.lbl_cert_desc.setStyleSheet("font-size: 10.5px; opacity: 0.65;")
+        self.lbl_cert_desc.setStyleSheet("font-size: 10.5px; color: #8b949e;")
         sec_l.addWidget(self.lbl_cert_info)
         sec_l.addWidget(self.lbl_cert_desc)
         layout.addWidget(self.sec_box)
@@ -2059,7 +2446,7 @@ class AegisSiteInfoPopup(QFrame):
         ck_l = QHBoxLayout(self.cookies_box)
         ck_l.setContentsMargins(10, 8, 10, 8)
         self.lbl_cookies = QLabel("🍪 Cookies y datos locales")
-        self.lbl_cookies.setStyleSheet("font-size: 11.5px; font-weight: 600;")
+        self.lbl_cookies.setStyleSheet("font-size: 11.5px; font-weight: 600; color: #f0f6fc;")
         ck_l.addWidget(self.lbl_cookies)
         ck_l.addStretch()
         self.btn_clear_site_cookies = QPushButton("🧹 Borrar")
@@ -2071,7 +2458,7 @@ class AegisSiteInfoPopup(QFrame):
 
         # Sección de Permisos
         perm_title = QLabel("Permisos del sitio")
-        perm_title.setStyleSheet("font-weight: 600; font-size: 11px; opacity: 0.7; margin-top: 2px;")
+        perm_title.setStyleSheet("font-weight: 600; font-size: 11px; color: #8b949e; margin-top: 2px;")
         layout.addWidget(perm_title)
 
         self.perms_layout = QVBoxLayout()
@@ -2088,7 +2475,7 @@ class AegisSiteInfoPopup(QFrame):
             l_n = QLabel(name)
             l_n.setStyleSheet("font-size: 11px;")
             l_s = QLabel(state)
-            l_s.setStyleSheet("font-size: 11px; opacity: 0.65; font-weight: 500;")
+            l_s.setStyleSheet("font-size: 11px; color: #8b949e; font-weight: 500;")
             row.addWidget(l_n)
             row.addStretch()
             row.addWidget(l_s)
@@ -2134,6 +2521,9 @@ class AegisSiteInfoPopup(QFrame):
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
+        if hasattr(self, "btn_tool_aniplay"):
+            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
+            self.btn_tool_aniplay.setVisible(enabled)
         qss = f"""
             QFrame#AegisSiteInfoPopup {{
                 background-color: {t['surface']};
@@ -2280,6 +2670,9 @@ class AegisTabSearchPopup(QFrame):
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
+        if hasattr(self, "btn_tool_aniplay"):
+            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
+            self.btn_tool_aniplay.setVisible(enabled)
         qss = f"""
             QFrame#AegisTabSearchPopup {{
                 background-color: {t['surface']};
@@ -2411,6 +2804,9 @@ class AegisBookmarkEditPopup(QFrame):
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
+        if hasattr(self, "btn_tool_aniplay"):
+            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
+            self.btn_tool_aniplay.setVisible(enabled)
         qss = f"""
             QFrame#AegisBookmarkEditPopup {{
                 background-color: {t['surface']};
@@ -2552,6 +2948,9 @@ class AegisClearDataDialog(QDialog):
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
+        if hasattr(self, "btn_tool_aniplay"):
+            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
+            self.btn_tool_aniplay.setVisible(enabled)
         qss = f"""
             QDialog {{
                 background-color: {t['surface']};
@@ -2645,6 +3044,9 @@ class AegisSidebarWidget(QFrame):
         self.btn_tool_shot = QPushButton("📸")
         self.btn_tool_shot.setToolTip("Captura de Pantalla")
 
+        self.btn_tool_aniplay = QPushButton("▶")
+        self.btn_tool_aniplay.setToolTip("AniPlay Anime Hub")
+
         tools = [
             (self.btn_tool_notes, 0),
             (self.btn_tool_reading, 1),
@@ -2652,6 +3054,7 @@ class AegisSidebarWidget(QFrame):
             (self.btn_tool_bookmarks, 3),
             (self.btn_tool_pass, 4),
             (self.btn_tool_shot, 5),
+            (self.btn_tool_aniplay, 6),
         ]
 
         for btn, idx in tools:
@@ -2680,7 +3083,7 @@ class AegisSidebarWidget(QFrame):
         l_n.setContentsMargins(12, 10, 12, 10)
         l_n.setSpacing(8)
         lbl_notes_title = QLabel("📝 Notas Rápidas (Autoguardado)")
-        lbl_notes_title.setStyleSheet("font-weight: 700; font-size: 12px;")
+        lbl_notes_title.setStyleSheet("font-weight: 700; font-size: 12px; color: #f0f6fc;")
         l_n.addWidget(lbl_notes_title)
         self.txt_notes = QTextEdit()
         self.txt_notes.setObjectName("SidebarNotesInput")
@@ -2748,11 +3151,11 @@ class AegisSidebarWidget(QFrame):
         l_p.setContentsMargins(12, 12, 12, 12)
         l_p.setSpacing(10)
         lbl_p_title = QLabel("🔐 Generador de Contraseñas")
-        lbl_p_title.setStyleSheet("font-weight: 700; font-size: 12px;")
+        lbl_p_title.setStyleSheet("font-weight: 700; font-size: 12px; color: #f0f6fc;")
         l_p.addWidget(lbl_p_title)
 
         self.lbl_len = QLabel("Longitud: 16 caracteres")
-        self.lbl_len.setStyleSheet("font-size: 11px; opacity: 0.8;")
+        self.lbl_len.setStyleSheet("font-size: 11px; color: #c9d1d9;")
         l_p.addWidget(self.lbl_len)
 
         self.slider_len = QSlider(Qt.Orientation.Horizontal)
@@ -2784,12 +3187,12 @@ class AegisSidebarWidget(QFrame):
         l_s.setContentsMargins(12, 12, 12, 12)
         l_s.setSpacing(12)
         lbl_s_title = QLabel("📸 Captura de Pantalla Web")
-        lbl_s_title.setStyleSheet("font-weight: 700; font-size: 12px;")
+        lbl_s_title.setStyleSheet("font-weight: 700; font-size: 12px; color: #f0f6fc;")
         l_s.addWidget(lbl_s_title)
 
         lbl_s_desc = QLabel("Captura la página actual en alta resolución y cópiala al portapapeles y a la carpeta Descargas.")
         lbl_s_desc.setWordWrap(True)
-        lbl_s_desc.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        lbl_s_desc.setStyleSheet("font-size: 11px; color: #8b949e;")
         l_s.addWidget(lbl_s_desc)
 
         btn_take_shot = QPushButton("📸 Capturar Pestaña Actual")
@@ -2798,6 +3201,25 @@ class AegisSidebarWidget(QFrame):
         l_s.addWidget(btn_take_shot)
         l_s.addStretch()
         self.stack.addWidget(w_shot)
+
+        # 7. Tab AniPlay Hub
+        w_ani = QWidget()
+        l_ani = QVBoxLayout(w_ani)
+        l_ani.setContentsMargins(12, 12, 12, 12)
+        l_ani.setSpacing(12)
+        lbl_ani_t = QLabel("▶ AniPlay Anime Hub")
+        lbl_ani_t.setStyleSheet("font-weight: 700; font-size: 13px; color: #ff5370;")
+        l_ani.addWidget(lbl_ani_t)
+        lbl_ani_d = QLabel("Centro multimedia integrado para ver anime en streaming sin anuncios ni ventanas emergentes.")
+        lbl_ani_d.setWordWrap(True)
+        lbl_ani_d.setStyleSheet("font-size: 11px; color: #8b949e;")
+        l_ani.addWidget(lbl_ani_d)
+        btn_open_aniplay = QPushButton("▶ Abrir Catálogo AniPlay")
+        btn_open_aniplay.setProperty("class", "sidebar-action-btn")
+        btn_open_aniplay.clicked.connect(lambda: self.parent_win.open_internal_page("aegis://aniplay") if self.parent_win else None)
+        l_ani.addWidget(btn_open_aniplay)
+        l_ani.addStretch()
+        self.stack.addWidget(w_ani)
 
         main_layout.addWidget(self.stack)
 
@@ -2915,6 +3337,9 @@ class AegisSidebarWidget(QFrame):
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
+        if hasattr(self, "btn_tool_aniplay"):
+            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
+            self.btn_tool_aniplay.setVisible(enabled)
         qss = f"""
             QFrame#AegisSidebarWidget {{
                 background-color: {t['surface']};
@@ -3021,7 +3446,7 @@ class AegisBookmarksBar(QWidget):
                 w.deleteLater()
 
         lbl_icon = QLabel("⭐")
-        lbl_icon.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        lbl_icon.setStyleSheet("font-size: 11px; color: #8b949e;")
         self.bar_layout.addWidget(lbl_icon)
 
         bookmarks = self.parent_win.bookmarks_mgr.bookmarks if (self.parent_win and hasattr(self.parent_win, "bookmarks_mgr")) else []
@@ -3080,7 +3505,7 @@ class FindInPageWidget(QFrame):
         layout.addWidget(self.input)
 
         self.lbl_count = QLabel("")
-        self.lbl_count.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        self.lbl_count.setStyleSheet("font-size: 11px; color: #8b949e;")
         layout.addWidget(self.lbl_count)
 
         self.btn_prev = QPushButton("▲")
@@ -3151,6 +3576,9 @@ class FindInPageWidget(QFrame):
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
+        if hasattr(self, "btn_tool_aniplay"):
+            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
+            self.btn_tool_aniplay.setVisible(enabled)
         qss = f"""
             QFrame#FindInPageBar {{
                 background-color: {t['surface']};
@@ -3402,6 +3830,7 @@ class AegisBrowserWindow(QMainWindow):
         # Menús flotantes y paneles desplegables dedicados
         self.shields_popup = AegisShieldsPopup(self, self.interceptor)
         self.app_menu = AegisAppMenu(self)
+        self.zoom_popup = AegisZoomPopup(self)
         self.downloads_popup = AegisDownloadsPopup(self)
         self.extensions_popup = AegisExtensionsPopup(self)
         self.media_popup = AegisMediaPopup(self)
@@ -3515,6 +3944,7 @@ class AegisBrowserWindow(QMainWindow):
 
     def load_userscripts(self):
         try:
+            ensure_builtin_userscripts(USERSCRIPTS_DIR)
             USERSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
             for s_file in USERSCRIPTS_DIR.glob("*.js"):
                 content = s_file.read_text(encoding="utf-8")
@@ -3563,7 +3993,9 @@ class AegisBrowserWindow(QMainWindow):
         self.downloads_mgr.add(item)
         if hasattr(self, "downloads_popup") and self.downloads_popup.isVisible():
             self.downloads_popup.refresh_list()
-        self.btn_downloads.setText("📥 1")
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        self.btn_downloads.setIcon(create_download_icon(t["accent"], 16))
+        self.btn_downloads.setText(" 1")
 
         download.receivedBytesChanged.connect(lambda: self.on_download_progress(download, download_id))
         download.isFinishedChanged.connect(lambda: self.on_download_finished(download, download_id))
@@ -3583,7 +4015,9 @@ class AegisBrowserWindow(QMainWindow):
             "received_bytes": download.receivedBytes(),
             "total_bytes": download.totalBytes()
         })
-        self.btn_downloads.setText("📥")
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        self.btn_downloads.setIcon(create_download_icon(t["text"], 16))
+        self.btn_downloads.setText("")
         if hasattr(self, "downloads_popup") and self.downloads_popup.isVisible():
             self.downloads_popup.refresh_list()
 
@@ -4398,6 +4832,18 @@ class AegisBrowserWindow(QMainWindow):
             QApplication.instance()._aegis_windows = []
         QApplication.instance()._aegis_windows.append(win)
 
+    def toggle_zoom_popup(self):
+        if not hasattr(self, "zoom_popup"):
+            return
+        if self.zoom_popup.isVisible():
+            self.zoom_popup.hide()
+            return
+        self.zoom_popup.update_val()
+        pos = self.url_bar.mapToGlobal(QPoint(self.url_bar.width() - self.zoom_popup.width() - 8, self.url_bar.height() + 4))
+        self.zoom_popup.move(pos)
+        self.zoom_popup.show()
+        self.zoom_popup.raise_()
+
     def update_zoom_ui(self):
         v = self.current_view()
         if not v:
@@ -4405,10 +4851,12 @@ class AegisBrowserWindow(QMainWindow):
         zf = round(v.zoomFactor(), 2)
         if hasattr(self, "app_menu") and hasattr(self.app_menu, "lbl_zoom_val"):
             self.app_menu.lbl_zoom_val.setText(f"{int(zf*100)}%")
+        if hasattr(self, "zoom_popup"):
+            self.zoom_popup.update_val()
         if hasattr(self, "zoom_action"):
             if abs(zf - 1.0) > 0.05:
                 self.zoom_action.setVisible(True)
-                self.zoom_action.setToolTip(f"Zoom actual: {int(zf*100)}% (Click para restablecer al 100%)")
+                self.zoom_action.setToolTip(f"Zoom actual: {int(zf*100)}% (Click para ajustar)")
             else:
                 self.zoom_action.setVisible(False)
 
@@ -4547,9 +4995,9 @@ class AegisBrowserWindow(QMainWindow):
             create_zoom_icon("#888888", 14),
             QLineEdit.ActionPosition.TrailingPosition
         )
-        self.zoom_action.setToolTip("Zoom alterado: Click para restablecer al 100%")
+        self.zoom_action.setToolTip("Zoom: Click para ajustar")
         self.zoom_action.setVisible(False)
-        self.zoom_action.triggered.connect(self.zoom_reset)
+        self.zoom_action.triggered.connect(self.toggle_zoom_popup)
 
         # Autocompletado del Omnibox
         self.completer_model = QStringListModel()
@@ -4570,61 +5018,60 @@ class AegisBrowserWindow(QMainWindow):
         self.btn_webstore_install.hide()
         toolbar_layout.addWidget(self.btn_webstore_install)
 
-        # Botón Estrella Marcador (☆ / ★)
-        self.btn_bookmark = QPushButton("☆")
-        self.btn_bookmark.setObjectName("BookmarkBtn")
-        self.btn_bookmark.setToolTip("Añadir esta pestaña a marcadores (Ctrl+D)")
-        self.btn_bookmark.clicked.connect(self.toggle_bookmark_active_page)
-        toolbar_layout.addWidget(self.btn_bookmark)
-
-        # Botón Escudo Aegis Shields
+        # Solo botones esenciales en la barra de herramientas:
+        # 1. Escudo Aegis Shields
         self.shield_btn = QPushButton(" 0")
         self.shield_btn.setObjectName("ShieldBtn")
         self.shield_btn.setToolTip("Aegis Shields: Click para desplegar panel de protección")
         self.shield_btn.clicked.connect(self.toggle_shields_popup)
         toolbar_layout.addWidget(self.shield_btn)
 
-        # Botón Control Multimedia Global (🎵)
-        self.btn_media = QPushButton("🎵")
-        self.btn_media.setObjectName("MediaControlBtn")
-        self.btn_media.setToolTip("Control multimedia global (YouTube, Spotify, Netflix, etc.)")
-        self.btn_media.clicked.connect(self.toggle_media_popup)
-        toolbar_layout.addWidget(self.btn_media)
-
-        # Botón Desplegable de Descargas (📥)
-        self.btn_downloads = QPushButton("📥")
+        # 2. Descargas (con icono vectorial nítido de alta visibilidad)
+        self.btn_downloads = QPushButton("")
         self.btn_downloads.setObjectName("DownloadsBtn")
-        self.btn_downloads.setToolTip("Descargas: Click para desplegar panel")
+        self.btn_downloads.setToolTip("Descargas: Click para desplegar panel (Ctrl+J)")
         self.btn_downloads.clicked.connect(self.toggle_downloads_popup)
         toolbar_layout.addWidget(self.btn_downloads)
 
-        # Botón Desplegable de Extensiones (🧩)
-        self.btn_extensions = QPushButton("🧩")
+        # 3. Extensiones (con icono de pieza de rompecabezas nítido)
+        self.btn_extensions = QPushButton("")
         self.btn_extensions.setObjectName("ExtensionsBtn")
-        self.btn_extensions.setToolTip("Extensiones y Scripts: Click para desplegar panel")
+        self.btn_extensions.setToolTip("Extensiones y Scripts: Click para desplegar panel (Ctrl+Shift+E)")
         self.btn_extensions.clicked.connect(self.toggle_extensions_popup)
         toolbar_layout.addWidget(self.btn_extensions)
 
-        # Botón Barra Lateral de Herramientas (📑)
+        # Contenedor dinámico de botones anclados (click derecho en los 3 puntos)
+        self.pinned_container = QWidget()
+        self.pinned_layout = QHBoxLayout(self.pinned_container)
+        self.pinned_layout.setContentsMargins(0, 0, 0, 0)
+        self.pinned_layout.setSpacing(4)
+        toolbar_layout.addWidget(self.pinned_container)
+
+        # Botones opcionales instanciados para compatibilidad
+        self.btn_bookmark = QPushButton("☆")
+        self.btn_bookmark.setObjectName("BookmarkBtn")
+        self.btn_bookmark.clicked.connect(self.toggle_bookmark_active_page)
+
+        self.btn_media = QPushButton("🎵")
+        self.btn_media.setObjectName("MediaControlBtn")
+        self.btn_media.clicked.connect(self.toggle_media_popup)
+
         self.btn_sidebar = QPushButton("📑")
         self.btn_sidebar.setObjectName("SidebarBtn")
-        self.btn_sidebar.setToolTip("Barra lateral: Notas, lectura, contraseñas (Ctrl+B)")
         self.btn_sidebar.clicked.connect(self.toggle_sidebar)
-        toolbar_layout.addWidget(self.btn_sidebar)
 
-        # Botón de Cambio Rápido de Tema (Oscuro / Claro)
         self.btn_theme_toggle = QPushButton("☀️")
         self.btn_theme_toggle.setObjectName("ThemeToggleBtn")
-        self.btn_theme_toggle.setToolTip("Cambiar tema (Oscuro / Claro)")
         self.btn_theme_toggle.clicked.connect(self.toggle_theme)
-        toolbar_layout.addWidget(self.btn_theme_toggle)
 
-        # Botón Menú Principal (⋮ Tres Puntos al estilo Brave)
+        # 4. Menú Principal (⋮ Tres Puntos)
         self.btn_more = QPushButton("⋮")
         self.btn_more.setObjectName("MoreBtn")
         self.btn_more.setToolTip("Personalizar y controlar Aegis")
         self.btn_more.clicked.connect(self.toggle_app_menu)
         toolbar_layout.addWidget(self.btn_more)
+
+        self.rebuild_pinned_toolbar_buttons()
 
         main_layout.addWidget(self.toolbar)
 
@@ -4692,8 +5139,38 @@ class AegisBrowserWindow(QMainWindow):
         rgb_accent = hex_to_rgb(t["accent"])
 
         qss = f"""
+            QWidget {{
+                color: {t['text']};
+            }}
+            QLabel {{
+                color: {t['text']};
+            }}
             QMainWindow {{
                 background-color: {t['bg']};
+                color: {t['text']};
+            }}
+            QToolTip {{
+                background-color: {t['surface']};
+                color: {t['text']};
+                border: 1px solid rgba({rgb_text}, 0.2);
+                border-radius: 4px;
+                padding: 4px 8px;
+            }}
+            QDialog, QMessageBox {{
+                background-color: {t['surface']};
+                color: {t['text']};
+            }}
+            QPushButton.pinned-toolbar-btn {{
+                background: transparent;
+                border: none;
+                color: {t['text']};
+                font-size: 15px;
+                border-radius: 14px;
+                width: 30px;
+                height: 30px;
+            }}
+            QPushButton.pinned-toolbar-btn:hover {{
+                background-color: {t['surface']};
             }}
             QWidget#TabHeader {{
                 background-color: {t['bg']};
@@ -4990,6 +5467,17 @@ class AegisBrowserWindow(QMainWindow):
         if hasattr(self, "app_menu"):
             self.app_menu.apply_theme(t)
 
+        if hasattr(self, "zoom_popup"):
+            self.zoom_popup.apply_theme(t)
+
+        if hasattr(self, "btn_downloads"):
+            self.btn_downloads.setIcon(create_download_icon(t["text"], 16))
+
+        if hasattr(self, "btn_extensions"):
+            self.btn_extensions.setIcon(create_extension_icon(t["text"], 16))
+
+        self.rebuild_pinned_toolbar_buttons()
+
         if hasattr(self, "downloads_popup"):
             self.downloads_popup.apply_theme(t)
 
@@ -5111,6 +5599,8 @@ class AegisBrowserWindow(QMainWindow):
             self.load_history(view)
         elif url_str == "aegis://extensions":
             self.load_extensions(view)
+        elif url_str == "aegis://aniplay":
+            self.load_aniplay(view)
 
     def load_settings(self, view: QWebEngineView):
         idx = self.views.index(view) if view in self.views else -1
@@ -5200,6 +5690,121 @@ class AegisBrowserWindow(QMainWindow):
                 self.history_mgr.update_favicon(domain, data_uri)
         except Exception:
             pass
+
+    def pin_toolbar_button(self, item_id: str):
+        pinned = self.config.setdefault("pinned_toolbar_buttons", [])
+        if item_id not in pinned:
+            pinned.append(item_id)
+            self.save_config()
+            self.rebuild_pinned_toolbar_buttons()
+            self.show_toast("Botón anclado a la barra de herramientas")
+
+    def unpin_toolbar_button(self, item_id: str):
+        pinned = self.config.get("pinned_toolbar_buttons", [])
+        if item_id in pinned:
+            pinned.remove(item_id)
+            self.save_config()
+            self.rebuild_pinned_toolbar_buttons()
+            self.show_toast("Botón desanclado de la barra de herramientas")
+
+    def show_pinned_btn_context_menu(self, item_id: str, btn: QWidget, pos: QPoint):
+        menu = QMenu(self)
+        menu.setStyleSheet(self.current_qss)
+        act = menu.addAction("Desanclar de la barra de herramientas")
+        act.triggered.connect(lambda: self.unpin_toolbar_button(item_id))
+        menu.exec(btn.mapToGlobal(pos))
+
+    def rebuild_pinned_toolbar_buttons(self):
+        if not hasattr(self, "pinned_layout"):
+            return
+        while self.pinned_layout.count():
+            item = self.pinned_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        pinned = self.config.get("pinned_toolbar_buttons", [])
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        for item_id in pinned:
+            btn = self.create_pinned_button(item_id, t)
+            if btn:
+                self.pinned_layout.addWidget(btn)
+
+    def create_pinned_button(self, item_id: str, t: dict) -> QWidget | None:
+        btn = QPushButton()
+        btn.setProperty("class", "pinned-toolbar-btn")
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setFixedSize(30, 30)
+        btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        btn.customContextMenuRequested.connect(lambda pos, i_id=item_id, b=btn: self.show_pinned_btn_context_menu(i_id, b, pos))
+
+        if item_id == "media_control":
+            btn.setText("🎵")
+            btn.setToolTip("Control multimedia global")
+            btn.clicked.connect(self.toggle_media_popup)
+        elif item_id == "sidebar":
+            btn.setText("📑")
+            btn.setToolTip("Barra lateral (Ctrl+B)")
+            btn.clicked.connect(self.toggle_sidebar)
+        elif item_id == "theme_toggle":
+            btn.setText("☀️" if self.current_theme_name == "Oscuro" else "🌙")
+            btn.setToolTip("Cambiar tema (Oscuro / Claro)")
+            btn.clicked.connect(self.toggle_theme)
+        elif item_id == "bookmarks_bar":
+            btn.setIcon(create_star_icon(t["text"], 16))
+            btn.setToolTip("Barra de marcadores (Ctrl+Shift+B)")
+            btn.clicked.connect(self.toggle_bookmarks_bar)
+        elif item_id == "history":
+            btn.setIcon(create_history_icon(t["text"], 16))
+            btn.setToolTip("Historial (Ctrl+H)")
+            btn.clicked.connect(lambda: self.open_internal_page("aegis://history"))
+        elif item_id == "reader_mode":
+            btn.setIcon(create_book_icon(t["text"], 16))
+            btn.setToolTip("Modo lectura (F9)")
+            btn.clicked.connect(self.toggle_reader_mode)
+        elif item_id == "clean_copy":
+            btn.setIcon(create_copy_link_icon(t["text"], 16))
+            btn.setToolTip("Copiar enlace limpio")
+            btn.clicked.connect(self.copy_clean_url)
+        elif item_id == "screenshot":
+            btn.setText("📸")
+            btn.setToolTip("Capturar pantalla (Ctrl+Shift+S)")
+            btn.clicked.connect(self.capture_page_screenshot)
+        elif item_id == "print_pdf":
+            btn.setText("🖨️")
+            btn.setToolTip("Guardar como PDF (Ctrl+P)")
+            btn.clicked.connect(self.print_to_pdf)
+        elif item_id == "find_in_page":
+            btn.setText("🔍")
+            btn.setToolTip("Buscar en la página (Ctrl+F)")
+            btn.clicked.connect(lambda: self.find_bar.show_find())
+        elif item_id == "pip":
+            btn.setText("🖼️")
+            btn.setToolTip("Imagen en imagen (Alt+P)")
+            btn.clicked.connect(self.toggle_picture_in_picture)
+        elif item_id == "aniplay":
+            btn.setIcon(create_aniplay_icon(t["accent"], 16))
+            btn.setToolTip("AniPlay Anime Hub")
+            btn.clicked.connect(lambda: self.open_internal_page("aegis://aniplay"))
+        elif item_id == "settings":
+            btn.setIcon(create_settings_icon(t["text"], 16))
+            btn.setToolTip("Configuración (Alt+S)")
+            btn.clicked.connect(lambda: self.open_internal_page("aegis://settings"))
+        else:
+            return None
+        return btn
+
+    def load_aniplay(self, view: QWebEngineView):
+        idx = self.views.index(view) if view in self.views else -1
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        if idx != -1:
+            self.tab_bar.setTabIcon(idx, create_aniplay_icon(t["accent"], 14))
+            self.tab_bar.setTabText(idx, "AniPlay Anime Hub")
+        view._aegis_virtual_url = "aegis://aniplay"
+        html = get_aniplay_html(t["ntp_class"])
+        view.setHtml(html, QUrl("aegis://aniplay"))
+        if view == self.current_view():
+            self.url_bar.setText("aegis://aniplay")
 
     def close_tab(self, index: int):
         if isinstance(index, QWebEngineView):
@@ -5305,9 +5910,14 @@ class AegisBrowserWindow(QMainWindow):
             return
         elif url_str == "aegis://extensions":
             self.load_extensions(view)
+        elif url_str == "aegis://aniplay":
+            self.load_aniplay(view)
             return
         elif url_str == "aegis://start":
             self.load_ntp(view)
+            return
+        elif url_str == "aegis://aniplay":
+            self.load_aniplay(view)
             return
 
         # Interceptar acciones desde páginas internas
@@ -6246,6 +6856,455 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
 """
 
 # ── 12.2 Plantilla HTML de Configuración (aegis://settings) ───────────────────
+import sys
+
+def get_aniplay_html(theme_class: str = "theme-dark") -> str:
+    return f"""<!DOCTYPE html>
+<html lang="es" class="{theme_class}">
+<head>
+  <meta charset="UTF-8">
+  <title>AniPlay Hub - Aegis</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    :root, .theme-dark {{
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --text: #f0f6fc;
+      --accent: #388bfd;
+      --ani-red: #ff5370;
+      --ani-gold: #f1c40f;
+    }}
+    .theme-light {{
+      --bg: #f6f8fa;
+      --surface: #ffffff;
+      --surface2: #eaeef2;
+      --text: #1f2328;
+      --accent: #0969da;
+      --ani-red: #e53935;
+      --ani-gold: #d4a017;
+    }}
+    body {{
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }}
+    header {{
+      background: var(--surface);
+      border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }}
+    .logo-box {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }}
+    .logo-box span {{
+      color: var(--ani-red);
+    }}
+    .search-box {{
+      display: flex;
+      align-items: center;
+      background: var(--bg);
+      border: 1px solid rgba(128, 128, 128, 0.25);
+      border-radius: 20px;
+      padding: 6px 16px;
+      width: 360px;
+      max-width: 100%;
+    }}
+    .search-box input {{
+      background: transparent;
+      border: none;
+      color: var(--text);
+      width: 100%;
+      font-size: 0.9rem;
+      outline: none;
+    }}
+    .filter-tabs {{
+      display: flex;
+      gap: 8px;
+    }}
+    .tab-btn {{
+      background: var(--bg);
+      border: 1px solid rgba(128, 128, 128, 0.2);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 16px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }}
+    .tab-btn.active, .tab-btn:hover {{
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+    }}
+    .container {{
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+      width: 100%;
+    }}
+    /* Spotlight Hero */
+    .hero {{
+      background: linear-gradient(135deg, rgba(255, 83, 112, 0.15), rgba(56, 139, 253, 0.15)), var(--surface);
+      border: 1px solid rgba(128, 128, 128, 0.15);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 32px;
+      display: flex;
+      gap: 24px;
+      align-items: center;
+    }}
+    .hero-img {{
+      width: 200px;
+      height: 280px;
+      object-fit: cover;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }}
+    .hero-info {{
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }}
+    .hero-badge {{
+      background: var(--ani-red);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      width: fit-content;
+      text-transform: uppercase;
+    }}
+    .hero-title {{
+      font-size: 1.8rem;
+      font-weight: 800;
+    }}
+    .hero-meta {{
+      font-size: 0.85rem;
+      opacity: 0.8;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }}
+    .hero-desc {{
+      font-size: 0.92rem;
+      line-height: 1.5;
+      opacity: 0.85;
+      max-width: 600px;
+    }}
+    .hero-btn {{
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      width: fit-content;
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: transform 0.15s;
+    }}
+    .hero-btn:hover {{
+      transform: scale(1.03);
+    }}
+    /* Anime Grid */
+    .section-title {{
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }}
+    .anime-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 18px;
+      margin-bottom: 36px;
+    }}
+    .anime-card {{
+      background: var(--surface);
+      border: 1px solid rgba(128, 128, 128, 0.15);
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.2s, border-color 0.2s;
+      position: relative;
+    }}
+    .anime-card:hover {{
+      transform: translateY(-5px);
+      border-color: var(--accent);
+    }}
+    .card-thumb {{
+      width: 100%;
+      height: 230px;
+      object-fit: cover;
+      display: block;
+    }}
+    .card-info {{
+      padding: 10px 12px;
+    }}
+    .card-title {{
+      font-size: 0.9rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }}
+    .card-meta {{
+      font-size: 0.78rem;
+      opacity: 0.7;
+      display: flex;
+      justify-content: space-between;
+    }}
+    /* Video Modal Player */
+    .modal-overlay {{
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }}
+    .modal-content {{
+      background: var(--surface);
+      border: 1px solid rgba(128, 128, 128, 0.2);
+      border-radius: 16px;
+      width: 900px;
+      max-width: 100%;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }}
+    .modal-header {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+    }}
+    .modal-title {{
+      font-size: 1.1rem;
+      font-weight: 700;
+    }}
+    .close-btn {{
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 1.5rem;
+      cursor: pointer;
+    }}
+    .player-box {{
+      width: 100%;
+      height: 480px;
+      background: #000;
+      position: relative;
+    }}
+    .player-box video {{
+      width: 100%;
+      height: 100%;
+    }}
+    .episode-bar {{
+      padding: 14px 18px;
+      background: var(--surface2);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      overflow-x: auto;
+    }}
+    .ep-pill {{
+      background: var(--bg);
+      border: 1px solid rgba(128, 128, 128, 0.2);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }}
+    .ep-pill.active {{
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo-box">
+      <span>▶</span> Aegis AniPlay
+    </div>
+    <div class="search-box">
+      <input type="text" id="animeSearch" placeholder="Buscar anime, OVA, películas..." oninput="filterAnime(this.value)">
+    </div>
+    <div class="filter-tabs">
+      <button class="tab-btn active" onclick="setCategory('all', this)">Todos</button>
+      <button class="tab-btn" onclick="setCategory('trending', this)">Tendencias</button>
+      <button class="tab-btn" onclick="setCategory('favs', this)">Favoritos</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="hero">
+      <img src="https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80" class="hero-img" alt="Solo Leveling" />
+      <div class="hero-info">
+        <span class="hero-badge">Estreno Destacado</span>
+        <h1 class="hero-title">Solo Leveling (Arise)</h1>
+        <div class="hero-meta">
+          <span>★ 9.4</span>
+          <span>• Acción / Fantasía</span>
+          <span>• 12 Episodios</span>
+          <span>• Sub / Dub</span>
+        </div>
+        <p class="hero-desc">
+          En un mundo donde cazadores humanos deben luchar contra monstruos mortales para proteger a la humanidad, Sung Jinwoo, el cazador más débil, es bendecido con el misterioso sistema de subida de nivel infinita.
+        </p>
+        <button class="hero-btn" onclick="openPlayer('Solo Leveling', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', 12)">
+          <span>▶</span> Reproducir Episodio 1
+        </button>
+      </div>
+    </div>
+
+    <div class="section-title">
+      <span>Catálogo de Anime</span>
+      <span id="catalogCount" style="font-size: 0.85rem; opacity: 0.65; font-weight: 400;">10 títulos disponibles</span>
+    </div>
+
+    <div class="anime-grid" id="animeGrid"></div>
+  </div>
+
+  <div class="modal-overlay" id="playerModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title" id="currentAnimeTitle">Reproduciendo Anime</span>
+        <button class="close-btn" onclick="closePlayer()">×</button>
+      </div>
+      <div class="player-box">
+        <video id="videoElement" controls autoplay></video>
+      </div>
+      <div class="episode-bar" id="episodesBar"></div>
+    </div>
+  </div>
+
+  <script>
+    const animeCatalog = [
+      {{ id: 1, title: 'Solo Leveling', rating: 9.4, eps: 12, genre: 'Acción / Fantasía', img: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80', trending: true }},
+      {{ id: 2, title: 'Jujutsu Kaisen', rating: 9.2, eps: 47, genre: 'Sobrenatural / Shonen', img: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=400&q=80', trending: true }},
+      {{ id: 3, title: 'Demon Slayer: Kimetsu no Yaiba', rating: 9.3, eps: 55, genre: 'Acción / Histórico', img: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&q=80', trending: true }},
+      {{ id: 4, title: 'Frieren: Beyond Journey', rating: 9.5, eps: 28, genre: 'Aventura / Fantasía', img: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&q=80', trending: true }},
+      {{ id: 5, title: 'Attack on Titan (Shingeki)', rating: 9.6, eps: 87, genre: 'Militar / Misterio', img: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=400&q=80', trending: false }},
+      {{ id: 6, title: 'Chainsaw Man', rating: 8.9, eps: 12, genre: 'Acción / Terror', img: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&q=80', trending: true }},
+      {{ id: 7, title: 'One Piece (Egghead Arc)', rating: 9.2, eps: 1100, genre: 'Aventura / Comedia', img: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=400&q=80', trending: false }},
+      {{ id: 8, title: 'Bleach: TYBW', rating: 9.1, eps: 26, genre: 'Acción / Sobrenatural', img: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=400&q=80', trending: true }},
+      {{ id: 9, title: 'Spy x Family', rating: 8.8, eps: 37, genre: 'Comedia / Espías', img: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=400&q=80', trending: false }},
+      {{ id: 10, title: 'Death Note', rating: 9.0, eps: 37, genre: 'Psicológico / Thriller', img: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=400&q=80', trending: false }}
+    ];
+
+    let currentCategory = 'all';
+
+    function renderGrid(items) {{
+      const grid = document.getElementById('animeGrid');
+      grid.innerHTML = '';
+      items.forEach(anime => {{
+        const card = document.createElement('div');
+        card.className = 'anime-card';
+        card.onclick = () => openPlayer(anime.title, 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', Math.min(anime.eps, 12));
+        card.innerHTML = `
+          <img src="${{anime.img}}" class="card-thumb" alt="${{anime.title}}" />
+          <div class="card-info">
+            <div class="card-title">${{anime.title}}</div>
+            <div class="card-meta">
+              <span>★ ${{anime.rating}}</span>
+              <span>${{anime.eps}} Eps</span>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      }});
+      document.getElementById('catalogCount').innerText = `${{items.length}} títulos disponibles`;
+    }}
+
+    function setCategory(cat, btn) {{
+      currentCategory = cat;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      filterAnime(document.getElementById('animeSearch').value);
+    }}
+
+    function filterAnime(query) {{
+      query = (query || '').toLowerCase().trim();
+      let list = animeCatalog;
+      if (currentCategory === 'trending') {{
+        list = list.filter(a => a.trending);
+      }} else if (currentCategory === 'favs') {{
+        const favs = JSON.parse(localStorage.getItem('aegis_ani_favs') || '[]');
+        list = list.filter(a => favs.includes(a.id));
+      }}
+      if (query) {{
+        list = list.filter(a => a.title.toLowerCase().includes(query) || a.genre.toLowerCase().includes(query));
+      }}
+      renderGrid(list);
+    }}
+
+    function openPlayer(title, sampleUrl, epsCount) {{
+      document.getElementById('currentAnimeTitle').innerText = title;
+      const vid = document.getElementById('videoElement');
+      vid.src = sampleUrl;
+      vid.play().catch(() => {{}});
+      
+      const epBar = document.getElementById('episodesBar');
+      epBar.innerHTML = '';
+      for (let i = 1; i <= epsCount; i++) {{
+        const pill = document.createElement('button');
+        pill.className = 'ep-pill' + (i === 1 ? ' active' : '');
+        pill.innerText = `Episodio ${{i}}`;
+        pill.onclick = () => {{
+          document.querySelectorAll('.ep-pill').forEach(p => p.classList.remove('active'));
+          pill.classList.add('active');
+          vid.currentTime = 0;
+          vid.play().catch(() => {{}});
+        }};
+        epBar.appendChild(pill);
+      }}
+      document.getElementById('playerModal').style.display = 'flex';
+    }}
+
+    function closePlayer() {{
+      const vid = document.getElementById('videoElement');
+      vid.pause();
+      vid.src = '';
+      document.getElementById('playerModal').style.display = 'none';
+    }}
+
+    renderGrid(animeCatalog);
+  </script>
+</body>
+</html>"""
+
 def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> str:
     if config is None:
         config = {}
