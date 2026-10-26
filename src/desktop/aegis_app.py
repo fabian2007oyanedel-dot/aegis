@@ -60,8 +60,9 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
     QWebEngineProfile, QWebEngineSettings, QWebEngineUrlRequestInterceptor
 )
-from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer
-from PyQt6.QtGui import QPainter, QColor, QBrush, QPen
+from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer, QByteArray
+from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QIcon, QPixmap
+from PyQt6.QtSvg import QSvgRenderer
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_FILE = Path.home() / ".aegis_browser_config.json"
@@ -265,11 +266,28 @@ def silent_background_memory_purge():
     except Exception:
         pass
 
-# ── 4. Helper para conversión Hex a RGB ────────────────────────────────────────
+# ── 4. Helper para conversión Hex a RGB y Creación de Iconos Vectoriales ──────
 def hex_to_rgb(h: str) -> str:
     h = h.lstrip("#")
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"{r}, {g}, {b}"
+
+def create_shield_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
+    """Genera un icono de escudo vectorial nítido sin emojis medievales de Windows."""
+    try:
+        svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>"""
+        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+        return QIcon(pixmap)
+    except Exception:
+        return QIcon()
 
 # ── 5. Soporte de Barra de Título Nativa Windows DWM ───────────────────────────
 def apply_windows_dark_title_bar(hwnd, dark: bool = True):
@@ -779,12 +797,12 @@ class AegisBrowserWindow(QMainWindow):
         self.url_bar.returnPressed.connect(self.navigate_to_url)
         toolbar_layout.addWidget(self.url_bar)
 
-        # Botón Escudo Aegis Shields (Abre desplegable estilo Brave)
-        self.shield_pill = QPushButton("🛡️ 0")
-        self.shield_pill.setObjectName("ShieldPill")
-        self.shield_pill.setToolTip("Aegis Shields: Click para desplegar panel")
-        self.shield_pill.clicked.connect(self.toggle_shields_popup)
-        toolbar_layout.addWidget(self.shield_pill)
+        # Botón Escudo Aegis Shields (Icono vectorial y borde neutral normal)
+        self.shield_btn = QPushButton(" 0")
+        self.shield_btn.setObjectName("ShieldBtn")
+        self.shield_btn.setToolTip("Aegis Shields: Click para desplegar panel")
+        self.shield_btn.clicked.connect(self.toggle_shields_popup)
+        toolbar_layout.addWidget(self.shield_btn)
 
         # Botón de Cambio Rápido de Tema (Oscuro / Claro)
         self.btn_theme_toggle = QPushButton("☀️")
@@ -925,18 +943,18 @@ class AegisBrowserWindow(QMainWindow):
             QLineEdit#Omnibox:focus {{
                 border: 1px solid {t['accent']};
             }}
-            QPushButton#ShieldPill {{
-                background-color: {t['surface']};
-                border: 1px solid rgba({rgb_accent}, 0.35);
-                border-radius: 13px;
-                color: {t['accent']};
-                padding: 4px 12px;
+            QPushButton#ShieldBtn {{
+                background-color: transparent;
+                border: 1px solid rgba({rgb_text}, 0.14);
+                border-radius: 6px;
+                color: {t['text']};
+                padding: 4px 10px;
                 font-size: 12px;
-                font-weight: 600;
+                font-weight: 500;
             }}
-            QPushButton#ShieldPill:hover {{
+            QPushButton#ShieldBtn:hover {{
                 background-color: {t['surface']};
-                border-color: {t['accent']};
+                border-color: rgba({rgb_text}, 0.28);
             }}
             QProgressBar#MicroProgress {{
                 background-color: transparent;
@@ -947,6 +965,9 @@ class AegisBrowserWindow(QMainWindow):
             }}
         """
         self.setStyleSheet(qss)
+
+        if hasattr(self, "shield_btn"):
+            self.shield_btn.setIcon(create_shield_icon(t["accent"], 16))
 
         if hasattr(self, "shields_popup"):
             self.shields_popup.apply_theme(t)
@@ -969,8 +990,8 @@ class AegisBrowserWindow(QMainWindow):
         host = url.host() if url else ""
         self.shields_popup.update_site(host, SHIELDS_CORE.total_blocked)
 
-        btn_pos = self.shield_pill.mapToGlobal(QPoint(0, self.shield_pill.height()))
-        popup_x = btn_pos.x() + self.shield_pill.width() - self.shields_popup.width()
+        btn_pos = self.shield_btn.mapToGlobal(QPoint(0, self.shield_btn.height()))
+        popup_x = btn_pos.x() + self.shield_btn.width() - self.shields_popup.width()
         popup_y = btn_pos.y() + 6
         self.shields_popup.move(popup_x, popup_y)
         self.shields_popup.show()
@@ -1155,7 +1176,7 @@ class AegisBrowserWindow(QMainWindow):
                 view.page().runJavaScript(js)
 
     def on_shield_block(self):
-        self.shield_pill.setText(f"🛡️ {SHIELDS_CORE.total_blocked}")
+        self.shield_btn.setText(f" {SHIELDS_CORE.total_blocked}")
         if hasattr(self, "shields_popup") and self.shields_popup.isVisible():
             self.shields_popup.lbl_count.setText(str(SHIELDS_CORE.total_blocked))
 
