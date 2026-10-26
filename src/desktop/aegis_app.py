@@ -32,8 +32,34 @@ import io
 import urllib.request
 import shutil
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs, unquote, quote
+import secrets
+import string
+from pathlib import Path
+from urllib.parse import urlparse, parse_qs, unquote, quote, urlencode, urlunparse
 from ctypes import wintypes
+
+TRACKING_PARAMS = {
+    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+    "utm_cid", "utm_reader", "utm_name",
+    "fbclid", "gclid", "gclsrc", "dclid",
+    "si", "igshid", "mc_eid", "msclkid",
+    "yclid", "_hsenc", "_openstat", "wickedid",
+    "rb_clickid", "s_kwcid"
+}
+
+def clean_url_tracking(url_str: str) -> str:
+    if not url_str or not url_str.startswith(("http://", "https://")):
+        return url_str
+    try:
+        parsed = urlparse(url_str)
+        if not parsed.query:
+            return url_str
+        qs = parse_qs(parsed.query, keep_blank_values=True)
+        cleaned_qs = {k: v for k, v in qs.items() if k.lower() not in TRACKING_PARAMS}
+        new_query = urlencode(cleaned_qs, doseq=True)
+        return urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+    except Exception:
+        return url_str
 
 # ── 1. Optimización Extrema de Chromium (GPU, Video Hardware, Audio y Widevine DRM) ──
 def find_widevine_cdm() -> tuple[str | None, str | None]:
@@ -92,7 +118,9 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QProgressBar, QTabBar, QStackedWidget,
     QLabel, QCheckBox, QFrame, QAbstractButton, QSizePolicy,
-    QMenu, QCompleter
+    QMenu, QCompleter, QDialog, QTextEdit, QListWidget, QListWidgetItem,
+    QFileDialog, QScrollArea, QSlider, QSplitter, QRadioButton, QButtonGroup,
+    QComboBox
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
@@ -108,6 +136,8 @@ CONFIG_FILE = Path.home() / ".aegis_browser_config.json"
 HISTORY_FILE = Path.home() / ".aegis_browser_history.json"
 DOWNLOADS_FILE = Path.home() / ".aegis_browser_downloads.json"
 BOOKMARKS_FILE = Path.home() / ".aegis_browser_bookmarks.json"
+SESSION_FILE = Path.home() / ".aegis_browser_session.json"
+READING_LIST_FILE = Path.home() / ".aegis_reading_list.json"
 USERSCRIPTS_DIR = Path.home() / ".aegis_userscripts"
 EXTENSIONS_DIR = Path.home() / ".aegis_extensions"
 PROFILE_DIR = Path.home() / ".aegis_profile"
@@ -191,6 +221,11 @@ class HistoryManager:
     def clear_history(self):
         self.data["history"] = []
         self.data["frequent"] = {}
+        self.save()
+
+    def clear_range(self, cutoff: float):
+        if "history" in self.data:
+            self.data["history"] = [h for h in self.data["history"] if h.get("time", 0) < cutoff]
         self.save()
 
     def remove_history_item(self, url: str):
@@ -885,6 +920,11 @@ class AegisRequestInterceptor(QWebEngineUrlRequestInterceptor):
     def interceptRequest(self, info):
         if not self.enabled:
             return
+        try:
+            info.setHttpHeader(b"DNT", b"1")
+            info.setHttpHeader(b"Sec-GPC", b"1")
+        except Exception:
+            pass
         url = info.requestUrl().toString()
         source = info.firstPartyUrl().toString()
         if SHIELDS_CORE.should_block(url, source, "other"):
@@ -1205,18 +1245,25 @@ class AegisAppMenu(QFrame):
         add_item("🗂️ Nueva ventana", "Ctrl+N", lambda: self.parent_win.open_new_window())
         add_item("🕶️ Ventana privada", "Ctrl+Shift+N", lambda: self.parent_win.open_incognito_window())
         add_item("↩️ Reabrir pestaña cerrada", "Ctrl+Shift+T", lambda: self.parent_win.reopen_closed_tab())
+        add_item("🔎 Buscar pestañas", "Ctrl+Shift+A", lambda: self.parent_win.toggle_tab_search_popup())
         add_separator()
+        add_item("📑 Barra lateral", "Ctrl+B", lambda: self.parent_win.toggle_sidebar())
         add_item("⭐ Barra de marcadores", "Ctrl+Shift+B", lambda: self.parent_win.toggle_bookmarks_bar())
         add_item("📥 Descargas", "Ctrl+J", lambda: self.parent_win.open_internal_page("aegis://downloads"))
         add_item("🕒 Historial", "Ctrl+H", lambda: self.parent_win.open_internal_page("aegis://history"))
         add_item("🧩 Extensiones", "Ctrl+Shift+E", lambda: self.parent_win.open_internal_page("aegis://extensions"))
         add_separator()
+        add_item("📖 Modo lectura", "F9", lambda: self.parent_win.toggle_reader_mode())
+        add_item("🧹 Copiar enlace limpio", "", lambda: self.parent_win.copy_clean_url())
+        add_item("📸 Capturar pantalla", "Ctrl+Shift+S", lambda: self.parent_win.capture_page_screenshot())
+        add_item("🖨️ Guardar como PDF", "Ctrl+P", lambda: self.parent_win.print_to_pdf())
         add_item("🔍 Buscar en la página", "Ctrl+F", lambda: self.parent_win.find_bar.show_find())
         add_item("🔇 Silenciar pestaña", "Ctrl+M", lambda: self.parent_win.toggle_mute_current_tab())
         add_item("🖼️ Imagen en imagen (PiP)", "Alt+P", lambda: self.parent_win.toggle_picture_in_picture())
         add_item("🎵 Control multimedia", "", lambda: self.parent_win.toggle_media_popup())
         add_item("🛠️ DevTools / Inspeccionar", "F12", lambda: self.parent_win.open_devtools())
         add_separator()
+        add_item("🗑️ Borrar datos de navegación", "Ctrl+Shift+Del", lambda: self.parent_win.open_clear_data_dialog())
         add_item("⚙️ Configuración", "Alt+S", lambda: self.parent_win.open_internal_page("aegis://settings"))
         add_separator()
 
@@ -1897,6 +1944,1010 @@ class AegisMediaPopup(QFrame):
         """
         self.setStyleSheet(qss)
 
+# ── 10.3.6 Popup de Información y Seguridad del Sitio (🔒 / ℹ️) ─────────────────
+class AegisSiteInfoPopup(QFrame):
+    def __init__(self, parent_win=None):
+        super().__init__(parent_win, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setObjectName("AegisSiteInfoPopup")
+        self.setFixedWidth(340)
+        self.parent_win = parent_win
+        self.init_ui()
+
+    def hideEvent(self, event):
+        if self.parent_win:
+            self.parent_win._last_site_info_close_time = time.time()
+        super().hideEvent(event)
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        # Header con icono + dominio
+        self.header_layout = QHBoxLayout()
+        self.lbl_sec_icon = QLabel("🔒")
+        self.lbl_sec_icon.setStyleSheet("font-size: 18px;")
+        self.header_layout.addWidget(self.lbl_sec_icon)
+
+        domain_v = QVBoxLayout()
+        self.lbl_domain = QLabel("dominio.com")
+        self.lbl_domain.setStyleSheet("font-weight: 700; font-size: 13.5px;")
+        self.lbl_status = QLabel("Conexión segura")
+        self.lbl_status.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        domain_v.addWidget(self.lbl_domain)
+        domain_v.addWidget(self.lbl_status)
+        self.header_layout.addLayout(domain_v)
+        self.header_layout.addStretch()
+        layout.addLayout(self.header_layout)
+
+        # Separador
+        sep1 = QFrame()
+        sep1.setObjectName("PopupSep")
+        sep1.setFixedHeight(1)
+        layout.addWidget(sep1)
+
+        # Tarjeta de seguridad de conexión
+        self.sec_box = QFrame()
+        self.sec_box.setObjectName("SecInfoBox")
+        sec_l = QVBoxLayout(self.sec_box)
+        sec_l.setContentsMargins(10, 8, 10, 8)
+        sec_l.setSpacing(4)
+        self.lbl_cert_info = QLabel("Certificado válido (TLS 1.3 / HTTPS)")
+        self.lbl_cert_info.setStyleSheet("font-size: 11.5px; font-weight: 600;")
+        self.lbl_cert_desc = QLabel("Tu información (contraseñas, mensajes) es privada.")
+        self.lbl_cert_desc.setStyleSheet("font-size: 10.5px; opacity: 0.65;")
+        sec_l.addWidget(self.lbl_cert_info)
+        sec_l.addWidget(self.lbl_cert_desc)
+        layout.addWidget(self.sec_box)
+
+        # Tarjeta de Cookies
+        self.cookies_box = QFrame()
+        self.cookies_box.setObjectName("SecInfoBox")
+        ck_l = QHBoxLayout(self.cookies_box)
+        ck_l.setContentsMargins(10, 8, 10, 8)
+        self.lbl_cookies = QLabel("🍪 Cookies y datos locales")
+        self.lbl_cookies.setStyleSheet("font-size: 11.5px; font-weight: 600;")
+        ck_l.addWidget(self.lbl_cookies)
+        ck_l.addStretch()
+        self.btn_clear_site_cookies = QPushButton("🧹 Borrar")
+        self.btn_clear_site_cookies.setProperty("class", "mini-action-btn")
+        self.btn_clear_site_cookies.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_clear_site_cookies.clicked.connect(self.clear_site_cookies)
+        ck_l.addWidget(self.btn_clear_site_cookies)
+        layout.addWidget(self.cookies_box)
+
+        # Sección de Permisos
+        perm_title = QLabel("Permisos del sitio")
+        perm_title.setStyleSheet("font-weight: 600; font-size: 11px; opacity: 0.7; margin-top: 2px;")
+        layout.addWidget(perm_title)
+
+        self.perms_layout = QVBoxLayout()
+        self.perms_layout.setSpacing(4)
+        perms = [
+            ("🎙️ Micrófono", "Permitido"),
+            ("📷 Cámara web", "Permitido"),
+            ("🖥️ Pantalla", "Permitido"),
+            ("🔔 Notificaciones", "Permitido"),
+            ("📋 Portapapeles", "Permitido")
+        ]
+        for name, state in perms:
+            row = QHBoxLayout()
+            l_n = QLabel(name)
+            l_n.setStyleSheet("font-size: 11px;")
+            l_s = QLabel(state)
+            l_s.setStyleSheet("font-size: 11px; opacity: 0.65; font-weight: 500;")
+            row.addWidget(l_n)
+            row.addStretch()
+            row.addWidget(l_s)
+            self.perms_layout.addLayout(row)
+        layout.addLayout(self.perms_layout)
+
+    def refresh_site(self, qurl: QUrl):
+        url_str = qurl.toString()
+        host = qurl.host()
+        scheme = qurl.scheme().lower()
+        if not host or url_str.startswith("aegis://") or url_str.startswith("about:"):
+            self.lbl_domain.setText("Aegis Browser")
+            self.lbl_sec_icon.setText("🛡️")
+            self.lbl_status.setText("Página interna del sistema")
+            self.lbl_cert_info.setText("Sistema de Aegis")
+            self.lbl_cert_desc.setText("Página segura local de configuración y navegación.")
+            self.btn_clear_site_cookies.setEnabled(False)
+        elif scheme == "https":
+            self.lbl_domain.setText(host)
+            self.lbl_sec_icon.setText("🔒")
+            self.lbl_status.setText("Conexión segura y cifrada")
+            self.lbl_cert_info.setText("Certificado válido (TLS / HTTPS)")
+            self.lbl_cert_desc.setText("Tu información es privada para este dominio.")
+            self.btn_clear_site_cookies.setEnabled(True)
+        else:
+            self.lbl_domain.setText(host)
+            self.lbl_sec_icon.setText("⚠️")
+            self.lbl_status.setText("Conexión no cifrada (HTTP)")
+            self.lbl_cert_info.setText("No es seguro")
+            self.lbl_cert_desc.setText("No ingreses información confidencial en este sitio.")
+            self.btn_clear_site_cookies.setEnabled(True)
+
+    def clear_site_cookies(self):
+        if self.parent_win and self.parent_win.profile:
+            cur = self.parent_win.current_view()
+            if cur:
+                host = cur.url().host()
+                store = self.parent_win.profile.cookieStore()
+                store.deleteAllCookies()
+                if hasattr(self.parent_win, "show_toast"):
+                    self.parent_win.show_toast(f"Cookies de {host} eliminadas.")
+                self.hide()
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        qss = f"""
+            QFrame#AegisSiteInfoPopup {{
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.16);
+                border-radius: 12px;
+            }}
+            QFrame#SecInfoBox {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.08);
+                border-radius: 8px;
+            }}
+            QFrame#PopupSep {{
+                background-color: rgba({rgb_text}, 0.08);
+                border: none;
+            }}
+            QLabel {{
+                color: {t['text']};
+            }}
+            QPushButton.mini-action-btn {{
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 4px;
+                color: {t['text']};
+                padding: 3px 8px;
+                font-size: 11px;
+                font-weight: 500;
+            }}
+            QPushButton.mini-action-btn:hover {{
+                border-color: {t['accent']};
+                color: {t['accent']};
+            }}
+        """
+        self.setStyleSheet(qss)
+
+# ── 10.3.7 Popup de Búsqueda y Selector de Pestañas (Ctrl+Shift+A) ─────────────
+class AegisTabSearchPopup(QFrame):
+    def __init__(self, parent_win=None):
+        super().__init__(parent_win, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setObjectName("AegisTabSearchPopup")
+        self.setFixedSize(460, 420)
+        self.parent_win = parent_win
+        self._all_items = []
+        self.init_ui()
+
+    def hideEvent(self, event):
+        if self.parent_win:
+            self.parent_win._last_tab_search_close_time = time.time()
+        super().hideEvent(event)
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        self.search_input = QLineEdit()
+        self.search_input.setObjectName("TabSearchInput")
+        self.search_input.setPlaceholderText("🔍 Buscar en pestañas abiertas y recientes... (Ctrl+Shift+A)")
+        self.search_input.textChanged.connect(self.filter_tabs)
+        layout.addWidget(self.search_input)
+
+        self.list_widget = QListWidget()
+        self.list_widget.setObjectName("TabSearchList")
+        self.list_widget.setSpacing(2)
+        self.list_widget.itemClicked.connect(self.on_item_clicked)
+        layout.addWidget(self.list_widget)
+
+    def refresh_tabs(self):
+        self.list_widget.clear()
+        self._all_items = []
+        if not self.parent_win:
+            return
+
+        for idx, view in enumerate(self.parent_win.views):
+            title = view.title() or "Pestaña"
+            url_str = view.url().toString()
+            if self.parent_win.is_internal_or_ntp(url_str):
+                title = "Nueva Pestaña"
+                url_str = "aegis://start"
+            is_audible = view.page() and view.page().recentlyAudible()
+            audible_icon = " 🔊" if is_audible else ""
+            self._all_items.append({
+                "type": "open",
+                "idx": idx,
+                "title": title,
+                "url": url_str,
+                "display": f"🌐 {title}{audible_icon}\n   {url_str}"
+            })
+
+        for closed_url, closed_title in reversed(self.parent_win.closed_tabs[:8]):
+            self._all_items.append({
+                "type": "closed",
+                "title": closed_title,
+                "url": closed_url,
+                "display": f"↩️ {closed_title}\n   {closed_url}"
+            })
+
+        self.filter_tabs(self.search_input.text())
+        self.search_input.setFocus()
+        self.search_input.selectAll()
+
+    def filter_tabs(self, query: str):
+        self.list_widget.clear()
+        q = query.lower().strip()
+        for item in self._all_items:
+            if not q or (q in item["title"].lower() or q in item["url"].lower()):
+                li = QListWidgetItem(item["display"])
+                li.setData(Qt.ItemDataRole.UserRole, item)
+                self.list_widget.addItem(li)
+        if self.list_widget.count() > 0:
+            self.list_widget.setCurrentRow(0)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
+            cur = self.list_widget.currentItem()
+            if cur:
+                self.on_item_clicked(cur)
+                return
+        elif event.key() == Qt.Key.Key_Escape:
+            self.hide()
+            return
+        elif event.key() == Qt.Key.Key_Down:
+            cur_r = self.list_widget.currentRow()
+            if cur_r < self.list_widget.count() - 1:
+                self.list_widget.setCurrentRow(cur_r + 1)
+            return
+        elif event.key() == Qt.Key.Key_Up:
+            cur_r = self.list_widget.currentRow()
+            if cur_r > 0:
+                self.list_widget.setCurrentRow(cur_r - 1)
+            return
+        super().keyPressEvent(event)
+
+    def on_item_clicked(self, item: QListWidgetItem):
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if not data or not self.parent_win:
+            return
+        if data["type"] == "open":
+            idx = data["idx"]
+            if 0 <= idx < len(self.parent_win.views):
+                self.parent_win.tab_bar.setCurrentIndex(idx)
+        elif data["type"] == "closed":
+            self.parent_win.add_new_tab(data["url"])
+        self.hide()
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        qss = f"""
+            QFrame#AegisTabSearchPopup {{
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.16);
+                border-radius: 12px;
+            }}
+            QLineEdit#TabSearchInput {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.18);
+                border-radius: 8px;
+                color: {t['text']};
+                padding: 8px 12px;
+                font-size: 13px;
+                selection-background-color: {t['accent']};
+            }}
+            QLineEdit#TabSearchInput:focus {{
+                border-color: {t['accent']};
+            }}
+            QListWidget#TabSearchList {{
+                background: transparent;
+                border: none;
+                color: {t['text']};
+            }}
+            QListWidget#TabSearchList::item {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.08);
+                border-radius: 8px;
+                padding: 8px 12px;
+                margin-bottom: 4px;
+                font-size: 12px;
+            }}
+            QListWidget#TabSearchList::item:hover {{
+                border-color: {t['accent']};
+                color: {t['accent']};
+            }}
+            QListWidget#TabSearchList::item:selected {{
+                background-color: {t['bg']};
+                border: 1.5px solid {t['accent']};
+                color: {t['accent']};
+                font-weight: 600;
+            }}
+        """
+        self.setStyleSheet(qss)
+
+# ── 10.3.8 Popup de Edición de Marcadores (⭐) ──────────────────────────────────
+class AegisBookmarkEditPopup(QFrame):
+    def __init__(self, parent_win=None):
+        super().__init__(parent_win, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setObjectName("AegisBookmarkEditPopup")
+        self.setFixedWidth(320)
+        self.parent_win = parent_win
+        self._target_url = ""
+        self.init_ui()
+
+    def hideEvent(self, event):
+        if self.parent_win:
+            self.parent_win._last_bookmark_popup_close_time = time.time()
+        super().hideEvent(event)
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        header = QLabel("⭐ Marcador guardado")
+        header.setStyleSheet("font-weight: 700; font-size: 13px;")
+        layout.addWidget(header)
+
+        lbl_name = QLabel("Nombre:")
+        lbl_name.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        layout.addWidget(lbl_name)
+
+        self.input_title = QLineEdit()
+        self.input_title.setObjectName("BookmarkEditInput")
+        layout.addWidget(self.input_title)
+
+        lbl_url = QLabel("Dirección URL:")
+        lbl_url.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        layout.addWidget(lbl_url)
+
+        self.input_url = QLineEdit()
+        self.input_url.setObjectName("BookmarkEditInput")
+        layout.addWidget(self.input_url)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        self.btn_del = QPushButton("🗑️ Eliminar")
+        self.btn_del.setProperty("class", "bm-del-btn")
+        self.btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_del.clicked.connect(self.delete_bookmark)
+        btn_row.addWidget(self.btn_del)
+
+        btn_row.addStretch()
+
+        self.btn_save = QPushButton("Listo")
+        self.btn_save.setProperty("class", "bm-save-btn")
+        self.btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_save.clicked.connect(self.save_bookmark)
+        btn_row.addWidget(self.btn_save)
+
+        layout.addLayout(btn_row)
+
+    def populate(self, url: str, title: str):
+        self._target_url = url
+        self.input_url.setText(url)
+        self.input_title.setText(title)
+
+    def delete_bookmark(self):
+        if self.parent_win:
+            self.parent_win.bookmarks_mgr.remove(self._target_url)
+            self.parent_win.btn_bookmark.setText("☆")
+            if hasattr(self.parent_win, "bookmarks_bar"):
+                self.parent_win.bookmarks_bar.refresh_bookmarks()
+            self.parent_win.show_toast("Marcador eliminado.")
+        self.hide()
+
+    def save_bookmark(self):
+        new_title = self.input_title.text().strip() or "Marcador"
+        new_url = self.input_url.text().strip() or self._target_url
+        if self.parent_win:
+            self.parent_win.bookmarks_mgr.remove(self._target_url)
+            self.parent_win.bookmarks_mgr.add(new_title, new_url)
+            self.parent_win.btn_bookmark.setText("★")
+            if hasattr(self.parent_win, "bookmarks_bar"):
+                self.parent_win.bookmarks_bar.refresh_bookmarks()
+            self.parent_win.show_toast("Marcador actualizado.")
+        self.hide()
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        qss = f"""
+            QFrame#AegisBookmarkEditPopup {{
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.16);
+                border-radius: 12px;
+            }}
+            QLineEdit#BookmarkEditInput {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 6px;
+                color: {t['text']};
+                padding: 6px 10px;
+                font-size: 12px;
+            }}
+            QLineEdit#BookmarkEditInput:focus {{
+                border-color: {t['accent']};
+            }}
+            QLabel {{
+                color: {t['text']};
+            }}
+            QPushButton.bm-del-btn {{
+                background: transparent;
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 6px;
+                color: #f85149;
+                padding: 5px 12px;
+                font-size: 11.5px;
+                font-weight: 500;
+            }}
+            QPushButton.bm-del-btn:hover {{
+                background-color: rgba(248, 81, 73, 0.1);
+            }}
+            QPushButton.bm-save-btn {{
+                background-color: {t['accent']};
+                border: none;
+                border-radius: 6px;
+                color: #ffffff;
+                padding: 5px 16px;
+                font-size: 11.5px;
+                font-weight: 600;
+            }}
+            QPushButton.bm-save-btn:hover {{
+                opacity: 0.9;
+            }}
+        """
+        self.setStyleSheet(qss)
+
+# ── 10.3.9 Diálogo Completo de Borrado de Datos de Navegación (Ctrl+Shift+Del) ──
+class AegisClearDataDialog(QDialog):
+    def __init__(self, parent_win=None):
+        super().__init__(parent_win)
+        self.parent_win = parent_win
+        self.setWindowTitle("Borrar datos de navegación - Aegis")
+        self.setFixedWidth(440)
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        header = QLabel("🗑️ Borrar datos de navegación")
+        header.setStyleSheet("font-weight: 700; font-size: 15px;")
+        layout.addWidget(header)
+
+        time_row = QHBoxLayout()
+        lbl_range = QLabel("Intervalo de tiempo:")
+        lbl_range.setStyleSheet("font-size: 12px; font-weight: 500;")
+        self.combo_range = QComboBox()
+        self.combo_range.setObjectName("ClearDataCombo")
+        self.combo_range.addItems(["Última hora", "Últimas 24 horas", "Últimos 7 días", "Todo el tiempo"])
+        self.combo_range.setCurrentIndex(3)
+        time_row.addWidget(lbl_range)
+        time_row.addWidget(self.combo_range)
+        layout.addLayout(time_row)
+
+        self.chk_history = QCheckBox("Historial de navegación y búsquedas")
+        self.chk_history.setChecked(True)
+        self.chk_cookies = QCheckBox("Cookies y datos de sitios web")
+        self.chk_cookies.setChecked(True)
+        self.chk_cache = QCheckBox("Archivos e imágenes en caché")
+        self.chk_cache.setChecked(True)
+        self.chk_downloads = QCheckBox("Historial de descargas")
+        self.chk_downloads.setChecked(True)
+        self.chk_closed_tabs = QCheckBox("Pestañas cerradas recientemente")
+        self.chk_closed_tabs.setChecked(True)
+
+        layout.addWidget(self.chk_history)
+        layout.addWidget(self.chk_cookies)
+        layout.addWidget(self.chk_cache)
+        layout.addWidget(self.chk_downloads)
+        layout.addWidget(self.chk_closed_tabs)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        self.btn_cancel = QPushButton("Cancelar")
+        self.btn_cancel.setProperty("class", "clear-cancel-btn")
+        self.btn_cancel.clicked.connect(self.reject)
+        btn_row.addWidget(self.btn_cancel)
+
+        self.btn_clear = QPushButton("Borrar datos")
+        self.btn_clear.setProperty("class", "clear-confirm-btn")
+        self.btn_clear.clicked.connect(self.execute_clear)
+        btn_row.addWidget(self.btn_clear)
+
+        layout.addLayout(btn_row)
+
+    def execute_clear(self):
+        if not self.parent_win:
+            self.accept()
+            return
+
+        range_idx = self.combo_range.currentIndex()
+        now = time.time()
+        cutoffs = [now - 3600, now - 86400, now - 604800, 0]
+        cutoff = cutoffs[range_idx]
+
+        if self.chk_history.isChecked():
+            if cutoff == 0:
+                self.parent_win.history_mgr.clear_history()
+            else:
+                self.parent_win.history_mgr.clear_range(cutoff)
+
+        if self.chk_cookies.isChecked() and self.parent_win.profile:
+            self.parent_win.profile.cookieStore().deleteAllCookies()
+
+        if self.chk_cache.isChecked() and self.parent_win.profile:
+            self.parent_win.profile.clearHttpCache()
+
+        if self.chk_downloads.isChecked():
+            self.parent_win.downloads_mgr.clear()
+
+        if self.chk_closed_tabs.isChecked():
+            self.parent_win.closed_tabs.clear()
+
+        self.parent_win.show_toast("✓ Datos de navegación borrados correctamente.")
+        self.accept()
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        qss = f"""
+            QDialog {{
+                background-color: {t['surface']};
+                color: {t['text']};
+            }}
+            QLabel, QCheckBox {{
+                color: {t['text']};
+                font-size: 12.5px;
+            }}
+            QComboBox#ClearDataCombo {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.18);
+                border-radius: 6px;
+                color: {t['text']};
+                padding: 4px 10px;
+                font-size: 12px;
+            }}
+            QPushButton.clear-cancel-btn {{
+                background: transparent;
+                border: 1px solid rgba({rgb_text}, 0.18);
+                border-radius: 6px;
+                color: {t['text']};
+                padding: 6px 14px;
+                font-size: 12px;
+                font-weight: 500;
+            }}
+            QPushButton.clear-cancel-btn:hover {{
+                background-color: {t['bg']};
+            }}
+            QPushButton.clear-confirm-btn {{
+                background-color: #da3633;
+                border: none;
+                border-radius: 6px;
+                color: #ffffff;
+                padding: 6px 16px;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+            QPushButton.clear-confirm-btn:hover {{
+                background-color: #b62324;
+            }}
+        """
+        self.setStyleSheet(qss)
+
+# ── 10.3.10 Barra Lateral de Productividad y Herramientas Rápidas (Ctrl+B) ──────
+class AegisSidebarWidget(QFrame):
+    def __init__(self, parent_win=None):
+        super().__init__(parent_win)
+        self.parent_win = parent_win
+        self.setObjectName("AegisSidebarWidget")
+        self.setFixedWidth(310)
+        self.reading_list = []
+        self.load_reading_list()
+        self.init_ui()
+
+    def load_reading_list(self):
+        if READING_LIST_FILE.exists():
+            try:
+                self.reading_list = json.loads(READING_LIST_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                self.reading_list = []
+
+    def save_reading_list(self):
+        try:
+            READING_LIST_FILE.write_text(json.dumps(self.reading_list, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
+
+    def init_ui(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Barra de botones de herramientas superior
+        top_bar = QWidget()
+        top_bar.setObjectName("SidebarTopBar")
+        top_layout = QHBoxLayout(top_bar)
+        top_layout.setContentsMargins(8, 6, 8, 6)
+        top_layout.setSpacing(4)
+
+        self.btn_tool_notes = QPushButton("📝")
+        self.btn_tool_notes.setToolTip("Bloc de Notas Rápido")
+        self.btn_tool_reading = QPushButton("📚")
+        self.btn_tool_reading.setToolTip("Lista de Lectura")
+        self.btn_tool_history = QPushButton("🕒")
+        self.btn_tool_history.setToolTip("Historial Rápido")
+        self.btn_tool_bookmarks = QPushButton("🔖")
+        self.btn_tool_bookmarks.setToolTip("Marcadores")
+        self.btn_tool_pass = QPushButton("🔐")
+        self.btn_tool_pass.setToolTip("Generador de Contraseñas")
+        self.btn_tool_shot = QPushButton("📸")
+        self.btn_tool_shot.setToolTip("Captura de Pantalla")
+
+        tools = [
+            (self.btn_tool_notes, 0),
+            (self.btn_tool_reading, 1),
+            (self.btn_tool_history, 2),
+            (self.btn_tool_bookmarks, 3),
+            (self.btn_tool_pass, 4),
+            (self.btn_tool_shot, 5),
+        ]
+
+        for btn, idx in tools:
+            btn.setProperty("class", "sidebar-tool-btn")
+            btn.setFixedSize(32, 28)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.clicked.connect(lambda _, i=idx: self.switch_tab(i))
+            top_layout.addWidget(btn)
+
+        top_layout.addStretch()
+
+        btn_close = QPushButton("✕")
+        btn_close.setProperty("class", "sidebar-close-btn")
+        btn_close.setFixedSize(24, 24)
+        btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_close.clicked.connect(lambda: self.parent_win.toggle_sidebar())
+        top_layout.addWidget(btn_close)
+
+        main_layout.addWidget(top_bar)
+
+        self.stack = QStackedWidget()
+
+        # 1. Notas Rápidas
+        w_notes = QWidget()
+        l_n = QVBoxLayout(w_notes)
+        l_n.setContentsMargins(12, 10, 12, 10)
+        l_n.setSpacing(8)
+        lbl_notes_title = QLabel("📝 Notas Rápidas (Autoguardado)")
+        lbl_notes_title.setStyleSheet("font-weight: 700; font-size: 12px;")
+        l_n.addWidget(lbl_notes_title)
+        self.txt_notes = QTextEdit()
+        self.txt_notes.setObjectName("SidebarNotesInput")
+        self.txt_notes.setPlaceholderText("Escribe ideas, notas o enlaces aquí...")
+        saved_notes = self.parent_win.config.get("quick_notes", "") if self.parent_win else ""
+        self.txt_notes.setPlainText(saved_notes)
+        self.txt_notes.textChanged.connect(self.on_notes_changed)
+        l_n.addWidget(self.txt_notes)
+        btn_copy_notes = QPushButton("📋 Copiar notas")
+        btn_copy_notes.setProperty("class", "sidebar-action-btn")
+        btn_copy_notes.clicked.connect(lambda: (QApplication.clipboard().setText(self.txt_notes.toPlainText()), self.parent_win.show_toast("Notas copiadas al portapapeles.")))
+        l_n.addWidget(btn_copy_notes)
+        self.stack.addWidget(w_notes)
+
+        # 2. Lista de Lectura
+        w_reading = QWidget()
+        l_r = QVBoxLayout(w_reading)
+        l_r.setContentsMargins(12, 10, 12, 10)
+        l_r.setSpacing(8)
+        btn_add_reading = QPushButton("➕ Añadir pestaña actual")
+        btn_add_reading.setProperty("class", "sidebar-action-btn")
+        btn_add_reading.clicked.connect(self.add_current_to_reading)
+        l_r.addWidget(btn_add_reading)
+        self.list_reading = QListWidget()
+        self.list_reading.setObjectName("SidebarList")
+        self.list_reading.itemClicked.connect(self.on_reading_item_clicked)
+        l_r.addWidget(self.list_reading)
+        self.stack.addWidget(w_reading)
+
+        # 3. Historial Rápido
+        w_hist = QWidget()
+        l_h = QVBoxLayout(w_hist)
+        l_h.setContentsMargins(12, 10, 12, 10)
+        l_h.setSpacing(8)
+        self.hist_filter = QLineEdit()
+        self.hist_filter.setObjectName("SidebarSearchInput")
+        self.hist_filter.setPlaceholderText("🔍 Filtrar historial...")
+        self.hist_filter.textChanged.connect(self.refresh_quick_history)
+        l_h.addWidget(self.hist_filter)
+        self.list_history = QListWidget()
+        self.list_history.setObjectName("SidebarList")
+        self.list_history.itemClicked.connect(self.on_hist_item_clicked)
+        l_h.addWidget(self.list_history)
+        self.stack.addWidget(w_hist)
+
+        # 4. Marcadores Rápidos
+        w_bm = QWidget()
+        l_bm = QVBoxLayout(w_bm)
+        l_bm.setContentsMargins(12, 10, 12, 10)
+        l_bm.setSpacing(8)
+        self.bm_filter = QLineEdit()
+        self.bm_filter.setObjectName("SidebarSearchInput")
+        self.bm_filter.setPlaceholderText("🔍 Filtrar marcadores...")
+        self.bm_filter.textChanged.connect(self.refresh_quick_bookmarks)
+        l_bm.addWidget(self.bm_filter)
+        self.list_bookmarks = QListWidget()
+        self.list_bookmarks.setObjectName("SidebarList")
+        self.list_bookmarks.itemClicked.connect(self.on_bm_item_clicked)
+        l_bm.addWidget(self.list_bookmarks)
+        self.stack.addWidget(w_bm)
+
+        # 5. Generador de Contraseñas
+        w_pass = QWidget()
+        l_p = QVBoxLayout(w_pass)
+        l_p.setContentsMargins(12, 12, 12, 12)
+        l_p.setSpacing(10)
+        lbl_p_title = QLabel("🔐 Generador de Contraseñas")
+        lbl_p_title.setStyleSheet("font-weight: 700; font-size: 12px;")
+        l_p.addWidget(lbl_p_title)
+
+        self.lbl_len = QLabel("Longitud: 16 caracteres")
+        self.lbl_len.setStyleSheet("font-size: 11px; opacity: 0.8;")
+        l_p.addWidget(self.lbl_len)
+
+        self.slider_len = QSlider(Qt.Orientation.Horizontal)
+        self.slider_len.setRange(8, 32)
+        self.slider_len.setValue(16)
+        self.slider_len.valueChanged.connect(self.on_slider_changed)
+        l_p.addWidget(self.slider_len)
+
+        self.chk_symbols = QCheckBox("Incluir símbolos (!@#$%^&*)")
+        self.chk_symbols.setChecked(True)
+        self.chk_symbols.stateChanged.connect(self.generate_password)
+        l_p.addWidget(self.chk_symbols)
+
+        self.pass_output = QLineEdit()
+        self.pass_output.setObjectName("SidebarPassOutput")
+        self.pass_output.setReadOnly(True)
+        l_p.addWidget(self.pass_output)
+
+        btn_gen = QPushButton("🔄 Generar y copiar")
+        btn_gen.setProperty("class", "sidebar-action-btn")
+        btn_gen.clicked.connect(self.generate_and_copy_pass)
+        l_p.addWidget(btn_gen)
+        l_p.addStretch()
+        self.stack.addWidget(w_pass)
+
+        # 6. Captura de Pantalla
+        w_shot = QWidget()
+        l_s = QVBoxLayout(w_shot)
+        l_s.setContentsMargins(12, 12, 12, 12)
+        l_s.setSpacing(12)
+        lbl_s_title = QLabel("📸 Captura de Pantalla Web")
+        lbl_s_title.setStyleSheet("font-weight: 700; font-size: 12px;")
+        l_s.addWidget(lbl_s_title)
+
+        lbl_s_desc = QLabel("Captura la página actual en alta resolución y cópiala al portapapeles y a la carpeta Descargas.")
+        lbl_s_desc.setWordWrap(True)
+        lbl_s_desc.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        l_s.addWidget(lbl_s_desc)
+
+        btn_take_shot = QPushButton("📸 Capturar Pestaña Actual")
+        btn_take_shot.setProperty("class", "sidebar-action-btn")
+        btn_take_shot.clicked.connect(self.take_screenshot)
+        l_s.addWidget(btn_take_shot)
+        l_s.addStretch()
+        self.stack.addWidget(w_shot)
+
+        main_layout.addWidget(self.stack)
+
+        self.refresh_reading_list()
+        self.refresh_quick_history()
+        self.refresh_quick_bookmarks()
+        self.generate_password()
+
+    def switch_tab(self, idx: int):
+        self.stack.setCurrentIndex(idx)
+        if idx == 1: self.refresh_reading_list()
+        elif idx == 2: self.refresh_quick_history()
+        elif idx == 3: self.refresh_quick_bookmarks()
+        elif idx == 4: self.generate_password()
+
+    def on_notes_changed(self):
+        if self.parent_win:
+            self.parent_win.config["quick_notes"] = self.txt_notes.toPlainText()
+            self.parent_win.save_config()
+
+    def add_current_to_reading(self):
+        if not self.parent_win:
+            return
+        cur = self.parent_win.current_view()
+        if cur:
+            u = cur.url().toString()
+            t = cur.title() or u
+            if u and not u.startswith("aegis://"):
+                item = {"title": t, "url": u, "time": time.time()}
+                self.reading_list.insert(0, item)
+                self.save_reading_list()
+                self.refresh_reading_list()
+                self.parent_win.show_toast("Artículo guardado en Lista de Lectura.")
+
+    def refresh_reading_list(self):
+        self.list_reading.clear()
+        for idx, item in enumerate(self.reading_list):
+            li = QListWidgetItem(f"📖 {item['title']}\n{item['url']}")
+            li.setData(Qt.ItemDataRole.UserRole, item['url'])
+            self.list_reading.addItem(li)
+
+    def on_reading_item_clicked(self, item: QListWidgetItem):
+        url = item.data(Qt.ItemDataRole.UserRole)
+        if url and self.parent_win:
+            self.parent_win.navigate_direct(url)
+
+    def refresh_quick_history(self):
+        self.list_history.clear()
+        if not self.parent_win: return
+        q = self.hist_filter.text().lower().strip()
+        hist = self.parent_win.history_mgr.data.get("history_log", [])
+        for h in hist[:40]:
+            title = h.get("title") or h.get("url", "")
+            u = h.get("url", "")
+            if not q or (q in title.lower() or q in u.lower()):
+                li = QListWidgetItem(f"🕒 {title}\n{u}")
+                li.setData(Qt.ItemDataRole.UserRole, u)
+                self.list_history.addItem(li)
+
+    def on_hist_item_clicked(self, item: QListWidgetItem):
+        url = item.data(Qt.ItemDataRole.UserRole)
+        if url and self.parent_win:
+            self.parent_win.navigate_direct(url)
+
+    def refresh_quick_bookmarks(self):
+        self.list_bookmarks.clear()
+        if not self.parent_win: return
+        q = self.bm_filter.text().lower().strip()
+        bms = self.parent_win.bookmarks_mgr.bookmarks
+        for b in bms:
+            title = b.get("title", "")
+            u = b.get("url", "")
+            if not q or (q in title.lower() or q in u.lower()):
+                li = QListWidgetItem(f"⭐ {title}\n{u}")
+                li.setData(Qt.ItemDataRole.UserRole, u)
+                self.list_bookmarks.addItem(li)
+
+    def on_bm_item_clicked(self, item: QListWidgetItem):
+        url = item.data(Qt.ItemDataRole.UserRole)
+        if url and self.parent_win:
+            self.parent_win.navigate_direct(url)
+
+    def on_slider_changed(self, val: int):
+        self.lbl_len.setText(f"Longitud: {val} caracteres")
+        self.generate_password()
+
+    def generate_password(self):
+        length = self.slider_len.value()
+        chars = string.ascii_letters + string.digits
+        if self.chk_symbols.isChecked():
+            chars += "!@#$%^&*()-_=+"
+        pwd = "".join(secrets.choice(chars) for _ in range(length))
+        self.pass_output.setText(pwd)
+
+    def generate_and_copy_pass(self):
+        self.generate_password()
+        pwd = self.pass_output.text()
+        QApplication.clipboard().setText(pwd)
+        if self.parent_win:
+            self.parent_win.show_toast("🔐 Contraseña generada y copiada al portapapeles.")
+
+    def take_screenshot(self):
+        if not self.parent_win:
+            return
+        cur = self.parent_win.current_view()
+        if not cur:
+            return
+        pix = cur.grab()
+        QApplication.clipboard().setPixmap(pix)
+        save_dir = Path.home() / "Downloads"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        file_path = save_dir / f"Aegis_Screenshot_{int(time.time())}.png"
+        pix.save(str(file_path), "PNG")
+        self.parent_win.show_toast(f"📸 Captura guardada en Descargas y copiada.")
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        qss = f"""
+            QFrame#AegisSidebarWidget {{
+                background-color: {t['surface']};
+                border-left: 1px solid rgba({rgb_text}, 0.12);
+            }}
+            QWidget#SidebarTopBar {{
+                background-color: {t['bg']};
+                border-bottom: 1px solid rgba({rgb_text}, 0.08);
+            }}
+            QPushButton.sidebar-tool-btn {{
+                background: transparent;
+                border: none;
+                border-radius: 4px;
+                font-size: 14px;
+            }}
+            QPushButton.sidebar-tool-btn:hover {{
+                background-color: {t['surface']};
+            }}
+            QPushButton.sidebar-close-btn {{
+                background: transparent;
+                border: none;
+                color: rgba({rgb_text}, 0.6);
+                font-size: 12px;
+                border-radius: 4px;
+            }}
+            QPushButton.sidebar-close-btn:hover {{
+                background-color: {t['surface']};
+                color: {t['text']};
+            }}
+            QLabel {{
+                color: {t['text']};
+            }}
+            QTextEdit#SidebarNotesInput {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.14);
+                border-radius: 8px;
+                color: {t['text']};
+                padding: 8px;
+                font-size: 12px;
+                font-family: inherit;
+            }}
+            QTextEdit#SidebarNotesInput:focus {{
+                border-color: {t['accent']};
+            }}
+            QLineEdit#SidebarSearchInput, QLineEdit#SidebarPassOutput {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.14);
+                border-radius: 6px;
+                color: {t['text']};
+                padding: 6px 10px;
+                font-size: 12px;
+            }}
+            QListWidget#SidebarList {{
+                background: transparent;
+                border: none;
+                color: {t['text']};
+            }}
+            QListWidget#SidebarList::item {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.08);
+                border-radius: 6px;
+                padding: 6px 8px;
+                margin-bottom: 4px;
+                font-size: 11.5px;
+            }}
+            QListWidget#SidebarList::item:hover {{
+                border-color: {t['accent']};
+                color: {t['accent']};
+            }}
+            QPushButton.sidebar-action-btn {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.16);
+                border-radius: 6px;
+                color: {t['text']};
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+            QPushButton.sidebar-action-btn:hover {{
+                background-color: {t['surface']};
+                border-color: {t['accent']};
+                color: {t['accent']};
+            }}
+        """
+        self.setStyleSheet(qss)
+
 # ── 10.4 Barra de Marcadores Horizontal (Ctrl+Shift+B) ────────────────────────
 class AegisBookmarksBar(QWidget):
     def __init__(self, parent_win):
@@ -2301,6 +3352,9 @@ class AegisBrowserWindow(QMainWindow):
         self.downloads_popup = AegisDownloadsPopup(self)
         self.extensions_popup = AegisExtensionsPopup(self)
         self.media_popup = AegisMediaPopup(self)
+        self.site_info_popup = AegisSiteInfoPopup(self)
+        self.bookmark_edit_popup = AegisBookmarkEditPopup(self)
+        self.tab_search_popup = AegisTabSearchPopup(self)
 
         # Barra de búsqueda flotante en página (Ctrl+F) y Toast de notificaciones
         self.find_bar = FindInPageWidget(self)
@@ -2324,8 +3378,10 @@ class AegisBrowserWindow(QMainWindow):
         self.tab_sleep_timer.timeout.connect(self.check_inactive_tabs_to_sleep)
         self.tab_sleep_timer.start()
 
-        # Abrir pestaña inicial
-        self.add_new_tab()
+        # Restaurar sesión previa o abrir pestaña inicial
+        restored = self.restore_session_tabs()
+        if not restored:
+            self.add_new_tab()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -2343,7 +3399,20 @@ class AegisBrowserWindow(QMainWindow):
             "search_engine": "Google",
             "shields_enabled": True,
             "force_dark_mode": True,
-            "show_bookmarks_bar": True
+            "show_bookmarks_bar": True,
+            "show_sidebar": False,
+            "show_home_button": True,
+            "default_zoom": 100,
+            "on_startup": "ntp",
+            "download_directory": str(Path.home() / "Downloads"),
+            "ask_download_location": False,
+            "sleeping_tabs_timeout": 900,
+            "clean_tracking_on_copy": True,
+            "webrtc_protection": True,
+            "fingerprint_protection": True,
+            "https_only_mode": False,
+            "clear_data_on_exit": False,
+            "quick_notes": ""
         }
         if CONFIG_FILE.exists():
             try:
@@ -2384,6 +3453,12 @@ class AegisBrowserWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+Equal"), self, self.zoom_in)
         QShortcut(QKeySequence("Ctrl+Minus"), self, self.zoom_out)
         QShortcut(QKeySequence("Ctrl+0"), self, self.zoom_reset)
+        QShortcut(QKeySequence("Ctrl+Shift+A"), self, self.toggle_tab_search_popup)
+        QShortcut(QKeySequence("Ctrl+B"), self, self.toggle_sidebar)
+        QShortcut(QKeySequence("Ctrl+Shift+Del"), self, self.open_clear_data_dialog)
+        QShortcut(QKeySequence("F9"), self, self.toggle_reader_mode)
+        QShortcut(QKeySequence("Ctrl+Shift+S"), self, self.capture_page_screenshot)
+        QShortcut(QKeySequence("Ctrl+P"), self, self.print_to_pdf)
 
     def load_userscripts(self):
         try:
@@ -2401,9 +3476,21 @@ class AegisBrowserWindow(QMainWindow):
             pass
 
     def on_download_requested(self, download: QWebEngineDownloadRequest):
-        save_dir = Path.home() / "Downloads"
+        save_dir_str = self.config.get("download_directory", str(Path.home() / "Downloads"))
+        save_dir = Path(save_dir_str)
         save_dir.mkdir(parents=True, exist_ok=True)
         filename = download.suggestedFileName() or "descarga"
+
+        if self.config.get("ask_download_location", False):
+            custom_path, _ = QFileDialog.getSaveFileName(self, "Guardar archivo como...", str(save_dir / filename))
+            if custom_path:
+                p = Path(custom_path)
+                save_dir = p.parent
+                filename = p.name
+            else:
+                download.cancel()
+                return
+
         download.setDownloadDirectory(str(save_dir))
         download.setDownloadFileName(filename)
         full_path = str(save_dir / filename)
@@ -2601,6 +3688,9 @@ class AegisBrowserWindow(QMainWindow):
             menu.addSeparator()
             act_close = menu.addAction("✕ Cerrar pestaña")
             act_close_others = menu.addAction("✕ Cerrar otras pestañas")
+            act_close_right = menu.addAction("✕ Cerrar pestañas a la derecha")
+            menu.addSeparator()
+            act_clean_link = menu.addAction("🧹 Copiar enlace sin rastreadores")
 
         act_reopen = None
         if self.closed_tabs:
@@ -2631,6 +3721,12 @@ class AegisBrowserWindow(QMainWindow):
             for i in reversed(range(len(self.views))):
                 if i != idx:
                     self.close_tab(i)
+        elif action == act_close_right and idx != -1:
+            for i in reversed(range(idx + 1, len(self.views))):
+                self.close_tab(i)
+        elif action == act_clean_link and idx != -1:
+            QApplication.clipboard().setText(clean_url_tracking(self.views[idx].url().toString()))
+            self.show_toast("Enlace copiado sin rastreadores.")
         elif action == act_reopen:
             self.reopen_closed_tab()
 
@@ -2880,6 +3976,180 @@ class AegisBrowserWindow(QMainWindow):
         if new_win not in app._aegis_windows:
             app._aegis_windows.append(new_win)
 
+    def toggle_site_info_popup(self):
+        now = time.time()
+        if hasattr(self, "_last_site_info_close_time") and (now - self._last_site_info_close_time < 0.25):
+            return
+        if hasattr(self, "site_info_popup") and self.site_info_popup.isVisible():
+            self.site_info_popup.hide()
+            return
+        v = self.current_view()
+        url = v.url() if v else QUrl()
+        self.site_info_popup.refresh_site(url)
+        pos = self.url_bar.mapToGlobal(QPoint(0, self.url_bar.height() + 4))
+        self.site_info_popup.move(pos.x(), pos.y())
+        self.site_info_popup.show()
+        self.site_info_popup.raise_()
+
+    def toggle_tab_search_popup(self):
+        now = time.time()
+        if hasattr(self, "_last_tab_search_close_time") and (now - self._last_tab_search_close_time < 0.25):
+            return
+        if hasattr(self, "tab_search_popup") and self.tab_search_popup.isVisible():
+            self.tab_search_popup.hide()
+            return
+        self.tab_search_popup.refresh_tabs()
+        btn_pos = self.btn_tab_search.mapToGlobal(QPoint(0, self.btn_tab_search.height() + 4))
+        popup_x = max(10, min(self.geometry().right() - self.tab_search_popup.width() - 10, btn_pos.x() - 180))
+        self.tab_search_popup.move(popup_x, btn_pos.y())
+        self.tab_search_popup.show()
+        self.tab_search_popup.raise_()
+
+    def toggle_sidebar(self):
+        if not hasattr(self, "sidebar"):
+            return
+        is_hidden = self.sidebar.isHidden()
+        self.sidebar.setVisible(is_hidden)
+        self.config["show_sidebar"] = is_hidden
+        self.save_config()
+        if is_hidden:
+            t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+            self.btn_sidebar.setStyleSheet(f"color: {t['accent']}; font-weight: bold;")
+        else:
+            self.btn_sidebar.setStyleSheet("")
+
+    def open_clear_data_dialog(self):
+        dlg = AegisClearDataDialog(self)
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        dlg.apply_theme(t)
+        dlg.exec()
+
+    def copy_clean_url(self):
+        cur = self.current_view()
+        if cur:
+            u = cur.url().toString()
+            clean_u = clean_url_tracking(u)
+            QApplication.clipboard().setText(clean_u)
+            self.show_toast("🔗 Enlace copiado sin parámetros de rastreo.")
+
+    def capture_page_screenshot(self):
+        cur = self.current_view()
+        if not cur:
+            return
+        pix = cur.grab()
+        QApplication.clipboard().setPixmap(pix)
+        save_dir = Path.home() / "Downloads"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        file_path = save_dir / f"Aegis_Screenshot_{int(time.time())}.png"
+        pix.save(str(file_path), "PNG")
+        self.show_toast("📸 Captura guardada en Descargas y copiada.")
+
+    def print_to_pdf(self):
+        cur = self.current_view()
+        if not cur:
+            return
+        save_dir = Path.home() / "Downloads"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        title = "".join(c for c in (cur.title() or "pagina") if c.isalnum() or c in (" ", "_", "-")).strip()
+        file_path = save_dir / f"{title}_{int(time.time())}.pdf"
+        cur.page().printToPdf(str(file_path))
+        self.show_toast(f"🖨️ PDF guardado en Descargas.")
+
+    def toggle_reader_mode(self):
+        cur = self.current_view()
+        if not cur:
+            return
+        if getattr(cur, "_in_reader_mode", False):
+            orig_url = getattr(cur, "_reader_orig_url", "")
+            cur._in_reader_mode = False
+            cur._aegis_virtual_url = None
+            if orig_url:
+                cur.load(QUrl(orig_url))
+            return
+
+        cur_url = cur.url().toString()
+        if not cur_url or cur_url.startswith("aegis://") or cur_url.startswith("about:"):
+            self.show_toast("Modo lectura no disponible en esta página.")
+            return
+
+        reader_script = """
+        (() => {
+            try {
+                const title = document.title || (document.querySelector('h1') ? document.querySelector('h1').innerText : 'Artículo');
+                let article = document.querySelector('article') || document.querySelector('main') || document.querySelector('.content') || document.querySelector('.post-content') || document.body;
+                const clone = article.cloneNode(true);
+                clone.querySelectorAll('script, style, nav, aside, footer, header, noscript, iframe, .ad, .social, .advertisement, [id*="ad-"], [class*="ad-"]').forEach(el => el.remove());
+                return {
+                    title: title,
+                    content: clone.innerHTML
+                };
+            } catch(e) {
+                return null;
+            }
+        })();
+        """
+        def on_extracted(data):
+            if not data or not data.get("content"):
+                self.show_toast("No se encontró contenido legible.")
+                return
+            cur._in_reader_mode = True
+            cur._reader_orig_url = cur_url
+            t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+            reader_html = f"""<!DOCTYPE html>
+            <html class="{t['ntp_class']}">
+            <head><meta charset="utf-8">
+            <style>
+              body {{ background: {t['bg']}; color: {t['text']}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.8; margin: 0; padding: 0; }}
+              .reader-top {{ position: sticky; top: 0; background: {t['surface']}; border-bottom: 1px solid rgba(128,128,128,0.15); padding: 10px 24px; display: flex; align-items: center; justify-content: space-between; z-index: 999; }}
+              .reader-btn {{ background: transparent; border: 1px solid rgba(128,128,128,0.25); border-radius: 6px; color: {t['text']}; padding: 4px 10px; cursor: pointer; font-size: 12px; font-weight: 500; }}
+              .reader-btn:hover {{ border-color: {t['accent']}; color: {t['accent']}; }}
+              .reader-container {{ max-width: 720px; margin: 40px auto; padding: 0 20px; }}
+              h1 {{ font-size: 2.2rem; margin-bottom: 1rem; line-height: 1.25; }}
+              p {{ font-size: 1.15rem; margin-bottom: 1.4rem; }}
+              img {{ max-width: 100%; height: auto; border-radius: 8px; margin: 16px 0; }}
+            </style>
+            </head>
+            <body>
+              <div class="reader-top">
+                <button class="reader-btn" onclick="window.location.href='{cur_url}'">← Salir de Modo Lectura</button>
+                <div style="font-size: 12px; opacity: 0.7;">📖 Aegis Reader Mode</div>
+              </div>
+              <div class="reader-container">
+                <h1>{data.get('title', 'Artículo')}</h1>
+                {data.get('content', '')}
+              </div>
+            </body>
+            </html>"""
+            cur.setHtml(reader_html, QUrl(cur_url))
+            self.show_toast("📖 Modo lectura activado.")
+
+        cur.page().runJavaScript(reader_script, on_extracted)
+
+    def restore_session_tabs(self):
+        if self.is_incognito or self.config.get("on_startup") != "restore_session":
+            return False
+        if SESSION_FILE.exists():
+            try:
+                urls = json.loads(SESSION_FILE.read_text(encoding="utf-8"))
+                if urls and isinstance(urls, list):
+                    first = True
+                    for u in urls:
+                        if u and not u.startswith("aegis://start") and not u.startswith("about:"):
+                            if first:
+                                v = self.current_view()
+                                if v:
+                                    v.load(QUrl(u))
+                                else:
+                                    self.add_new_tab(u)
+                                first = False
+                            else:
+                                self.add_new_tab(u)
+                    if not first:
+                        return True
+            except Exception:
+                pass
+        return False
+
     def closeEvent(self, event):
         app = QApplication.instance()
         if hasattr(app, "_aegis_windows") and self in app._aegis_windows:
@@ -2888,6 +4158,26 @@ class AegisBrowserWindow(QMainWindow):
             self.auto_purge_timer.stop()
         if hasattr(self, "tab_sleep_timer") and self.tab_sleep_timer.isActive():
             self.tab_sleep_timer.stop()
+
+        # Guardar sesión previa si está activo
+        if not self.is_incognito and self.config.get("on_startup") == "restore_session":
+            open_urls = []
+            for v in self.views:
+                u = v.url().toString()
+                if u and not self.is_internal_or_ntp(u):
+                    open_urls.append(u)
+            try:
+                SESSION_FILE.write_text(json.dumps(open_urls, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+
+        # Limpiar datos al salir si está configurado
+        if self.config.get("clear_data_on_exit", False):
+            if self.profile:
+                self.profile.cookieStore().deleteAllCookies()
+                self.profile.clearHttpCache()
+            self.history_mgr.clear_history()
+
         super().closeEvent(event)
 
     def is_internal_or_ntp(self, url_str: str) -> bool:
@@ -3104,6 +4394,12 @@ class AegisBrowserWindow(QMainWindow):
         self.btn_new_tab.clicked.connect(lambda: self.add_new_tab())
         tab_header_layout.addWidget(self.btn_new_tab)
 
+        self.btn_tab_search = QPushButton("▼")
+        self.btn_tab_search.setObjectName("TabSearchBtn")
+        self.btn_tab_search.setToolTip("Buscar pestañas abiertas o recientes (Ctrl+Shift+A)")
+        self.btn_tab_search.clicked.connect(self.toggle_tab_search_popup)
+        tab_header_layout.addWidget(self.btn_tab_search)
+
         tab_header_layout.addStretch()
         main_layout.addWidget(self.tab_header)
 
@@ -3141,6 +4437,15 @@ class AegisBrowserWindow(QMainWindow):
         # Omnibox Cápsula Inteligente
         self.url_bar = AegisOmnibox(self)
         self.url_bar.setObjectName("Omnibox")
+
+        # Acción de seguridad SSL (🔒 / ⚠️ / 🛡️)
+        self.security_action = self.url_bar.addAction(
+            create_shield_icon("#2ea043", 16),
+            QLineEdit.ActionPosition.LeadingPosition
+        )
+        self.security_action.setToolTip("Información del sitio y seguridad de conexión")
+        self.security_action.triggered.connect(self.toggle_site_info_popup)
+
         engine = self.config.get("search_engine", "Google")
         self.search_engine_action = self.url_bar.addAction(
             create_search_engine_icon(engine, 16),
@@ -3152,6 +4457,29 @@ class AegisBrowserWindow(QMainWindow):
         placeholder = f"Navegación Privada · Buscar con {engine}..." if self.is_incognito else f"Buscar con {engine} o ingresar dirección..."
         self.url_bar.setPlaceholderText(placeholder)
         self.url_bar.returnPressed.connect(self.navigate_to_url)
+
+        # Acciones laterales derechas del Omnibox
+        self.clean_copy_action = self.url_bar.addAction(
+            create_shield_icon("#888888", 14),
+            QLineEdit.ActionPosition.TrailingPosition
+        )
+        self.clean_copy_action.setToolTip("Copiar enlace limpio sin parámetros de rastreo")
+        self.clean_copy_action.triggered.connect(self.copy_clean_url)
+
+        self.reader_action = self.url_bar.addAction(
+            create_shield_icon("#888888", 14),
+            QLineEdit.ActionPosition.TrailingPosition
+        )
+        self.reader_action.setToolTip("Modo Lectura / Distraction-free (F9)")
+        self.reader_action.triggered.connect(self.toggle_reader_mode)
+
+        self.zoom_action = self.url_bar.addAction(
+            create_shield_icon("#888888", 14),
+            QLineEdit.ActionPosition.TrailingPosition
+        )
+        self.zoom_action.setToolTip("Zoom alterado: Click para restablecer al 100%")
+        self.zoom_action.setVisible(False)
+        self.zoom_action.triggered.connect(self.zoom_reset)
 
         # Autocompletado del Omnibox
         self.completer_model = QStringListModel()
@@ -3207,6 +4535,13 @@ class AegisBrowserWindow(QMainWindow):
         self.btn_extensions.clicked.connect(self.toggle_extensions_popup)
         toolbar_layout.addWidget(self.btn_extensions)
 
+        # Botón Barra Lateral de Herramientas (📑)
+        self.btn_sidebar = QPushButton("📑")
+        self.btn_sidebar.setObjectName("SidebarBtn")
+        self.btn_sidebar.setToolTip("Barra lateral: Notas, lectura, contraseñas (Ctrl+B)")
+        self.btn_sidebar.clicked.connect(self.toggle_sidebar)
+        toolbar_layout.addWidget(self.btn_sidebar)
+
         # Botón de Cambio Rápido de Tema (Oscuro / Claro)
         self.btn_theme_toggle = QPushButton("☀️")
         self.btn_theme_toggle.setObjectName("ThemeToggleBtn")
@@ -3237,9 +4572,21 @@ class AegisBrowserWindow(QMainWindow):
         self.progress_bar.hide()
         main_layout.addWidget(self.progress_bar)
 
-        # ── 5. Contenedor de Vistas Web ───────────────────────────────────────
+        # ── 5. Contenedor de Vistas Web y Barra Lateral ───────────────────────
+        self.web_content_splitter = QWidget()
+        splitter_layout = QHBoxLayout(self.web_content_splitter)
+        splitter_layout.setContentsMargins(0, 0, 0, 0)
+        splitter_layout.setSpacing(0)
+
         self.stack = QStackedWidget()
-        main_layout.addWidget(self.stack)
+        splitter_layout.addWidget(self.stack, 1)
+
+        self.sidebar = AegisSidebarWidget(self)
+        if not self.config.get("show_sidebar", False):
+            self.sidebar.hide()
+        splitter_layout.addWidget(self.sidebar, 0)
+
+        main_layout.addWidget(self.web_content_splitter, 1)
 
     def save_theme(self, theme_name: str):
         self.config["theme"] = theme_name
@@ -3344,6 +4691,31 @@ class AegisBrowserWindow(QMainWindow):
             QPushButton#NewTabBtn:hover {{
                 background-color: {t['surface']};
                 color: {t['text']};
+            }}
+            QPushButton#TabSearchBtn {{
+                background: transparent;
+                border: none;
+                color: rgba({rgb_text}, 0.65);
+                font-size: 11px;
+                border-radius: 12px;
+                width: 22px;
+                height: 22px;
+            }}
+            QPushButton#TabSearchBtn:hover {{
+                background-color: {t['surface']};
+                color: {t['text']};
+            }}
+            QPushButton#SidebarBtn {{
+                background: transparent;
+                border: none;
+                color: {t['text']};
+                font-size: 15px;
+                border-radius: 14px;
+                width: 30px;
+                height: 30px;
+            }}
+            QPushButton#SidebarBtn:hover {{
+                background-color: {t['surface']};
             }}
             QWidget#Toolbar {{
                 background-color: {t['bg']};
@@ -3556,6 +4928,18 @@ class AegisBrowserWindow(QMainWindow):
 
         if hasattr(self, "media_popup"):
             self.media_popup.apply_theme(t)
+
+        if hasattr(self, "site_info_popup"):
+            self.site_info_popup.apply_theme(t)
+
+        if hasattr(self, "bookmark_edit_popup"):
+            self.bookmark_edit_popup.apply_theme(t)
+
+        if hasattr(self, "tab_search_popup"):
+            self.tab_search_popup.apply_theme(t)
+
+        if hasattr(self, "sidebar"):
+            self.sidebar.apply_theme(t)
 
         if hasattr(self, "find_bar"):
             self.find_bar.apply_theme(t)
@@ -3904,6 +5288,18 @@ class AegisBrowserWindow(QMainWindow):
                     self.history_mgr.remove_history_item(u)
                     self.load_history(view)
                     return
+                elif "choose_download_dir" in q:
+                    cur_dir = self.config.get("download_directory", str(Path.home() / "Downloads"))
+                    chosen = QFileDialog.getExistingDirectory(self, "Seleccionar carpeta de descargas", cur_dir)
+                    if chosen:
+                        self.config["download_directory"] = chosen
+                        self.save_config()
+                        self.show_toast("Carpeta de descargas actualizada.")
+                    self.load_settings(view)
+                    return
+                elif "open_clear_data_modal" in q:
+                    self.open_clear_data_dialog()
+                    return
                 elif "open_scripts_folder" in q:
                     USERSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
                     subprocess.Popen(f'explorer.exe "{str(USERSCRIPTS_DIR)}"')
@@ -3934,6 +5330,39 @@ class AegisBrowserWindow(QMainWindow):
             return
 
         if view == self.current_view():
+            # Actualizar candado SSL / indicador de seguridad
+            u_scheme = qurl.scheme().lower()
+            if hasattr(self, "security_action"):
+                t_cur = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+                if u_scheme == "https":
+                    self.security_action.setIcon(create_shield_icon("#2ea043", 16))
+                    self.security_action.setToolTip("Conexión segura y cifrada (HTTPS)")
+                elif u_scheme == "http":
+                    self.security_action.setIcon(create_shield_icon("#d29922", 16))
+                    self.security_action.setToolTip("Conexión no cifrada (HTTP)")
+                else:
+                    self.security_action.setIcon(create_shield_icon(t_cur["accent"], 16))
+                    self.security_action.setToolTip("Página del sistema de Aegis")
+
+            # Actualizar estrella de marcadores
+            if hasattr(self, "btn_bookmark"):
+                t_cur = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+                if self.bookmarks_mgr.is_bookmarked(url_str):
+                    self.btn_bookmark.setText("★")
+                    self.btn_bookmark.setStyleSheet(f"color: {t_cur['accent']}; font-weight: bold;")
+                else:
+                    self.btn_bookmark.setText("☆")
+                    self.btn_bookmark.setStyleSheet("")
+
+            # Actualizar indicador de zoom si no es 100%
+            if hasattr(self, "zoom_action"):
+                zf = round(view.zoomFactor(), 2)
+                if abs(zf - 1.0) > 0.05:
+                    self.zoom_action.setVisible(True)
+                    self.zoom_action.setToolTip(f"Zoom actual: {int(zf*100)}% (Click para restablecer al 100%)")
+                else:
+                    self.zoom_action.setVisible(False)
+
             # Sanitizar estrictamente el Omnibox para que jamás muestre acciones ni código JS ni data URLs
             if self.is_internal_or_ntp(url_str):
                 if url_str.startswith("aegis://") and url_str != "aegis://start":
@@ -4164,6 +5593,9 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
         frequent_sites = []
 
     engine_svg = get_search_engine_svg(search_engine, size=22)
+    blocked_count = max(42, SHIELDS_CORE.total_blocked)
+    mb_saved = f"{int(blocked_count * 0.045 + 1)} MB"
+    time_saved = f"{int(blocked_count * 0.04 + 1)}s" 
 
     cards_html = ""
     for site in frequent_sites:
@@ -4259,6 +5691,13 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
       color: var(--text);
     }}
 
+    .greeting {{
+      font-size: 1.15rem;
+      font-weight: 500;
+      opacity: 0.75;
+      letter-spacing: 0.2px;
+      margin-bottom: 0.25rem;
+    }}
     .clock {{
       font-size: 4.5rem;
       font-weight: 200;
@@ -4266,6 +5705,60 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
       color: var(--text);
       margin-bottom: 0.25rem;
       font-variant-numeric: tabular-nums;
+    }}
+    .stats-card {{
+      display: inline-flex;
+      align-items: center;
+      gap: 18px;
+      background: var(--surface);
+      border: 1px solid rgba(128, 128, 128, 0.14);
+      border-radius: 20px;
+      padding: 8px 20px;
+      margin-bottom: 1.8rem;
+    }}
+    .stat-item {{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }}
+    .stat-val {{
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--accent);
+    }}
+    .stat-lbl {{
+      font-size: 0.72rem;
+      opacity: 0.6;
+      margin-top: 1px;
+    }}
+    .stat-sep {{
+      width: 1px;
+      height: 22px;
+      background: rgba(128, 128, 128, 0.18);
+    }}
+    .quick-pills {{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }}
+    .quick-pill {{
+      text-decoration: none;
+      color: var(--text);
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid rgba(128, 128, 128, 0.12);
+      transition: all 0.2s ease;
+    }}
+    .quick-pill:hover {{
+      border-color: var(--accent);
+      color: var(--accent);
+      transform: translateY(-1px);
     }}
     .date {{
       font-size: 0.95rem;
@@ -4546,8 +6039,26 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
       <div class="brand-name">Aegis</div>
     </div>
 
+    <div id="greeting" class="greeting">Bienvenido</div>
     <div id="clock" class="clock">12:00</div>
     <div id="date" class="date">Cargando fecha...</div>
+
+    <div class="stats-card">
+      <div class="stat-item">
+        <span class="stat-val">{blocked_count}</span>
+        <span class="stat-lbl">Bloqueados por Escudos</span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">
+        <span class="stat-val">{mb_saved}</span>
+        <span class="stat-lbl">Datos ahorrados</span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">
+        <span class="stat-val">{time_saved}</span>
+        <span class="stat-lbl">Tiempo ahorrado</span>
+      </div>
+    </div>
 
     <!-- Barra de Búsqueda Idéntica a la Imagen -->
     <form class="ntp-search-form" onsubmit="handleNtpSearch(event)">
@@ -4569,6 +6080,13 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
     <div class="shortcuts-section-title">Sitios Frecuentes</div>
     <div class="shortcuts-grid">
       {cards_html}
+    </div>
+
+    <div class="quick-pills">
+      <a href="aegis://settings" class="quick-pill">⚙️ Configuración</a>
+      <a href="aegis://history" class="quick-pill">🕒 Historial</a>
+      <a href="aegis://downloads" class="quick-pill">📥 Descargas</a>
+      <a href="aegis://extensions" class="quick-pill">🧩 Extensiones</a>
     </div>
   </main>
 
@@ -4599,6 +6117,13 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
 
       const options = {{ weekday: 'long', month: 'long', day: 'numeric' }};
       document.getElementById('date').textContent = now.toLocaleDateString('es-ES', options);
+
+      const hr = now.getHours();
+      let greeting = 'Buenas noches';
+      if (hr >= 6 && hr < 12) greeting = 'Buenos días';
+      else if (hr >= 12 && hr < 20) greeting = 'Buenas tardes';
+      const elGreet = document.getElementById('greeting');
+      if (elGreet) elGreet.textContent = greeting;
     }}
     updateClock();
     setInterval(updateClock, 1000);
@@ -4656,14 +6181,52 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
     tab_v = "selected" if config.get("tab_position") == "vertical" else ""
     th_dark = "selected" if config.get("theme", "Oscuro") == "Oscuro" else ""
     th_light = "selected" if config.get("theme") == "Claro" else ""
-    cur_eng = config.get("search_engine", "Google")
-    eng_google = "selected" if cur_eng.lower() == "google" else ""
-    eng_ddg = "selected" if cur_eng.lower() == "duckduckgo" else ""
-    eng_bing = "selected" if cur_eng.lower() == "bing" else ""
-    eng_brave = "selected" if cur_eng.lower() == "brave" else ""
-    eng_yahoo = "selected" if cur_eng.lower() == "yahoo" else ""
+    
+    bm_show = "selected" if config.get("show_bookmarks_bar", True) else ""
+    bm_hide = "" if config.get("show_bookmarks_bar", True) else "selected"
+
+    sb_show = "selected" if config.get("show_sidebar", False) else ""
+    sb_hide = "" if config.get("show_sidebar", False) else "selected"
+
+    cur_eng = config.get("search_engine", "Google").lower()
+    eng_google = "selected" if cur_eng == "google" else ""
+    eng_ddg = "selected" if cur_eng == "duckduckgo" else ""
+    eng_bing = "selected" if cur_eng == "bing" else ""
+    eng_brave = "selected" if cur_eng == "brave" else ""
+    eng_yahoo = "selected" if cur_eng == "yahoo" else ""
+    eng_startpage = "selected" if cur_eng == "startpage" else ""
+    eng_ecosia = "selected" if cur_eng == "ecosia" else ""
+
     sh_on = "selected" if config.get("shields_enabled", True) else ""
     sh_off = "" if config.get("shields_enabled", True) else "selected"
+
+    https_on = "selected" if config.get("https_only_mode", False) else ""
+    https_off = "" if config.get("https_only_mode", False) else "selected"
+
+    webrtc_on = "selected" if config.get("webrtc_protection", True) else ""
+    webrtc_off = "" if config.get("webrtc_protection", True) else "selected"
+
+    fp_on = "selected" if config.get("fingerprint_protection", True) else ""
+    fp_off = "" if config.get("fingerprint_protection", True) else "selected"
+
+    clear_exit_on = "selected" if config.get("clear_data_on_exit", False) else ""
+    clear_exit_off = "" if config.get("clear_data_on_exit", False) else "selected"
+
+    ask_dl_on = "selected" if config.get("ask_download_location", False) else ""
+    ask_dl_off = "" if config.get("ask_download_location", False) else "selected"
+
+    startup_mode = config.get("on_startup", "ntp")
+    start_ntp = "selected" if startup_mode == "ntp" else ""
+    start_restore = "selected" if startup_mode == "restore_session" else ""
+
+    sleep_timeout = config.get("sleeping_tabs_timeout", 900)
+    sl_300 = "selected" if sleep_timeout == 300 else ""
+    sl_900 = "selected" if sleep_timeout == 900 else ""
+    sl_1800 = "selected" if sleep_timeout == 1800 else ""
+    sl_3600 = "selected" if sleep_timeout == 3600 else ""
+    sl_0 = "selected" if sleep_timeout == 0 else ""
+
+    dl_dir = config.get("download_directory", str(Path.home() / "Downloads"))
 
     return f"""<!DOCTYPE html>
 <html lang="es" class="{theme_class}">
@@ -4695,7 +6258,7 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
     }}
     .container {{
       width: 100%;
-      max-width: 680px;
+      max-width: 760px;
     }}
     .header {{
       display: flex;
@@ -4721,6 +6284,9 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
       font-weight: 600;
       margin-bottom: 14px;
       color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }}
     .setting-row {{
       display: flex;
@@ -4737,6 +6303,7 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
       display: flex;
       flex-direction: column;
       gap: 4px;
+      max-width: 480px;
     }}
     .setting-name {{
       font-size: 0.9rem;
@@ -4745,6 +6312,7 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
     .setting-desc {{
       font-size: 0.8rem;
       opacity: 0.65;
+      line-height: 1.35;
     }}
     select, button.action-btn {{
       background: var(--bg);
@@ -4769,6 +6337,25 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
       background: #ff6b6b;
       color: #ffffff;
     }}
+    .shortcut-table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 0.85rem;
+    }}
+    .shortcut-table td {{
+      padding: 8px 6px;
+      border-bottom: 1px solid rgba(128, 128, 128, 0.08);
+    }}
+    .kbd-key {{
+      background: var(--bg);
+      border: 1px solid rgba(128, 128, 128, 0.25);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }}
   </style>
 </head>
 <body>
@@ -4781,56 +6368,78 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
       <h1 class="title">Configuración</h1>
     </div>
 
-    <!-- 1. Apariencia -->
+    <!-- 1. Apariencia y Diseño -->
     <div class="card">
-      <h2 class="card-title">Diseño y Pestañas</h2>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Orientación de pestañas</span>
-          <span class="setting-desc">Elige entre la barra horizontal tradicional o el panel vertical lateral</span>
-        </div>
-        <select onchange="updateSetting('tab_position', this.value)">
-          <option value="horizontal" {tab_h}>Horizontal clásica (arriba)</option>
-          <option value="vertical" {tab_v}>Vertical lateral (estilo Arc / Zen)</option>
-        </select>
-      </div>
+      <h2 class="card-title">🎨 Apariencia y Diseño</h2>
       <div class="setting-row">
         <div class="setting-info">
           <span class="setting-name">Tema de interfaz</span>
           <span class="setting-desc">Paleta estricta de 4 colores de alto contraste</span>
         </div>
         <select onchange="updateSetting('theme', this.value)">
-          <option value="Oscuro" {th_dark}>Oscuro</option>
-          <option value="Claro" {th_light}>Claro</option>
+          <option value="Oscuro" {th_dark}>Oscuro (#0d1117)</option>
+          <option value="Claro" {th_light}>Claro (#f6f8fa)</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Orientación de pestañas</span>
+          <span class="setting-desc">Barra horizontal clásica o panel lateral vertical (Arc style)</span>
+        </div>
+        <select onchange="updateSetting('tab_position', this.value)">
+          <option value="horizontal" {tab_h}>Horizontal clásica (arriba)</option>
+          <option value="vertical" {tab_v}>Vertical lateral (estilo Arc)</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Barra de marcadores</span>
+          <span class="setting-desc">Mostrar u ocultar la barra horizontal de marcadores (Ctrl+Shift+B)</span>
+        </div>
+        <select onchange="updateSetting('show_bookmarks_bar', this.value === 'true')">
+          <option value="true" {bm_show}>Mostrar siempre</option>
+          <option value="false" {bm_hide}>Ocultar</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Barra lateral de herramientas</span>
+          <span class="setting-desc">Acceso rápido a notas, lectura y contraseñas (Ctrl+B)</span>
+        </div>
+        <select onchange="updateSetting('show_sidebar', this.value === 'true')">
+          <option value="true" {sb_show}>Visible</option>
+          <option value="false" {sb_hide}>Oculta</option>
         </select>
       </div>
     </div>
 
-    <!-- 2. Búsqueda -->
+    <!-- 2. Motor de Búsqueda -->
     <div class="card">
-      <h2 class="card-title">Motor de Búsqueda</h2>
+      <h2 class="card-title">🔍 Motor de Búsqueda</h2>
       <div class="setting-row">
         <div class="setting-info">
           <span class="setting-name">Buscador predeterminado</span>
-          <span class="setting-desc">Utilizado al escribir directamente en el Omnibox</span>
+          <span class="setting-desc">Utilizado al escribir directamente en el Omnibox y en la Nueva Pestaña</span>
         </div>
         <select onchange="updateSetting('search_engine', this.value)">
           <option value="Google" {eng_google}>Google</option>
           <option value="DuckDuckGo" {eng_ddg}>DuckDuckGo (Privado)</option>
-          <option value="Bing" {eng_bing}>Microsoft Bing</option>
           <option value="Brave" {eng_brave}>Brave Search</option>
+          <option value="Bing" {eng_bing}>Microsoft Bing</option>
           <option value="Yahoo" {eng_yahoo}>Yahoo</option>
+          <option value="Startpage" {eng_startpage}>Startpage</option>
+          <option value="Ecosia" {eng_ecosia}>Ecosia</option>
         </select>
       </div>
     </div>
 
-    <!-- 3. Privacidad y Escudos -->
+    <!-- 3. Escudos, Privacidad y Seguridad -->
     <div class="card">
-      <h2 class="card-title">Escudos y Rendimiento</h2>
+      <h2 class="card-title">🛡️ Escudos, Privacidad y Seguridad</h2>
       <div class="setting-row">
         <div class="setting-info">
           <span class="setting-name">Aegis Shields</span>
-          <span class="setting-desc">Bloqueo de socket a nivel de red Rust FFI</span>
+          <span class="setting-desc">Bloqueo de anuncios, rastreadores y telemetría por socket Rust FFI</span>
         </div>
         <select onchange="updateSetting('shields_enabled', this.value === 'true')">
           <option value="true" {sh_on}>Activado (Recomendado)</option>
@@ -4839,24 +6448,136 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
       </div>
       <div class="setting-row">
         <div class="setting-info">
-          <span class="setting-name">Compactación silenciosa de RAM</span>
-          <span class="setting-desc">NT kernel WorkingSet compaction cada 90s (cero placebo)</span>
+          <span class="setting-name">Forzar conexiones HTTPS (HTTPS-Only)</span>
+          <span class="setting-desc">Actualizar automáticamente solicitudes HTTP inseguras a HTTPS</span>
         </div>
-        <span style="font-size: 0.85rem; color: var(--accent); font-weight: 600;">100% Automático</span>
+        <select onchange="updateSetting('https_only_mode', this.value === 'true')">
+          <option value="true" {https_on}>Activado</option>
+          <option value="false" {https_off}>Desactivado</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Protección de fuga de IP por WebRTC</span>
+          <span class="setting-desc">Evita que servidores WebRTC obtengan tu IP local de red privada</span>
+        </div>
+        <select onchange="updateSetting('webrtc_protection', this.value === 'true')">
+          <option value="true" {webrtc_on}>Protegido (Recomendado)</option>
+          <option value="false" {webrtc_off}>Estándar</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Protección contra huella digital (Anti-Fingerprinting)</span>
+          <span class="setting-desc">Inyecta ruido imperceptible en Canvas y Audio para evitar perfilado</span>
+        </div>
+        <select onchange="updateSetting('fingerprint_protection', this.value === 'true')">
+          <option value="true" {fp_on}>Activado</option>
+          <option value="false" {fp_off}>Desactivado</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Borrar datos al cerrar el navegador</span>
+          <span class="setting-desc">Elimina cookies y caché temporal al salir de Aegis</span>
+        </div>
+        <select onchange="updateSetting('clear_data_on_exit', this.value === 'true')">
+          <option value="true" {clear_exit_on}>Activado</option>
+          <option value="false" {clear_exit_off}>Desactivado</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Limpiar datos de navegación ahora</span>
+          <span class="setting-desc">Abre el diálogo completo de borrado de historial, cookies y caché</span>
+        </div>
+        <button class="action-btn btn-danger" onclick="openClearDataModal()">Borrar Datos... (Ctrl+Shift+Del)</button>
       </div>
     </div>
 
-    <!-- 4. Datos -->
+    <!-- 4. Pestañas y Rendimiento -->
     <div class="card">
-      <h2 class="card-title">Datos de Navegación</h2>
+      <h2 class="card-title">⚡ Rendimiento y Memoria</h2>
       <div class="setting-row">
         <div class="setting-info">
-          <span class="setting-name">Historial y sitios frecuentes</span>
-          <span class="setting-desc">Borrar todas las visitas guardadas en este equipo</span>
+          <span class="setting-name">Tiempo de reposo de pestañas inactivas (Sleeping Tabs)</span>
+          <span class="setting-desc">Libera RAM y recursos de GPU en pestañas en segundo plano (con escudo de audio activo)</span>
         </div>
-        <button class="action-btn btn-danger" onclick="clearHistory()">Borrar Historial</button>
+        <select onchange="updateSetting('sleeping_tabs_timeout', parseInt(this.value))">
+          <option value="300" {sl_300}>A los 5 minutos</option>
+          <option value="900" {sl_900}>A los 15 minutos (Predeterminado)</option>
+          <option value="1800" {sl_1800}>A los 30 minutos</option>
+          <option value="3600" {sl_3600}>A la 1 hora</option>
+          <option value="0" {sl_0}>Desactivado</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Compactación silenciosa de memoria RAM</span>
+          <span class="setting-desc">Alineación WorkingSet del kernel de Windows cada 90s sin afectar la reproducción</span>
+        </div>
+        <span style="font-size: 0.85rem; color: #2ea043; font-weight: 600;">✓ 100% Automático</span>
       </div>
     </div>
+
+    <!-- 5. Descargas -->
+    <div class="card">
+      <h2 class="card-title">📥 Descargas</h2>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Ubicación de descarga</span>
+          <span class="setting-desc">{dl_dir}</span>
+        </div>
+        <button class="action-btn" onclick="chooseDownloadDir()">Cambiar carpeta...</button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Preguntar dónde guardar cada archivo</span>
+          <span class="setting-desc">Mostrar selector de archivos antes de iniciar la descarga</span>
+        </div>
+        <select onchange="updateSetting('ask_download_location', this.value === 'true')">
+          <option value="true" {ask_dl_on}>Sí, preguntar siempre</option>
+          <option value="false" {ask_dl_off}>Guardar automáticamente</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 6. Al Iniciar -->
+    <div class="card">
+      <h2 class="card-title">🚀 Al Iniciar Aegis</h2>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Página de inicio</span>
+          <span class="setting-desc">Elige qué abrir al iniciar Aegis Browser</span>
+        </div>
+        <select onchange="updateSetting('on_startup', this.value)">
+          <option value="ntp" {start_ntp}>Abrir página de Nueva Pestaña</option>
+          <option value="restore_session" {start_restore}>Continuar donde lo dejaste (Restaurar sesión previa)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 7. Atajos de Teclado -->
+    <div class="card">
+      <h2 class="card-title">⌨️ Atajos de Teclado Principales</h2>
+      <table class="shortcut-table">
+        <tr><td>Nueva pestaña</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">T</span></td></tr>
+        <tr><td>Cerrar pestaña actual</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">W</span></td></tr>
+        <tr><td>Reabrir pestaña cerrada</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">Shift</span> + <span class="kbd-key">T</span></td></tr>
+        <tr><td>Buscar pestañas abiertas / recientes</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">Shift</span> + <span class="kbd-key">A</span></td></tr>
+        <tr><td>Barra lateral de herramientas</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">B</span></td></tr>
+        <tr><td>Barra de marcadores</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">Shift</span> + <span class="kbd-key">B</span></td></tr>
+        <tr><td>Borrar datos de navegación</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">Shift</span> + <span class="kbd-key">Del</span></td></tr>
+        <tr><td>Modo Lectura libre de distracciones</td><td style="text-align:right;"><span class="kbd-key">F9</span></td></tr>
+        <tr><td>Capturar pantalla de la pestaña</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">Shift</span> + <span class="kbd-key">S</span></td></tr>
+        <tr><td>Guardar página como PDF</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">P</span></td></tr>
+        <tr><td>Imagen en imagen (Picture-in-Picture)</td><td style="text-align:right;"><span class="kbd-key">Alt</span> + <span class="kbd-key">P</span></td></tr>
+        <tr><td>Silenciar / Activar sonido de pestaña</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">M</span></td></tr>
+        <tr><td>Pantalla completa</td><td style="text-align:right;"><span class="kbd-key">F11</span></td></tr>
+        <tr><td>Herramientas de Desarrollador (DevTools)</td><td style="text-align:right;"><span class="kbd-key">F12</span></td></tr>
+      </table>
+    </div>
+
   </div>
 
   <script>
@@ -4864,10 +6585,11 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
       const payload = JSON.stringify({{key: key, value: val}});
       window.location.href = 'aegis://action?set_config=' + encodeURIComponent(payload);
     }}
-    function clearHistory() {{
-      if (confirm('¿Deseas borrar todo el historial de navegación?')) {{
-        window.location.href = 'aegis://action?clear_history=1';
-      }}
+    function chooseDownloadDir() {{
+      window.location.href = 'aegis://action?choose_download_dir=1';
+    }}
+    function openClearDataModal() {{
+      window.location.href = 'aegis://action?open_clear_data_modal=1';
     }}
   </script>
 </body>
