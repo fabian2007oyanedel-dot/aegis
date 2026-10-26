@@ -35,29 +35,56 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote, quote
 from ctypes import wintypes
 
-# ── 1. Hardening Extremo de Chromium (CPU, RAM y Rendimiento de Renderizado) ──
+# ── 1. Optimización Extrema de Chromium (GPU, Video Hardware, Audio y Widevine DRM) ──
+def find_widevine_cdm() -> tuple[str | None, str | None]:
+    """Detecta dinámicamente el módulo Widevine CDM oficial en el sistema (Brave, Chrome o Edge)."""
+    candidates = [
+        Path.home() / "AppData" / "Local" / "BraveSoftware" / "Brave-Browser" / "User Data" / "WidevineCdm",
+        Path.home() / "AppData" / "Local" / "Google" / "Chrome" / "User Data" / "WidevineCdm",
+        Path("C:/Program Files/Google/Chrome/Application"),
+        Path("C:/Program Files (x86)/Microsoft/Edge/Application"),
+        Path.home() / "AppData" / "Local" / "Microsoft" / "Edge" / "User Data" / "WidevineCdm",
+    ]
+    for c in candidates:
+        if c.exists():
+            for dll in c.glob("**/widevinecdm.dll"):
+                version = "4.10.3112.0"
+                manifest = dll.parent.parent / "manifest.json"
+                if not manifest.exists():
+                    manifest = dll.parent / "manifest.json"
+                if manifest.exists():
+                    try:
+                        m_data = json.loads(manifest.read_text(encoding="utf-8"))
+                        version = m_data.get("version", version)
+                    except Exception:
+                        pass
+                return str(dll).replace("\\", "/"), version
+    return None, None
+
+_widevine_dll, _widevine_ver = find_widevine_cdm()
+_widevine_flags = f'--widevine-cdm-path="{_widevine_dll}" --widevine-cdm-version="{_widevine_ver}" ' if _widevine_dll else ""
+
 os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
+    _widevine_flags +
     "--enable-gpu-rasterization "
     "--enable-zero-copy "
     "--ignore-gpu-blocklist "
-    "--renderer-process-limit=3 "
+    "--enable-accelerated-video-decode "
+    "--enable-accelerated-mjpeg-decode "
+    "--enable-features=VaapiVideoDecoder,D3D11VideoDecoder,HardwareMediaKeyHandling,ParallelDownloading,CanvasOopRasterization,WebContentsDiscarding,IntensiveWakeUpThrottling,BlinkMemorySaver "
+    "--autoplay-policy=no-user-gesture-required "
+    "--enable-smooth-scrolling "
+    "--num-raster-threads=4 "
+    "--v8-cache-options=code "
     "--disable-breakpad "
     "--disable-telemetry "
     "--disable-sync "
     "--disable-domain-reliability "
     "--no-pings "
-    "--dns-prefetch-disable "
-    "--disable-speech-api "
     "--disable-wake-on-wifi "
-    "--disable-background-networking "
     "--disable-component-update "
     "--disable-client-side-phishing-detection "
-    "--enable-features=WebContentsDiscarding,IntensiveWakeUpThrottling,ParallelDownloading,CanvasOopRasterization,PurgeAndSuspend,BlinkMemorySaver,WebContentsForceDark "
-    "--force-dark-mode "
-    "--blink-settings=forceDarkModeEnabled=true "
     "--disable-features=Translate,OptimizationHints,MediaRouter "
-    "--num-raster-threads=2 "
-    "--v8-cache-options=code "
     "--js-flags=--expose-gc "
 )
 
@@ -522,9 +549,21 @@ def get_shared_profile() -> QWebEngineProfile:
         _SHARED_PERSISTENT_PROFILE.setHttpUserAgent(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.5"
         )
-        _SHARED_PERSISTENT_PROFILE.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
-        _SHARED_PERSISTENT_PROFILE.settings().setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
-        _SHARED_PERSISTENT_PROFILE.settings().setAttribute(QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, True)
+        s = _SHARED_PERSISTENT_PROFILE.settings()
+        s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.AllowWindowActivationFromJavaScript, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, False)
+        s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanPaste, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.DnsPrefetchEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.AutoLoadIconsForPage, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.ScreenCaptureEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.BackForwardCacheEnabled, True)
     return _SHARED_PERSISTENT_PROFILE
 
 class AegisToast(QLabel):
@@ -595,10 +634,23 @@ if kernel32 and psapi:
     psapi.EmptyWorkingSet.argtypes = [wintypes.HANDLE]
     psapi.EmptyWorkingSet.restype = wintypes.BOOL
 
-def silent_background_memory_purge():
-    """Compactación periódica del sistema operativo ejecutada automáticamente."""
+def silent_background_memory_purge(force: bool = False):
+    """Compactación periódica del sistema operativo con protección inteligente de audio multimedia."""
     if not kernel32 or not psapi:
         return
+    # Si hay reproducción activa de audio (YouTube, Spotify, Discord), evitar vaciar working set para prevenir microcortes
+    if not force:
+        try:
+            app = QApplication.instance()
+            if app and hasattr(app, "_aegis_windows"):
+                for w in getattr(app, "_aegis_windows", []):
+                    if hasattr(w, "views"):
+                        for v in w.views:
+                            if v and v.page() and v.page().recentlyAudible():
+                                return
+        except Exception:
+            pass
+
     gc.collect()
     try:
         my_pid = os.getpid()
@@ -1161,6 +1213,8 @@ class AegisAppMenu(QFrame):
         add_separator()
         add_item("🔍 Buscar en la página", "Ctrl+F", lambda: self.parent_win.find_bar.show_find())
         add_item("🔇 Silenciar pestaña", "Ctrl+M", lambda: self.parent_win.toggle_mute_current_tab())
+        add_item("🖼️ Imagen en imagen (PiP)", "Alt+P", lambda: self.parent_win.toggle_picture_in_picture())
+        add_item("🎵 Control multimedia", "", lambda: self.parent_win.toggle_media_popup())
         add_item("🛠️ DevTools / Inspeccionar", "F12", lambda: self.parent_win.open_devtools())
         add_separator()
         add_item("⚙️ Configuración", "Alt+S", lambda: self.parent_win.open_internal_page("aegis://settings"))
@@ -1651,6 +1705,198 @@ class AegisExtensionsPopup(QFrame):
             self.sw_shields.update_colors(t["accent"], t["bg"])
         self.update()
 
+# ── 10.3.5 Panel Desplegable de Control Multimedia (Toolbar 🎵) ───────────────
+class AegisMediaPopup(QFrame):
+    def __init__(self, parent=None):
+        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setObjectName("AegisMediaPopup")
+        self.setFixedWidth(320)
+        self.parent_win = parent
+        self.init_ui()
+
+    def hideEvent(self, event):
+        if self.parent_win:
+            self.parent_win._last_media_close_time = time.time()
+        super().hideEvent(event)
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        header = QHBoxLayout()
+        lbl_title = QLabel("🎵 Control de Reproducción")
+        lbl_title.setStyleSheet("font-weight: 700; font-size: 13px;")
+        header.addWidget(lbl_title)
+        layout.addLayout(header)
+
+        self.card = QFrame()
+        self.card.setObjectName("MediaCard")
+        cl = QVBoxLayout(self.card)
+        cl.setContentsMargins(12, 10, 12, 10)
+        cl.setSpacing(6)
+
+        self.lbl_track = QLabel("No hay audio reproduciéndose")
+        self.lbl_track.setStyleSheet("font-weight: 600; font-size: 12px;")
+        self.lbl_track.setWordWrap(True)
+        cl.addWidget(self.lbl_track)
+
+        self.lbl_site = QLabel("")
+        self.lbl_site.setStyleSheet("font-size: 11px; opacity: 0.65;")
+        cl.addWidget(self.lbl_site)
+
+        ctrl_l = QHBoxLayout()
+        ctrl_l.setSpacing(6)
+
+        self.btn_prev = QPushButton("⏮️ -10s")
+        self.btn_prev.setProperty("class", "media-ctrl-btn")
+        self.btn_prev.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_prev.clicked.connect(lambda: self.seek_audio(-10))
+        ctrl_l.addWidget(self.btn_prev)
+
+        self.btn_play_pause = QPushButton("⏯️ Play/Pausa")
+        self.btn_play_pause.setProperty("class", "media-ctrl-btn")
+        self.btn_play_pause.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_play_pause.clicked.connect(self.toggle_play_pause)
+        ctrl_l.addWidget(self.btn_play_pause)
+
+        self.btn_next = QPushButton("⏭️ +10s")
+        self.btn_next.setProperty("class", "media-ctrl-btn")
+        self.btn_next.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_next.clicked.connect(lambda: self.seek_audio(10))
+        ctrl_l.addWidget(self.btn_next)
+
+        self.btn_mute = QPushButton("🔇")
+        self.btn_mute.setProperty("class", "media-ctrl-btn")
+        self.btn_mute.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_mute.clicked.connect(self.toggle_mute_playing)
+        ctrl_l.addWidget(self.btn_mute)
+
+        cl.addLayout(ctrl_l)
+
+        self.btn_goto = QPushButton("🔗 Ir a la pestaña")
+        self.btn_goto.setProperty("class", "media-goto-btn")
+        self.btn_goto.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_goto.clicked.connect(self.go_to_playing_tab)
+        cl.addWidget(self.btn_goto)
+
+        layout.addWidget(self.card)
+
+    def get_audible_view(self) -> QWebEngineView | None:
+        if not self.parent_win or not hasattr(self.parent_win, "views"):
+            return None
+        for v in self.parent_win.views:
+            if v and v.page() and v.page().recentlyAudible():
+                return v
+        return self.parent_win.current_view()
+
+    def refresh_state(self):
+        v = self.get_audible_view()
+        if v:
+            title = v.title() or "Página multimedia"
+            host = v.url().host() or "Web"
+            is_muted = v.page().isAudioMuted() if v.page() else False
+            self.lbl_track.setText(title)
+            self.lbl_site.setText(f"Sitio: {host} · {'🔇 Silenciada' if is_muted else '🔊 Sonando'}")
+            self.btn_mute.setText("🔊" if is_muted else "🔇")
+            self.btn_play_pause.setEnabled(True)
+            self.btn_prev.setEnabled(True)
+            self.btn_next.setEnabled(True)
+            self.btn_goto.setEnabled(True)
+        else:
+            self.lbl_track.setText("No hay contenido multimedia activo")
+            self.lbl_site.setText("Inicia reproducción en YouTube, Spotify, Netflix o Discord")
+            self.btn_play_pause.setEnabled(False)
+            self.btn_prev.setEnabled(False)
+            self.btn_next.setEnabled(False)
+            self.btn_goto.setEnabled(False)
+
+    def toggle_play_pause(self):
+        v = self.get_audible_view()
+        if v:
+            v.page().runJavaScript("""
+            (() => {
+                const media = document.querySelectorAll('video, audio');
+                if (media.length > 0) {
+                    let anyPlaying = Array.from(media).some(m => !m.paused);
+                    media.forEach(m => {
+                        if (anyPlaying) m.pause(); else m.play();
+                    });
+                }
+            })();
+            """)
+
+    def seek_audio(self, delta: int):
+        v = self.get_audible_view()
+        if v:
+            v.page().runJavaScript(f"""
+            (() => {{
+                const media = document.querySelectorAll('video, audio');
+                media.forEach(m => {{
+                    try {{ m.currentTime = Math.max(0, m.currentTime + ({delta})); }} catch(e) {{}}
+                }});
+            }})();
+            """)
+
+    def toggle_mute_playing(self):
+        v = self.get_audible_view()
+        if v and v.page():
+            new_muted = not v.page().isAudioMuted()
+            v.page().setAudioMuted(new_muted)
+            self.refresh_state()
+
+    def go_to_playing_tab(self):
+        v = self.get_audible_view()
+        if v and self.parent_win:
+            idx = self.parent_win.views.index(v) if v in self.parent_win.views else -1
+            if idx != -1:
+                self.parent_win.tab_bar.setCurrentIndex(idx)
+        self.hide()
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        qss = f"""
+            QFrame#AegisMediaPopup {{
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 12px;
+            }}
+            QFrame#MediaCard {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.08);
+                border-radius: 8px;
+            }}
+            QLabel {{
+                color: {t['text']};
+            }}
+            QPushButton.media-ctrl-btn {{
+                background: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.12);
+                border-radius: 6px;
+                color: {t['text']};
+                padding: 6px 8px;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QPushButton.media-ctrl-btn:hover {{
+                border-color: {t['accent']};
+                color: {t['accent']};
+            }}
+            QPushButton.media-goto-btn {{
+                background: transparent;
+                border: 1px solid rgba({rgb_text}, 0.12);
+                border-radius: 6px;
+                color: {t['accent']};
+                padding: 5px;
+                font-size: 11.5px;
+                font-weight: 600;
+            }}
+            QPushButton.media-goto-btn:hover {{
+                background-color: {t['surface']};
+            }}
+        """
+        self.setStyleSheet(qss)
+
 # ── 10.4 Barra de Marcadores Horizontal (Ctrl+Shift+B) ────────────────────────
 class AegisBookmarksBar(QWidget):
     def __init__(self, parent_win):
@@ -1839,25 +2085,60 @@ class FindInPageWidget(QFrame):
         self.setStyleSheet(qss)
         self.update()
 
-# ── 10.6 Vista Web Personalizada con Menú Contextual Temático ─────────────────
+# ── 10.6 Página y Vista Web Personalizada con Menú Contextual Temático ────────
+class AegisWebPage(QWebEnginePage):
+    def __init__(self, profile, view, browser_win=None):
+        super().__init__(profile, view)
+        self.browser_win = browser_win
+        self.featurePermissionRequested.connect(self.handle_feature_permission)
+        self.fullScreenRequested.connect(self.handle_fullscreen_request)
+
+    def createWindow(self, window_type: QWebEnginePage.WebWindowType) -> QWebEnginePage:
+        # Permite popups de OAuth (Google, Discord, Spotify) y target="_blank"
+        if self.browser_win:
+            new_view = self.browser_win.add_new_tab()
+            return new_view.page()
+        return super().createWindow(window_type)
+
+    def handle_feature_permission(self, security_origin: QUrl, feature: QWebEnginePage.Feature):
+        # Auto-conceder permisos esenciales para Discord (micrófono, cámara, pantalla, notificaciones, portapapeles) y Spotify
+        self.setFeaturePermission(security_origin, feature, QWebEnginePage.PermissionPolicy.PermissionGrantedByUser)
+
+    def handle_fullscreen_request(self, request):
+        if self.browser_win and hasattr(self.browser_win, "handle_fullscreen_request"):
+            self.browser_win.handle_fullscreen_request(request)
+        else:
+            request.accept()
+
 class AegisWebView(QWebEngineView):
     def __init__(self, browser_win=None):
         super().__init__()
         self.browser_win = browser_win
+        self._last_active_time = time.time()
+        self._is_hibernated = False
+        self._is_pinned = False
+        self._hibernated_url = ""
+        self._hibernated_title = ""
 
     def contextMenuEvent(self, event):
         menu = self.createStandardContextMenu()
         if menu:
+            # Opción de Imagen en imagen (Picture-in-Picture)
+            act_pip = menu.addAction("🖼️ Imagen en imagen (PiP)  [Alt+P]")
+            if self.browser_win and hasattr(self.browser_win, "toggle_picture_in_picture"):
+                act_pip.triggered.connect(self.browser_win.toggle_picture_in_picture)
+
             if self.browser_win and hasattr(self.browser_win, "current_qss"):
                 menu.setStyleSheet(self.browser_win.current_qss)
             menu.exec(event.globalPos())
 
-# ── 10.7 Barra de Pestañas con Desprendimiento (Tear-Off) y Botón X Integrado ──
+# ── 10.7 Barra de Pestañas con Desprendimiento (Tear-Off) y Menú Contextual ───
 class AegisTabBar(QTabBar):
     tabDetached = pyqtSignal(int, QPoint)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.parent_win = parent
         self.setTabsClosable(True)
         self.setMovable(True)
         self.setDrawBase(False)
@@ -1865,6 +2146,14 @@ class AegisTabBar(QTabBar):
         self.setIconSize(QSize(16, 16))
         self._drag_start_pos = None
         self._drag_tab_idx = -1
+
+    def contextMenuEvent(self, event):
+        idx = self.tabAt(event.pos())
+        if idx != -1 and self.parent_win and hasattr(self.parent_win, "show_tab_context_menu"):
+            self.parent_win.show_tab_context_menu(idx, event.globalPos())
+            event.accept()
+        else:
+            super().contextMenuEvent(event)
 
     def tabInserted(self, index: int):
         super().tabInserted(index)
@@ -1890,7 +2179,13 @@ class AegisTabBar(QTabBar):
                 break
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.MouseButton.MiddleButton:
+            idx = self.tabAt(event.pos())
+            if idx != -1:
+                self.tabCloseRequested.emit(idx)
+                event.accept()
+                return
+        elif event.button() == Qt.MouseButton.LeftButton:
             self._drag_start_pos = event.pos()
             self._drag_tab_idx = self.tabAt(event.pos())
         super().mousePressEvent(event)
@@ -1951,6 +2246,8 @@ class AegisBrowserWindow(QMainWindow):
         self._last_app_menu_close_time = 0.0
         self._last_downloads_close_time = 0.0
         self._last_extensions_close_time = 0.0
+        self._last_media_close_time = 0.0
+        self._is_web_fullscreen = False
         self.config = self.load_config()
         self.current_theme_name = self.config.get("theme", "Oscuro")
 
@@ -1968,9 +2265,21 @@ class AegisBrowserWindow(QMainWindow):
             self.profile.setHttpUserAgent(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.5"
             )
-            self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
-            self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
-            self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, True)
+            s = self.profile.settings()
+            s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, True)
+            s.setAttribute(QWebEngineSettings.WebAttribute.AllowWindowActivationFromJavaScript, True)
+            s.setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
+            s.setAttribute(QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, False)
+            s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
+            s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanPaste, True)
+            s.setAttribute(QWebEngineSettings.WebAttribute.DnsPrefetchEnabled, True)
+            s.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
+            s.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, True)
+            s.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+            s.setAttribute(QWebEngineSettings.WebAttribute.AutoLoadIconsForPage, True)
+            s.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
+            s.setAttribute(QWebEngineSettings.WebAttribute.ScreenCaptureEnabled, True)
+            s.setAttribute(QWebEngineSettings.WebAttribute.BackForwardCacheEnabled, True)
             self.profile.setUrlRequestInterceptor(self.interceptor)
             self.profile.downloadRequested.connect(self.on_download_requested)
             self.load_userscripts()
@@ -1991,6 +2300,7 @@ class AegisBrowserWindow(QMainWindow):
         self.app_menu = AegisAppMenu(self)
         self.downloads_popup = AegisDownloadsPopup(self)
         self.extensions_popup = AegisExtensionsPopup(self)
+        self.media_popup = AegisMediaPopup(self)
 
         # Barra de búsqueda flotante en página (Ctrl+F) y Toast de notificaciones
         self.find_bar = FindInPageWidget(self)
@@ -2007,6 +2317,12 @@ class AegisBrowserWindow(QMainWindow):
         self.auto_purge_timer.setInterval(90 * 1000)
         self.auto_purge_timer.timeout.connect(silent_background_memory_purge)
         self.auto_purge_timer.start()
+
+        # Motor de Ahorro de Memoria Extremo e Hibernación Inteligente de Pestañas
+        self.tab_sleep_timer = QTimer(self)
+        self.tab_sleep_timer.setInterval(60 * 1000)
+        self.tab_sleep_timer.timeout.connect(self.check_inactive_tabs_to_sleep)
+        self.tab_sleep_timer.start()
 
         # Abrir pestaña inicial
         self.add_new_tab()
@@ -2057,6 +2373,8 @@ class AegisBrowserWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+Shift+B"), self, self.toggle_bookmarks_bar)
         QShortcut(QKeySequence("Ctrl+F"), self, self.find_bar.show_find)
         QShortcut(QKeySequence("Ctrl+M"), self, self.toggle_mute_current_tab)
+        QShortcut(QKeySequence("Alt+P"), self, self.toggle_picture_in_picture)
+        QShortcut(QKeySequence("F11"), self, self.toggle_fullscreen_manual)
         QShortcut(QKeySequence("F12"), self, self.open_devtools)
         QShortcut(QKeySequence("Ctrl+Shift+I"), self, self.open_devtools)
         QShortcut(QKeySequence("Ctrl+L"), self, lambda: (self.url_bar.setFocus(), self.url_bar.selectAll()))
@@ -2238,11 +2556,26 @@ class AegisBrowserWindow(QMainWindow):
             if view.url().toString() in ("aegis://start", "about:blank"):
                 title = "Nueva Pestaña"
             display_title = title if len(title) <= 14 else title[:12] + "…"
-            if view.page().isAudioMuted():
+            if getattr(view, "_is_pinned", False):
+                display_title = ""
+            elif getattr(view, "_is_hibernated", False):
+                display_title = "🍃 " + display_title
+            elif view.page() and view.page().isAudioMuted():
                 display_title += " 🔇"
-            elif view.page().recentlyAudible():
+            elif view.page() and view.page().recentlyAudible():
                 display_title += " 🔊"
             self.tab_bar.setTabText(idx, display_title)
+
+        # Actualizar botón flotante de control multimedia en la barra
+        has_audio = any(v.page().recentlyAudible() for v in self.views if v and v.page())
+        if hasattr(self, "btn_media"):
+            t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+            if has_audio:
+                self.btn_media.setStyleSheet(f"color: {t['accent']}; font-weight: bold;")
+                self.btn_media.setToolTip("Reproduciendo multimedia: Click para desplegar controles")
+            else:
+                self.btn_media.setStyleSheet("")
+                self.btn_media.setToolTip("Control multimedia")
 
     def on_tab_bar_context_menu(self, point: QPoint):
         idx = self.tab_bar.tabAt(point)
@@ -2251,12 +2584,18 @@ class AegisBrowserWindow(QMainWindow):
             menu.setStyleSheet(self.current_qss)
 
         act_new = menu.addAction("➕ Nueva pestaña")
-        act_reload = act_mute = act_detach = act_close = act_close_others = None
+        act_reload = act_mute = act_pip = act_dup = act_pin = act_sleep = act_detach = act_close = act_close_others = None
         if idx != -1:
             view = self.views[idx]
             act_reload = menu.addAction("↻ Recargar pestaña")
-            is_muted = view.page().isAudioMuted()
+            act_dup = menu.addAction("📋 Duplicar pestaña")
+            is_muted = view.page().isAudioMuted() if view.page() else False
             act_mute = menu.addAction("🔇 Reactivar sonido" if is_muted else "🔊 Silenciar pestaña")
+            act_pip = menu.addAction("🖼️ Imagen en imagen (PiP)  [Alt+P]")
+            is_pinned = getattr(view, "_is_pinned", False)
+            act_pin = menu.addAction("📌 Desfijar pestaña" if is_pinned else "📌 Fijar pestaña")
+            if not getattr(view, "_is_hibernated", False) and view != self.current_view() and not (view.page() and view.page().recentlyAudible()):
+                act_sleep = menu.addAction("🍃 Poner en reposo (Liberar RAM)")
             if self.tab_bar.count() > 1:
                 act_detach = menu.addAction("🗗 Desprender pestaña (Nueva ventana)")
             menu.addSeparator()
@@ -2273,9 +2612,17 @@ class AegisBrowserWindow(QMainWindow):
             self.add_new_tab()
         elif action == act_reload and idx != -1:
             self.views[idx].reload()
+        elif action == act_dup and idx != -1:
+            self.add_new_tab(self.views[idx].url().toString())
         elif action == act_mute and idx != -1:
             self.views[idx].page().setAudioMuted(not self.views[idx].page().isAudioMuted())
             self.on_tab_audio_state_changed(self.views[idx])
+        elif action == act_pip:
+            self.toggle_picture_in_picture()
+        elif action == act_pin and idx != -1:
+            self.toggle_pin_tab(idx)
+        elif action == act_sleep and idx != -1:
+            self.hibernate_tab(self.views[idx])
         elif action == act_detach and idx != -1:
             self.detach_tab_to_new_window(idx, self.tab_bar.mapToGlobal(point))
         elif action == act_close and idx != -1:
@@ -2286,6 +2633,184 @@ class AegisBrowserWindow(QMainWindow):
                     self.close_tab(i)
         elif action == act_reopen:
             self.reopen_closed_tab()
+
+    def toggle_pin_tab(self, tab_idx: int):
+        if not (0 <= tab_idx < len(self.views)):
+            return
+        view = self.views[tab_idx]
+        view._is_pinned = not getattr(view, "_is_pinned", False)
+        btn_w = self.tab_bar.tabButton(tab_idx, QTabBar.ButtonPosition.RightSide)
+        if btn_w:
+            btn_w.setVisible(not view._is_pinned)
+        self.on_tab_audio_state_changed(view)
+
+    def toggle_picture_in_picture(self):
+        cur = self.current_view()
+        if not cur:
+            return
+        pip_script = """
+        (() => {
+            try {
+                const v = document.querySelector('video');
+                if (!v) return 'novideo';
+                if (document.pictureInPictureElement) {
+                    document.exitPictureInPicture();
+                    return 'exit';
+                } else if (document.pictureInPictureEnabled && !v.disablePictureInPicture) {
+                    v.requestPictureInPicture();
+                    return 'enter';
+                }
+            } catch(e) {
+                return 'error: ' + e.message;
+            }
+            return 'unsupported';
+        })();
+        """
+        def on_pip_result(res):
+            if res == "enter":
+                self.show_toast("🖼️ Video en ventana flotante (PiP)")
+            elif res == "exit":
+                self.show_toast("Ventana flotante cerrada")
+            elif res == "novideo":
+                self.show_toast("No se encontró ningún reproductor de video en esta página.")
+        cur.page().runJavaScript(pip_script, on_pip_result)
+
+    def handle_fullscreen_request(self, request):
+        if request.toggleOn():
+            request.accept()
+            self._is_web_fullscreen = True
+            self.toolbar.hide()
+            self.tab_header.hide()
+            if hasattr(self, "bookmarks_bar"):
+                self.bookmarks_bar.hide()
+            self.showFullScreen()
+        else:
+            request.accept()
+            self._is_web_fullscreen = False
+            self.toolbar.show()
+            self.tab_header.show()
+            if hasattr(self, "bookmarks_bar") and self.config.get("show_bookmarks_bar", True):
+                self.bookmarks_bar.show()
+            self.showNormal()
+
+    def toggle_fullscreen_manual(self):
+        if self.isFullScreen():
+            self.showNormal()
+            self.toolbar.show()
+            self.tab_header.show()
+            if hasattr(self, "bookmarks_bar") and self.config.get("show_bookmarks_bar", True):
+                self.bookmarks_bar.show()
+        else:
+            self.showFullScreen()
+
+    def keyPressEvent(self, event):
+        if getattr(self, "_is_web_fullscreen", False) and event.key() == Qt.Key.Key_Escape:
+            cur = self.current_view()
+            if cur and cur.page():
+                cur.page().action(QWebEnginePage.WebAction.ExitFullScreen).trigger()
+            return
+        super().keyPressEvent(event)
+
+    def toggle_media_popup(self):
+        now = time.time()
+        if hasattr(self, "_last_media_close_time") and (now - self._last_media_close_time < 0.25):
+            return
+        if hasattr(self, "media_popup") and self.media_popup.isVisible():
+            self.media_popup.hide()
+            return
+
+        if self.shields_popup.isVisible(): self.shields_popup.hide()
+        if self.app_menu.isVisible(): self.app_menu.hide()
+        if self.downloads_popup.isVisible(): self.downloads_popup.hide()
+        if self.extensions_popup.isVisible(): self.extensions_popup.hide()
+
+        self.media_popup.refresh_state()
+        btn_pos = self.btn_media.mapToGlobal(QPoint(0, self.btn_media.height()))
+        popup_x = btn_pos.x() + self.btn_media.width() - self.media_popup.width()
+        popup_y = btn_pos.y() + 6
+        self.media_popup.move(popup_x, popup_y)
+        self.media_popup.show()
+        self.media_popup.raise_()
+
+    def check_inactive_tabs_to_sleep(self):
+        # Reposo automático a los 15 minutos (900 seg)
+        timeout = 900
+        now = time.time()
+        current = self.current_view()
+        for v in self.views:
+            if v == current:
+                continue
+            if getattr(v, "_is_hibernated", False) or getattr(v, "_is_pinned", False):
+                continue
+            # NUNCA poner en reposo pestañas con audio activo (Spotify, YouTube Music, Discord)
+            if v.page() and v.page().recentlyAudible():
+                continue
+            last_active = getattr(v, "_last_active_time", now)
+            if now - last_active > timeout:
+                self.hibernate_tab(v)
+
+    def hibernate_tab(self, view: QWebEngineView):
+        if view == self.current_view():
+            return
+        if view.page() and view.page().recentlyAudible():
+            return
+        if getattr(view, "_is_hibernated", False):
+            return
+
+        u = view.url().toString()
+        if not u or u in ("aegis://start", "about:blank") or u.startswith("aegis://"):
+            u = getattr(view, "_aegis_target_url", "")
+            if not u or u in ("aegis://start", "about:blank") or u.startswith("aegis://"):
+                return
+
+        view._is_hibernated = True
+        view._hibernated_url = u
+        view._hibernated_title = view.title() or "Página"
+
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        html = f"""<!DOCTYPE html>
+        <html class="{t['ntp_class']}">
+        <head><meta charset="utf-8">
+        <style>
+          body {{ background: {t['bg']}; color: {t['text']}; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; cursor: pointer; user-select: none; }}
+          .box {{ text-align: center; padding: 26px 32px; border: 1px solid rgba(128,128,128,0.15); border-radius: 14px; background: {t['surface']}; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }}
+        </style>
+        </head>
+        <body onclick="window.location.href='{u}'">
+          <div class="box">
+            <div style="font-size: 2.2rem; margin-bottom: 8px;">🍃</div>
+            <div style="font-weight: 600; font-size: 0.95rem;">Pestaña en reposo para ahorrar memoria</div>
+            <div style="font-size: 0.8rem; opacity: 0.65; margin-top: 4px;">{view._hibernated_title}</div>
+            <div style="font-size: 0.75rem; color: {t['accent']}; margin-top: 10px; font-weight: 500;">Haz clic en cualquier lugar para restaurar</div>
+          </div>
+        </body>
+        </html>"""
+        view.setHtml(html, QUrl(u))
+
+        idx = self.views.index(view) if view in self.views else -1
+        if idx != -1:
+            title = view._hibernated_title
+            display_title = title if len(title) <= 12 else title[:10] + "…"
+            self.tab_bar.setTabText(idx, f"🍃 {display_title}")
+
+        silent_background_memory_purge(force=True)
+
+    def wake_tab(self, view: QWebEngineView):
+        if not getattr(view, "_is_hibernated", False):
+            return
+        view._is_hibernated = False
+        target = getattr(view, "_hibernated_url", "")
+        if target:
+            view.load(QUrl(target))
+        idx = self.views.index(view) if view in self.views else -1
+        if idx != -1:
+            title = getattr(view, "_hibernated_title", "Pestaña")
+            display_title = title if len(title) <= 12 else title[:10] + "…"
+            self.tab_bar.setTabText(idx, display_title)
+
+    def show_tab_context_menu(self, idx: int, global_pos: QPoint):
+        local_pos = self.tab_bar.mapFromGlobal(global_pos)
+        self.on_tab_bar_context_menu(local_pos)
 
     def on_tab_moved(self, from_idx: int, to_idx: int):
         if 0 <= from_idx < len(self.views) and 0 <= to_idx < len(self.views):
@@ -2359,6 +2884,10 @@ class AegisBrowserWindow(QMainWindow):
         app = QApplication.instance()
         if hasattr(app, "_aegis_windows") and self in app._aegis_windows:
             app._aegis_windows.remove(self)
+        if hasattr(self, "auto_purge_timer") and self.auto_purge_timer.isActive():
+            self.auto_purge_timer.stop()
+        if hasattr(self, "tab_sleep_timer") and self.tab_sleep_timer.isActive():
+            self.tab_sleep_timer.stop()
         super().closeEvent(event)
 
     def is_internal_or_ntp(self, url_str: str) -> bool:
@@ -2657,6 +3186,13 @@ class AegisBrowserWindow(QMainWindow):
         self.shield_btn.clicked.connect(self.toggle_shields_popup)
         toolbar_layout.addWidget(self.shield_btn)
 
+        # Botón Control Multimedia Global (🎵)
+        self.btn_media = QPushButton("🎵")
+        self.btn_media.setObjectName("MediaControlBtn")
+        self.btn_media.setToolTip("Control multimedia global (YouTube, Spotify, Netflix, etc.)")
+        self.btn_media.clicked.connect(self.toggle_media_popup)
+        toolbar_layout.addWidget(self.btn_media)
+
         # Botón Desplegable de Descargas (📥)
         self.btn_downloads = QPushButton("📥")
         self.btn_downloads.setObjectName("DownloadsBtn")
@@ -2865,6 +3401,18 @@ class AegisBrowserWindow(QMainWindow):
                 font-weight: 600;
                 padding: 4px 16px;
             }}
+            QPushButton#MediaControlBtn {{
+                background: transparent;
+                border: none;
+                color: {t['text']};
+                font-size: 15px;
+                border-radius: 14px;
+                width: 30px;
+                height: 30px;
+            }}
+            QPushButton#MediaControlBtn:hover {{
+                background-color: {t['surface']};
+            }}
             QPushButton#DownloadsBtn {{
                 background: transparent;
                 border: none;
@@ -3006,6 +3554,9 @@ class AegisBrowserWindow(QMainWindow):
         if hasattr(self, "extensions_popup"):
             self.extensions_popup.apply_theme(t)
 
+        if hasattr(self, "media_popup"):
+            self.media_popup.apply_theme(t)
+
         if hasattr(self, "find_bar"):
             self.find_bar.apply_theme(t)
 
@@ -3045,8 +3596,11 @@ class AegisBrowserWindow(QMainWindow):
         view = AegisWebView(self)
         view._aegis_target_url = url_str
 
-        page = QWebEnginePage(self.profile, view)
+        page = AegisWebPage(self.profile, view, self)
         view.setPage(page)
+        view._last_active_time = time.time()
+        view._is_hibernated = False
+        view._is_pinned = False
 
         t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
         view.page().setBackgroundColor(QColor(t["bg"]))
@@ -3221,11 +3775,14 @@ class AegisBrowserWindow(QMainWindow):
         return None
 
     def on_tab_changed(self, index: int):
-        if self.shields_popup.isVisible():
+        if hasattr(self, "shields_popup") and self.shields_popup.isVisible():
             self.shields_popup.hide()
         if 0 <= index < len(self.views):
             self.stack.setCurrentIndex(index)
             view = self.views[index]
+            view._last_active_time = time.time()
+            if getattr(view, "_is_hibernated", False):
+                self.wake_tab(view)
             self.on_url_changed(view.url(), view)
 
     def navigate_to_url(self):
