@@ -7,7 +7,7 @@
 # ==============================================================================
 
 param(
-    [string]$ApkPath = ""
+    [string]$ApkPath = "dist\android\Aegis-arm64-v8a.apk"
 )
 
 $ErrorActionPreference = "Stop"
@@ -73,7 +73,7 @@ foreach ($devLine in $devices) {
     }
 
     if ($ApkPath -and (Test-Path $ApkPath)) {
-        Write-Host "`n[>] Instalando APK en $devId: $ApkPath..." -ForegroundColor Cyan
+        Write-Host "`n[>] Instalando APK en ${devId}: $ApkPath..." -ForegroundColor Cyan
         & $AdbExe -s $devId install -r -d "$ApkPath"
         if ($LASTEXITCODE -eq 0) {
             Write-Host "  [EXITO] Aegis Browser instalado correctamente en $model!" -ForegroundColor Green
