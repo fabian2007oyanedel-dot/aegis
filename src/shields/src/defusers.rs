@@ -132,6 +132,20 @@ pub fn get_curated_cosmetic_css_for_url(url: &str) -> String {
         );
     }
 
+    if lower_url.contains("duckduckgo.com") {
+        rules.push(
+            ".results--ads, [data-testid=\"ad\"], .badge--ad, li[data-layout=\"ad\"], \
+             .js-badge--ad, div[class*=\"badge--ad\"], .result--ad, \
+             div[data-layout=\"ad\"] { display: none !important; opacity: 0 !important; height: 0 !important; visibility: hidden !important; }"
+        );
+    }
+
+    if lower_url.contains("google.") {
+        rules.push(
+            "div[data-text-ad], .uEierd, div[id*=\"tads\"], div[id*=\"bottomads\"] { display: none !important; opacity: 0 !important; }"
+        );
+    }
+
     rules.join("\n")
 }
 

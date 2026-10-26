@@ -163,4 +163,19 @@ cinecalidad*.com##.fake-player
 ||cuty.io/ads*
 curseforge.com##.curseforge-ad
 curseforge.com##div[id*="cf-ad-"]
+
+! ── 11. Motores de Búsqueda (DuckDuckGo, Google, Bing, Yahoo) ─────────────────
+duckduckgo.com##.results--ads
+duckduckgo.com##[data-testid="ad"]
+duckduckgo.com##.badge--ad
+duckduckgo.com##li[data-layout="ad"]
+duckduckgo.com##.js-badge--ad
+duckduckgo.com##div[class*="badge--ad"]
+duckduckgo.com##.result--ad
+google.*##div[data-text-ad]
+google.*##.uEierd
+google.*##div[id*="tads"]
+bing.com##.b_ad
+||duckduckgo.com/y.js$xhr
+||impr.duckduckgo.com^
 "#;

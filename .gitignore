@@ -1,4 +1,11 @@
 
 src/shields/target/
 *.log
+dist/
+build/
+*.spec
+__pycache__/
+*.pyc
+
+
 
