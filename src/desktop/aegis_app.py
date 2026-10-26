@@ -1,82 +1,80 @@
 #!/usr/bin/env python3
-# ==============================================================================
-# Aegis Browser - Native Desktop Browser (Minimalist, Dark Theme, Zero-Bloat)
-# ==============================================================================
-# - Real Top Tab Strip (Arc / Zen style)
-# - Real Working Omnibox (Navigates to ANY URL or search)
-# - Native Force Dark Mode for all websites (DuckDuckGo, Wikipedia, YouTube, etc.)
-# - DWM Immersive Dark Title Bar (Zero lime-green Windows borders)
-# - Interactive Aegis Shields Dialog (adblock-rust FFI)
-# - Real 4-Theme Live Switcher (Cyber, Midnight, OLED, Light)
-# - Built-in NTP with live clock, inline SVG logo, and working shortcuts
-# ==============================================================================
+# -*- coding: utf-8 -*-
+"""
+================================================================================
+                    AEGIS BROWSER - NATIVE RUNTIME (v1.3.1)
+           Chromium WebEngine + Rust FFI Shields + Brave-Style UI
+================================================================================
+Características:
+  - Interfaz minimalista inspirada en Brave Browser (Popup anclado, sin menús invasivos).
+  - Escudo interactivo tipo Brave: Hostname, Switch principal, tarjeta de estadísticas
+    y sección desplegable colapsable "Opciones avanzadas".
+  - Sistema de 2 Temas Estrictos (Máximo 4 colores por tema): Oscuro y Claro.
+  - Botón de cambio de tema rápido en barra de herramientas (sin combobox que estorbe).
+  - Tira de pestañas nativa limpia y cápsula Omnibox con búsqueda DuckDuckGo / URL.
+  - Sincronización con DWM de Windows (título oscuro / claro sin bordes de acento).
+  - Motor de bloqueo Rust FFI de alto rendimiento con defusers para YouTube, DuckDuckGo,
+    sitios de streaming y acortadores.
+================================================================================
+"""
 
 import os
 import sys
 import json
+import time
 import ctypes
-from ctypes import wintypes
 from pathlib import Path
 
-# ── 1. Forzar Dark Mode en el motor Chromium de QtWebEngine ──────────────────
+# Configuración de rendimiento y aceleración para Chromium Engine
 os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
     "--enable-gpu-rasterization "
+    "--enable-zero-copy "
     "--ignore-gpu-blocklist "
-    "--force-dark-mode "
-    "--enable-features=WebContentsForceDark,VaapiVideoDecoder,CanvasOopRasterization "
-    "--blink-settings=forceDarkModeEnabled=true"
+    "--disable-breakpad "
+    "--disable-telemetry "
+    "--disable-sync "
+    "--disable-domain-reliability "
+    "--no-pings "
+    "--dns-prefetch-disable"
 )
 
-from PyQt6.QtCore import QUrl, Qt, QSize
-from PyQt6.QtGui import QAction, QKeySequence, QColor
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QTabBar, QStackedWidget, QLabel,
-    QProgressBar, QDialog, QCheckBox, QComboBox, QMessageBox
-)
-from PyQt6.QtWebEngineCore import (
-    QWebEngineProfile, QWebEnginePage, QWebEngineUrlRequestInterceptor,
-    QWebEngineSettings
+    QLineEdit, QPushButton, QProgressBar, QTabBar, QStackedWidget,
+    QLabel, QCheckBox, QMessageBox, QFrame, QAbstractButton
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWebEngineCore import (
+    QWebEngineProfile, QWebEngineSettings, QWebEngineUrlRequestInterceptor
+)
+from PyQt6.QtCore import QUrl, Qt, QPoint
+from PyQt6.QtGui import QIcon, QPainter, QColor, QBrush, QPen
 
-# ── 2. Localización de Rutas ──────────────────────────────────────────────────
-def find_base_dir() -> Path:
-    candidates = [
-        Path(sys.executable).resolve().parent,
-        Path(sys.executable).resolve().parent.parent,
-        Path(sys.executable).resolve().parent.parent.parent,
-        Path(__file__).resolve().parent,
-        Path(__file__).resolve().parent.parent.parent,
-        Path.cwd(),
-    ]
-    for c in candidates:
-        if (c / "src" / "shields" / "target" / "release" / "aegis_shields.dll").exists():
-            return c
-        if (c / "aegis_shields.dll").exists():
-            return c
-    return Path(__file__).resolve().parent.parent.parent
-
-BASE_DIR = find_base_dir()
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_FILE = Path.home() / ".aegis_browser_config.json"
 
-# ── 3. DWM Immersive Dark Mode para la Barra de Título de Windows ─────────────
-def apply_windows_dark_title_bar(window_id):
+# ── 1. Helper para conversión Hex a RGB ────────────────────────────────────────
+def hex_to_rgb(h: str) -> str:
+    h = h.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"{r}, {g}, {b}"
+
+# ── 2. Soporte de Barra de Título Nativa Windows DWM ───────────────────────────
+def apply_windows_dark_title_bar(hwnd, dark: bool = True):
+    if sys.platform != "win32":
+        return
     try:
         DWMWA_USE_IMMERSIVE_DARK_MODE = 20
-        DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19
-        val = ctypes.c_int(1)
-        hwnd = wintypes.HWND(int(window_id))
-        ctypes.windll.dwmapi.DwmSetWindowAttribute(
-            hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ctypes.byref(val), ctypes.sizeof(val)
-        )
-        ctypes.windll.dwmapi.DwmSetWindowAttribute(
-            hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ctypes.byref(val), ctypes.sizeof(val)
-        )
+        set_attribute = ctypes.windll.dwmapi.DwmSetWindowAttribute
+        val = ctypes.c_int(1 if dark else 0)
+        hr = set_attribute(int(hwnd), DWMWA_USE_IMMERSIVE_DARK_MODE, ctypes.byref(val), ctypes.sizeof(val))
+        if hr != 0:
+            DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19
+            set_attribute(int(hwnd), DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ctypes.byref(val), ctypes.sizeof(val))
     except Exception:
         pass
 
-# ── 4. Enlace FFI con el Motor Rust (adblock-rust) ────────────────────────────
+# ── 3. Motor Aegis Shields (Rust FFI) ──────────────────────────────────────────
 class AegisShieldsRustCore:
     def __init__(self):
         self.dll = None
@@ -84,8 +82,8 @@ class AegisShieldsRustCore:
         self.total_blocked = 0
 
         dll_paths = [
-            BASE_DIR / "src" / "shields" / "target" / "release" / "aegis_shields.dll",
             BASE_DIR / "dist" / "Aegis" / "aegis_shields.dll",
+            BASE_DIR / "src" / "shields" / "target" / "release" / "aegis_shields.dll",
             BASE_DIR / "aegis_shields.dll",
             Path.cwd() / "dist" / "Aegis" / "aegis_shields.dll",
         ]
@@ -129,7 +127,7 @@ class AegisShieldsRustCore:
 
     def get_cosmetic_css(self, url: str) -> str:
         css_rules = [
-            # Reglas cosméticas de respaldo universal para DuckDuckGo, Google, etc.
+            # Ocultación universal de publicidad en buscadores
             ".results--ads, [data-testid=\"ad\"], .badge--ad, li[data-layout=\"ad\"], "
             ".js-badge--ad, div[class*=\"badge--ad\"], .result--ad, div[data-layout=\"ad\"], "
             "div[data-text-ad], .uEierd, div[id*=\"tads\"], div[id*=\"bottomads\"], .b_ad "
@@ -162,7 +160,7 @@ class AegisShieldsRustCore:
 
 SHIELDS_CORE = AegisShieldsRustCore()
 
-# ── 5. Interceptor de Peticiones de Red ───────────────────────────────────────
+# ── 4. Interceptor de Peticiones de Red ───────────────────────────────────────
 class AegisRequestInterceptor(QWebEngineUrlRequestInterceptor):
     def __init__(self, callback=None):
         super().__init__()
@@ -179,175 +177,287 @@ class AegisRequestInterceptor(QWebEngineUrlRequestInterceptor):
             if self.callback:
                 self.callback()
 
-# ── 6. Sistema de 4 Temas Reales (Cyber, Midnight, OLED, Light) ───────────────
+# ── 5. Sistema de 2 Temas Estrictos (Máximo 4 Colores por Tema) ───────────────
+# Regla: Cada tema contiene exactamente 4 colores fundamentales:
+# 1. bg: Fondo general
+# 2. surface: Superficie de controles, Omnibox, pestañas y popup
+# 3. text: Texto y símbolos
+# 4. accent: Color de realce interactivo / interruptor activo
 THEMES = {
-    "Cyber Dark": {
-        "bg_win": "#090d14",
-        "bg_tab_header": "#090d14",
-        "bg_tab_unselected": "#0e1420",
-        "bg_tab_selected": "#141c2c",
-        "border_tab": "#38bdf8",
-        "bg_toolbar": "#0f1624",
-        "bg_omnibox": "#070b12",
-        "text_main": "#f0f6fc",
-        "text_muted": "#8b949e",
-        "accent": "#38bdf8",
-        "shield_color": "#10b981",
-        "shield_bg": "rgba(16, 185, 129, 0.08)",
-        "shield_border": "rgba(16, 185, 129, 0.25)",
-        "ntp_class": "theme-cyber"
+    "Oscuro": {
+        "bg": "#0d1117",        # Color 1
+        "surface": "#161b22",   # Color 2
+        "text": "#f0f6fc",      # Color 3
+        "accent": "#388bfd",    # Color 4
+        "ntp_class": "theme-dark"
     },
-    "Midnight Indigo": {
-        "bg_win": "#090a12",
-        "bg_tab_header": "#090a12",
-        "bg_tab_unselected": "#0f111e",
-        "bg_tab_selected": "#181b2e",
-        "border_tab": "#818cf8",
-        "bg_toolbar": "#111422",
-        "bg_omnibox": "#090a12",
-        "text_main": "#f8fafc",
-        "text_muted": "#94a3b8",
-        "accent": "#818cf8",
-        "shield_color": "#a855f7",
-        "shield_bg": "rgba(168, 85, 247, 0.08)",
-        "shield_border": "rgba(168, 85, 247, 0.25)",
-        "ntp_class": "theme-midnight"
-    },
-    "Pure OLED Black": {
-        "bg_win": "#000000",
-        "bg_tab_header": "#000000",
-        "bg_tab_unselected": "#0a0a0a",
-        "bg_tab_selected": "#141414",
-        "border_tab": "#10b981",
-        "bg_toolbar": "#080808",
-        "bg_omnibox": "#000000",
-        "text_main": "#ffffff",
-        "text_muted": "#737373",
-        "accent": "#10b981",
-        "shield_color": "#10b981",
-        "shield_bg": "rgba(16, 185, 129, 0.12)",
-        "shield_border": "rgba(16, 185, 129, 0.3)",
-        "ntp_class": "theme-oled"
-    },
-    "Clean Titanium Light": {
-        "bg_win": "#f1f5f9",
-        "bg_tab_header": "#e2e8f0",
-        "bg_tab_unselected": "#e2e8f0",
-        "bg_tab_selected": "#ffffff",
-        "border_tab": "#0284c7",
-        "bg_toolbar": "#ffffff",
-        "bg_omnibox": "#f8fafc",
-        "text_main": "#0f172a",
-        "text_muted": "#64748b",
-        "accent": "#0284c7",
-        "shield_color": "#059669",
-        "shield_bg": "rgba(5, 150, 105, 0.1)",
-        "shield_border": "rgba(5, 150, 105, 0.25)",
+    "Claro": {
+        "bg": "#f6f8fa",        # Color 1
+        "surface": "#ffffff",   # Color 2
+        "text": "#1f2328",      # Color 3
+        "accent": "#0969da",    # Color 4
         "ntp_class": "theme-light"
     }
 }
 
-# ── 7. Diálogo Interactivo de Aegis Shields ───────────────────────────────────
-class AegisShieldsDialog(QDialog):
-    def __init__(self, parent=None, interceptor=None):
+# ── 6. Switch Interactivo Moderno (Estilo Brave) ──────────────────────────────
+class ToggleSwitch(QAbstractButton):
+    def __init__(self, checked=True, parent=None, accent_color="#388bfd", bg_color="#0d1117"):
         super().__init__(parent)
+        self.setCheckable(True)
+        self.setChecked(checked)
+        self.setFixedSize(42, 22)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.accent_color = accent_color
+        self.bg_color = bg_color
+
+    def update_colors(self, accent_color: str, bg_color: str):
+        self.accent_color = accent_color
+        self.bg_color = bg_color
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect()
+
+        if self.isChecked():
+            pill_color = QColor(self.accent_color)
+            thumb_color = QColor("#ffffff")
+        else:
+            pill_color = QColor(self.bg_color)
+            thumb_color = QColor("#8b949e")
+
+        painter.setBrush(QBrush(pill_color))
+        painter.setPen(QPen(QColor(self.accent_color if self.isChecked() else "#30363d"), 1))
+        painter.drawRoundedRect(rect, 11, 11)
+
+        thumb_diam = 16
+        thumb_x = (rect.width() - thumb_diam - 3) if self.isChecked() else 3
+        painter.setBrush(QBrush(thumb_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(thumb_x, 3, thumb_diam, thumb_diam)
+        painter.end()
+
+# ── 7. Menú Desplegable de Aegis Shields (Estilo Brave) ────────────────────────
+class AegisShieldsPopup(QFrame):
+    def __init__(self, parent=None, interceptor=None):
+        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setObjectName("AegisShieldsPopup")
+        self.setFixedWidth(340)
         self.interceptor = interceptor
-        self.setWindowTitle("Aegis Shields — Centro de Control")
-        self.setFixedSize(420, 390)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #0d121c;
-                color: #f0f6fc;
-                border: 1px solid rgba(56, 189, 248, 0.3);
-                border-radius: 12px;
-                font-family: -apple-system, 'Segoe UI', sans-serif;
-            }
-            QLabel {
-                color: #f0f6fc;
-            }
-            QCheckBox {
-                color: #e2e8f0;
-                font-size: 13px;
-                spacing: 8px;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border-radius: 4px;
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                background: #090d14;
-            }
-            QCheckBox::indicator:checked {
-                background: #10b981;
-                border-color: #10b981;
-            }
-            QPushButton {
-                background: rgba(255, 255, 255, 0.06);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                border-radius: 8px;
-                color: #f0f6fc;
-                padding: 7px 14px;
-                font-weight: 600;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background: rgba(56, 189, 248, 0.15);
-                border-color: #38bdf8;
-            }
-        """)
+        self.parent_win = parent
 
+        self.init_ui()
+
+    def hideEvent(self, event):
+        if self.parent_win:
+            self.parent_win._last_popup_close_time = time.time()
+        super().hideEvent(event)
+
+    def init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(14)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
 
-        # Encabezado
-        title = QLabel(f"🛡️ Aegis Shields (adblock-rust)")
-        title.setStyleSheet("font-size: 16px; font-weight: 700; color: #38bdf8;")
-        layout.addWidget(title)
+        # ── Cabecera: Dominio actual + Subtítulo + Switch Principal ───────────
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(10)
 
-        # Contador
-        stats = QLabel(f"<b>{SHIELDS_CORE.total_blocked}</b> anuncios y rastreadores bloqueados en esta sesión.")
-        stats.setStyleSheet("font-size: 13px; color: #10b981; margin-bottom: 6px;")
-        layout.addWidget(stats)
+        site_info_layout = QVBoxLayout()
+        site_info_layout.setSpacing(2)
 
-        # Opciones interactivas reales
-        self.cb_network = QCheckBox("Bloqueo de red a nivel socket (adblock-rust)")
-        self.cb_network.setChecked(self.interceptor.enabled if self.interceptor else True)
+        self.lbl_site = QLabel("aegis://start")
+        self.lbl_site.setObjectName("PopupSiteName")
+        site_info_layout.addWidget(self.lbl_site)
+
+        self.lbl_status = QLabel("Escudos activados para este sitio")
+        self.lbl_status.setObjectName("PopupStatusText")
+        site_info_layout.addWidget(self.lbl_status)
+
+        header_layout.addLayout(site_info_layout)
+        header_layout.addStretch()
+
+        self.main_switch = ToggleSwitch(checked=True)
+        self.main_switch.toggled.connect(self.on_main_switch_toggled)
+        header_layout.addWidget(self.main_switch)
+
+        layout.addLayout(header_layout)
+
+        # ── Tarjeta Estadística (Contador en cápsula estilo Brave) ────────────
+        self.stat_card = QFrame()
+        self.stat_card.setObjectName("PopupStatCard")
+        stat_layout = QHBoxLayout(self.stat_card)
+        stat_layout.setContentsMargins(14, 12, 14, 12)
+        stat_layout.setSpacing(12)
+
+        self.lbl_count = QLabel("0")
+        self.lbl_count.setObjectName("PopupCount")
+        stat_layout.addWidget(self.lbl_count)
+
+        self.lbl_stat_text = QLabel("rastreadores, anuncios y más elementos bloqueados")
+        self.lbl_stat_text.setObjectName("PopupStatLabel")
+        self.lbl_stat_text.setWordWrap(True)
+        stat_layout.addWidget(self.lbl_stat_text)
+
+        layout.addWidget(self.stat_card)
+
+        # ── Botón Desplegable "Opciones avanzadas" ────────────────────────────
+        self.btn_advanced = QPushButton("⚙ Opciones avanzadas ▾")
+        self.btn_advanced.setObjectName("PopupAdvancedBtn")
+        self.btn_advanced.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_advanced.clicked.connect(self.toggle_advanced)
+        layout.addWidget(self.btn_advanced)
+
+        # Contenedor Colapsable (Opciones Avanzadas)
+        self.advanced_container = QWidget()
+        adv_layout = QVBoxLayout(self.advanced_container)
+        adv_layout.setContentsMargins(4, 2, 4, 6)
+        adv_layout.setSpacing(8)
+
+        self.cb_network = QCheckBox("Bloqueo de red a nivel socket (Rust FFI)")
+        self.cb_network.setChecked(True)
         self.cb_network.toggled.connect(self.toggle_network)
-        layout.addWidget(self.cb_network)
+        adv_layout.addWidget(self.cb_network)
 
-        self.cb_cosmetic = QCheckBox("Filtrado cosmético (eliminar espacios y anuncios DuckDuckGo)")
+        self.cb_cosmetic = QCheckBox("Ocultación cosmética CSS en búsquedas y páginas")
         self.cb_cosmetic.setChecked(True)
-        layout.addWidget(self.cb_cosmetic)
+        adv_layout.addWidget(self.cb_cosmetic)
 
-        self.cb_youtube = QCheckBox("Bypass de comerciales y anti-adblock de YouTube")
-        self.cb_youtube.setChecked(True)
-        layout.addWidget(self.cb_youtube)
+        self.cb_video = QCheckBox("Salto automático de anuncios de video (YouTube)")
+        self.cb_video.setChecked(True)
+        adv_layout.addWidget(self.cb_video)
 
-        self.cb_countdown = QCheckBox("FastForward automático de cuentas atrás (CurseForge / ouo.io)")
+        self.cb_countdown = QCheckBox("Bypass de temporizadores y acortadores")
         self.cb_countdown.setChecked(True)
-        layout.addWidget(self.cb_countdown)
+        adv_layout.addWidget(self.cb_countdown)
 
-        layout.addSpacing(6)
+        self.btn_clear_cache = QPushButton("🗑️ Limpiar caché de sesión")
+        self.btn_clear_cache.setObjectName("PopupClearBtn")
+        self.btn_clear_cache.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_clear_cache.clicked.connect(self.clear_cache)
+        adv_layout.addWidget(self.btn_clear_cache)
 
-        # Botón limpiar caché
-        btn_clear = QPushButton("🗑️ Limpiar Caché y Cookies de Sesión")
-        btn_clear.clicked.connect(self.clear_cache)
-        layout.addWidget(btn_clear)
+        self.advanced_container.hide()  # Colapsado por defecto para no estorbar
+        layout.addWidget(self.advanced_container)
 
-        # Botón Cerrar
-        btn_close = QPushButton("Entendido")
-        btn_close.setStyleSheet("background: #10b981; color: #052e16; font-weight: 700;")
-        btn_close.clicked.connect(self.accept)
-        layout.addWidget(btn_close)
+        # ── Pie de nota ───────────────────────────────────────────────────────
+        self.lbl_footer = QLabel("Aegis Shields • adblock-rust FFI • Cero telemetría")
+        self.lbl_footer.setObjectName("PopupFooter")
+        self.lbl_footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.lbl_footer)
 
-    def toggle_network(self, checked):
+    def toggle_advanced(self):
+        is_vis = self.advanced_container.isVisible()
+        self.advanced_container.setVisible(not is_vis)
+        self.btn_advanced.setText("⚙ Opciones avanzadas ▴" if not is_vis else "⚙ Opciones avanzadas ▾")
+        self.adjustSize()
+
+    def on_main_switch_toggled(self, checked: bool):
+        if checked:
+            self.lbl_status.setText("Escudos activados para este sitio")
+            if self.interceptor:
+                self.interceptor.enabled = True
+        else:
+            self.lbl_status.setText("Escudos desactivados para este sitio")
+            if self.interceptor:
+                self.interceptor.enabled = False
+
+    def toggle_network(self, checked: bool):
         if self.interceptor:
             self.interceptor.enabled = checked
 
     def clear_cache(self):
         QWebEngineProfile.defaultProfile().clearHttpCache()
-        QMessageBox.information(self, "Caché", "✓ Caché HTTP de navegación limpiada correctamente.")
+        self.lbl_status.setText("✓ Caché de sesión limpiada")
+
+    def update_site(self, host: str, count: int):
+        self.lbl_site.setText(host or "Nueva Pestaña")
+        self.lbl_count.setText(str(count))
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        rgb_accent = hex_to_rgb(t["accent"])
+        self.main_switch.update_colors(accent_color=t["accent"], bg_color=t["bg"])
+
+        qss = f"""
+            QFrame#AegisShieldsPopup {{
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 12px;
+            }}
+            QLabel#PopupSiteName {{
+                color: {t['text']};
+                font-size: 15px;
+                font-weight: 700;
+            }}
+            QLabel#PopupStatusText {{
+                color: rgba({rgb_text}, 0.7);
+                font-size: 11.5px;
+            }}
+            QFrame#PopupStatCard {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.08);
+                border-radius: 10px;
+            }}
+            QLabel#PopupCount {{
+                color: {t['accent']};
+                font-size: 24px;
+                font-weight: 800;
+            }}
+            QLabel#PopupStatLabel {{
+                color: {t['text']};
+                font-size: 12px;
+            }}
+            QPushButton#PopupAdvancedBtn {{
+                background: transparent;
+                border: none;
+                color: rgba({rgb_text}, 0.75);
+                font-size: 11.5px;
+                font-weight: 600;
+                text-align: left;
+                padding: 4px 0;
+            }}
+            QPushButton#PopupAdvancedBtn:hover {{
+                color: {t['accent']};
+            }}
+            QCheckBox {{
+                color: {t['text']};
+                font-size: 12px;
+                spacing: 8px;
+            }}
+            QCheckBox::indicator {{
+                width: 16px;
+                height: 16px;
+                border-radius: 4px;
+                border: 1px solid rgba({rgb_text}, 0.25);
+                background: {t['bg']};
+            }}
+            QCheckBox::indicator:checked {{
+                background: {t['accent']};
+                border-color: {t['accent']};
+            }}
+            QPushButton#PopupClearBtn {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.12);
+                border-radius: 8px;
+                color: {t['text']};
+                padding: 6px 12px;
+                font-size: 11.5px;
+                margin-top: 4px;
+            }}
+            QPushButton#PopupClearBtn:hover {{
+                background-color: rgba({rgb_accent}, 0.12);
+                border-color: {t['accent']};
+            }}
+            QLabel#PopupFooter {{
+                color: rgba({rgb_text}, 0.45);
+                font-size: 10px;
+                margin-top: 4px;
+            }}
+        """
+        self.setStyleSheet(qss)
+        self.update()
 
 # ── 8. Ventana Principal de Aegis Browser ─────────────────────────────────────
 class AegisBrowserWindow(QMainWindow):
@@ -356,38 +466,47 @@ class AegisBrowserWindow(QMainWindow):
         self.setWindowTitle("Aegis")
         self.resize(1340, 860)
 
-        # Cargar configuración guardada
+        self._last_popup_close_time = 0.0
         self.current_theme_name = self.load_saved_theme()
 
         # Configurar Perfil Chromium
         self.profile = QWebEngineProfile.defaultProfile()
         self.profile.setHttpUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.1"
         )
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, False)
 
-        # Interceptor de red
+        # Interceptor de peticiones de red
         self.interceptor = AegisRequestInterceptor(self.on_shield_block)
         self.profile.setUrlRequestInterceptor(self.interceptor)
 
         self.views = []
         self.init_ui()
 
-        # Aplicar borde oscuro nativo de Windows (eliminar verde lima)
-        apply_windows_dark_title_bar(self.winId())
+        # Crear menú desplegable estilo Brave
+        self.shields_popup = AegisShieldsPopup(self, self.interceptor)
+
+        # Aplicar tema inicial (Oscuro o Claro)
+        self.apply_theme(self.current_theme_name)
+        self.setup_shortcuts()
+
+        # Abrir pestaña inicial
+        self.add_new_tab()
 
     def load_saved_theme(self) -> str:
         if CONFIG_FILE.exists():
             try:
                 data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-                theme = data.get("theme", "Cyber Dark")
-                if theme in THEMES:
+                theme = data.get("theme", "Oscuro")
+                if theme in ("Oscuro", "Claro"):
                     return theme
+                if "light" in theme.lower() or "claro" in theme.lower():
+                    return "Claro"
             except Exception:
                 pass
-        return "Cyber Dark"
+        return "Oscuro"
 
     def save_theme(self, theme_name: str):
         try:
@@ -402,7 +521,7 @@ class AegisBrowserWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # ── 1. Tira de Pestañas (En la cima de la ventana) ──────────────────────
+        # ── 1. Tira de Pestañas Limpia (Sin menús invasivos) ───────────────────
         self.tab_header = QWidget()
         self.tab_header.setObjectName("TabHeader")
         tab_header_layout = QHBoxLayout(self.tab_header)
@@ -423,19 +542,9 @@ class AegisBrowserWindow(QMainWindow):
         tab_header_layout.addWidget(self.btn_new_tab)
 
         tab_header_layout.addStretch()
-
-        # Selector de Tema en Vivo
-        self.theme_combo = QComboBox()
-        self.theme_combo.setObjectName("ThemeSelector")
-        for t_name in THEMES.keys():
-            self.theme_combo.addItem(t_name)
-        self.theme_combo.setCurrentText(self.current_theme_name)
-        self.theme_combo.currentTextChanged.connect(self.change_theme)
-        tab_header_layout.addWidget(self.theme_combo)
-
         main_layout.addWidget(self.tab_header)
 
-        # ── 2. Barra de Navegación y Omnibox Flotante ─────────────────────────
+        # ── 2. Barra de Navegación, Omnibox y Botones de Acción ───────────────
         self.toolbar = QWidget()
         self.toolbar.setObjectName("Toolbar")
         toolbar_layout = QHBoxLayout(self.toolbar)
@@ -473,12 +582,19 @@ class AegisBrowserWindow(QMainWindow):
         self.url_bar.returnPressed.connect(self.navigate_to_url)
         toolbar_layout.addWidget(self.url_bar)
 
-        # Píldora de Aegis Shields
+        # Botón Escudo Aegis Shields (Abre desplegable estilo Brave)
         self.shield_pill = QPushButton("🛡️ 0")
         self.shield_pill.setObjectName("ShieldPill")
-        self.shield_pill.setToolTip("Aegis Shields: Click para ver panel de control")
-        self.shield_pill.clicked.connect(self.open_shields_panel)
+        self.shield_pill.setToolTip("Aegis Shields: Click para desplegar panel")
+        self.shield_pill.clicked.connect(self.toggle_shields_popup)
         toolbar_layout.addWidget(self.shield_pill)
+
+        # Botón de Cambio Rápido de Tema (Oscuro / Claro)
+        self.btn_theme_toggle = QPushButton("☀️")
+        self.btn_theme_toggle.setObjectName("ThemeToggleBtn")
+        self.btn_theme_toggle.setToolTip("Cambiar tema (Oscuro / Claro)")
+        self.btn_theme_toggle.clicked.connect(self.toggle_theme)
+        toolbar_layout.addWidget(self.btn_theme_toggle)
 
         main_layout.addWidget(self.toolbar)
 
@@ -494,33 +610,52 @@ class AegisBrowserWindow(QMainWindow):
         self.stack = QStackedWidget()
         main_layout.addWidget(self.stack)
 
-        self.apply_theme(self.current_theme_name)
-        self.setup_shortcuts()
-
-        # Abrir pestaña inicial
-        self.add_new_tab()
+    def toggle_theme(self):
+        new_theme = "Claro" if self.current_theme_name == "Oscuro" else "Oscuro"
+        self.apply_theme(new_theme)
 
     def apply_theme(self, theme_name: str):
-        t = THEMES.get(theme_name, THEMES["Cyber Dark"])
+        if theme_name not in THEMES:
+            theme_name = "Oscuro"
         self.current_theme_name = theme_name
         self.save_theme(theme_name)
+        t = THEMES[theme_name]
+        is_dark = (theme_name == "Oscuro")
 
+        # Actualizar botón de alternancia
+        if is_dark:
+            self.btn_theme_toggle.setText("☀️")
+            self.btn_theme_toggle.setToolTip("Cambiar a Modo Claro")
+        else:
+            self.btn_theme_toggle.setText("🌙")
+            self.btn_theme_toggle.setToolTip("Cambiar a Modo Oscuro")
+
+        # Sincronizar borde y barra de título de Windows
+        apply_windows_dark_title_bar(self.winId(), dark=is_dark)
+
+        # Sincronizar motor Chromium WebEngine ForceDarkMode
+        self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.ForceDarkMode, is_dark)
+
+        rgb_text = hex_to_rgb(t["text"])
+        rgb_accent = hex_to_rgb(t["accent"])
+
+        # Hoja de estilos basada estrictamente en los 4 colores del tema
         qss = f"""
             QMainWindow {{
-                background-color: {t['bg_win']};
+                background-color: {t['bg']};
             }}
             QWidget#TabHeader {{
-                background-color: {t['bg_tab_header']};
-                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+                background-color: {t['bg']};
+                border-bottom: 1px solid rgba({rgb_text}, 0.08);
             }}
             QTabBar {{
                 background: transparent;
                 border: none;
             }}
             QTabBar::tab {{
-                background-color: {t['bg_tab_unselected']};
-                color: {t['text_muted']};
-                border: 1px solid rgba(255, 255, 255, 0.05);
+                background-color: {t['bg']};
+                color: rgba({rgb_text}, 0.65);
+                border: 1px solid rgba({rgb_text}, 0.08);
                 border-bottom: none;
                 padding: 6px 14px;
                 border-top-left-radius: 8px;
@@ -532,60 +667,64 @@ class AegisBrowserWindow(QMainWindow):
                 max-width: 220px;
             }}
             QTabBar::tab:hover {{
-                background-color: {t['bg_tab_selected']};
-                color: {t['text_main']};
+                background-color: {t['surface']};
+                color: {t['text']};
             }}
             QTabBar::tab:selected {{
-                background-color: {t['bg_tab_selected']};
-                color: {t['text_main']};
-                border: 1px solid rgba(255, 255, 255, 0.08);
+                background-color: {t['surface']};
+                color: {t['text']};
+                border: 1px solid rgba({rgb_text}, 0.12);
                 border-bottom: none;
-                border-top: 2px solid {t['border_tab']};
+                border-top: 2px solid {t['accent']};
                 font-weight: 600;
             }}
             QPushButton#NewTabBtn {{
                 background: transparent;
                 border: none;
-                color: {t['text_muted']};
+                color: rgba({rgb_text}, 0.65);
                 font-size: 16px;
                 border-radius: 12px;
                 width: 24px;
                 height: 24px;
             }}
             QPushButton#NewTabBtn:hover {{
-                background-color: rgba(255, 255, 255, 0.08);
-                color: {t['text_main']};
-            }}
-            QComboBox#ThemeSelector {{
-                background-color: {t['bg_omnibox']};
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 6px;
-                color: {t['text_muted']};
-                padding: 2px 8px;
-                font-size: 11px;
+                background-color: {t['surface']};
+                color: {t['text']};
             }}
             QWidget#Toolbar {{
-                background-color: {t['bg_toolbar']};
-                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+                background-color: {t['bg']};
+                border-bottom: 1px solid rgba({rgb_text}, 0.08);
             }}
             QPushButton.nav-btn {{
                 background: transparent;
                 border: none;
-                color: {t['text_muted']};
+                color: rgba({rgb_text}, 0.7);
                 font-size: 15px;
                 border-radius: 14px;
                 width: 30px;
                 height: 30px;
             }}
             QPushButton.nav-btn:hover {{
-                background-color: rgba(255, 255, 255, 0.08);
-                color: {t['text_main']};
+                background-color: {t['surface']};
+                color: {t['text']};
+            }}
+            QPushButton#ThemeToggleBtn {{
+                background: transparent;
+                border: none;
+                color: {t['text']};
+                font-size: 15px;
+                border-radius: 14px;
+                width: 30px;
+                height: 30px;
+            }}
+            QPushButton#ThemeToggleBtn:hover {{
+                background-color: {t['surface']};
             }}
             QLineEdit#Omnibox {{
-                background-color: {t['bg_omnibox']};
-                border: 1px solid rgba(255, 255, 255, 0.08);
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.12);
                 border-radius: 16px;
-                color: {t['text_main']};
+                color: {t['text']};
                 padding: 5px 16px;
                 font-size: 12.5px;
                 font-family: -apple-system, 'Segoe UI', sans-serif;
@@ -595,57 +734,73 @@ class AegisBrowserWindow(QMainWindow):
                 border: 1px solid {t['accent']};
             }}
             QPushButton#ShieldPill {{
-                background-color: {t['shield_bg']};
-                border: 1px solid {t['shield_border']};
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_accent}, 0.35);
                 border-radius: 13px;
-                color: {t['shield_color']};
-                font-size: 11.5px;
+                color: {t['accent']};
+                padding: 4px 12px;
+                font-size: 12px;
                 font-weight: 600;
-                padding: 4px 11px;
             }}
             QPushButton#ShieldPill:hover {{
-                background-color: {t['shield_color']};
-                color: #000000;
+                background-color: {t['surface']};
+                border-color: {t['accent']};
             }}
             QProgressBar#MicroProgress {{
+                background-color: transparent;
                 border: none;
-                background: transparent;
-                height: 2px;
             }}
             QProgressBar#MicroProgress::chunk {{
-                background: {t['accent']};
+                background-color: {t['accent']};
             }}
         """
         self.setStyleSheet(qss)
 
-        # Si la pestaña actual está en la New Tab Page, actualizar su tema dinámicamente
-        for v in self.views:
-            if v.url().toString() in ("aegis://start", "about:blank"):
-                v.page().runJavaScript(f"document.documentElement.className = '{t['ntp_class']}';")
+        # Actualizar tema del desplegable estilo Brave
+        if hasattr(self, "shields_popup"):
+            self.shields_popup.apply_theme(t)
 
-    def change_theme(self, theme_name: str):
-        if theme_name in THEMES:
-            self.apply_theme(theme_name)
+        # Actualizar páginas de Nueva Pestaña abiertas
+        for view in self.views:
+            if view.url().toString() in ("aegis://start", "about:blank"):
+                self.load_ntp(view)
+
+    def toggle_shields_popup(self):
+        now = time.time()
+        if hasattr(self, "_last_popup_close_time") and (now - self._last_popup_close_time < 0.25):
+            return
+
+        if self.shields_popup.isVisible():
+            self.shields_popup.hide()
+            return
+
+        view = self.current_view()
+        url = view.url() if view else QUrl()
+        host = url.host() if url.host() else ("Nueva Pestaña" if url.toString() in ("aegis://start", "") else "Página actual")
+        self.shields_popup.update_site(host, SHIELDS_CORE.total_blocked)
+
+        # Posicionamiento exacto anclado bajo la píldora del escudo
+        btn_pos = self.shield_pill.mapToGlobal(QPoint(0, self.shield_pill.height()))
+        popup_x = btn_pos.x() + self.shield_pill.width() - self.shields_popup.width()
+        popup_y = btn_pos.y() + 6
+        self.shields_popup.move(popup_x, popup_y)
+        self.shields_popup.show()
+        self.shields_popup.raise_()
 
     def setup_shortcuts(self):
-        QAction(self, shortcut=QKeySequence("Ctrl+T"), triggered=lambda: self.add_new_tab())
-        QAction(self, shortcut=QKeySequence("Ctrl+W"), triggered=lambda: self.close_tab(self.tab_bar.currentIndex()))
-        QAction(self, shortcut=QKeySequence("Ctrl+R"), triggered=self.reload_page)
-        QAction(self, shortcut=QKeySequence("F5"), triggered=self.reload_page)
-        QAction(self, shortcut=QKeySequence("Ctrl+L"), triggered=lambda: (self.url_bar.setFocus(), self.url_bar.selectAll()))
+        pass
 
-    def add_new_tab(self, url_str: str | None = None, label: str = "Nueva Pestaña"):
+    def add_new_tab(self, url_str: str = "") -> QWebEngineView:
         view = QWebEngineView()
-        page = QWebEnginePage(self.profile, view)
-        view.setPage(page)
+        view.setPage(view.page())
 
-        view.urlChanged.connect(lambda qurl: self.on_url_changed(qurl, view))
-        view.loadProgress.connect(self.on_load_progress)
-        view.loadFinished.connect(lambda ok: self.on_load_finished(ok, view))
-
-        self.views.append(view)
+        tab_idx = self.tab_bar.addTab("Nueva Pestaña")
         stack_idx = self.stack.addWidget(view)
-        tab_idx = self.tab_bar.addTab(label)
+        self.views.append(view)
+
+        view.urlChanged.connect(lambda qurl, v=view: self.on_url_changed(qurl, v))
+        view.loadProgress.connect(self.on_load_progress)
+        view.loadFinished.connect(lambda ok, v=view: self.on_load_finished(ok, v))
 
         if url_str:
             view.load(QUrl(url_str))
@@ -657,7 +812,7 @@ class AegisBrowserWindow(QMainWindow):
         return view
 
     def load_ntp(self, view: QWebEngineView):
-        t = THEMES.get(self.current_theme_name, THEMES["Cyber Dark"])
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
         html = get_clean_ntp_html(t["ntp_class"])
         view.setHtml(html, QUrl("aegis://start"))
 
@@ -680,6 +835,8 @@ class AegisBrowserWindow(QMainWindow):
         return None
 
     def on_tab_changed(self, index: int):
+        if self.shields_popup.isVisible():
+            self.shields_popup.hide()
         if 0 <= index < len(self.views):
             self.stack.setCurrentIndex(index)
             view = self.views[index]
@@ -730,7 +887,7 @@ class AegisBrowserWindow(QMainWindow):
         if progress < 100:
             self.progress_bar.show()
             self.progress_bar.setValue(progress)
-            # Inyección anticipada de CSS cosmético anti-anuncios al 50% de carga
+            # Inyección anticipada de CSS cosmético anti-anuncios
             v = self.current_view()
             if v and v.url().toString() not in ("aegis://start", "about:blank"):
                 css = SHIELDS_CORE.get_cosmetic_css(v.url().toString())
@@ -763,7 +920,7 @@ class AegisBrowserWindow(QMainWindow):
             self.tab_bar.setTabText(idx, display_title)
 
         if ok and current_url not in ("aegis://start", "about:blank"):
-            # Inyección cosmética de Rust (Oculta DuckDuckGo ads, YouTube ads, etc.)
+            # Inyección de CSS cosmético
             css = SHIELDS_CORE.get_cosmetic_css(current_url)
             if css:
                 inject_css = f"""
@@ -781,20 +938,18 @@ class AegisBrowserWindow(QMainWindow):
                 """
                 view.page().runJavaScript(inject_css)
 
-            # Inyección de scriptlets defusers (Anti-adblock bypass, skip videos, skip popups)
+            # Inyección de defusers JavaScript
             js = SHIELDS_CORE.get_injected_scripts(current_url)
             if js:
                 view.page().runJavaScript(js)
 
     def on_shield_block(self):
         self.shield_pill.setText(f"🛡️ {SHIELDS_CORE.total_blocked}")
+        if hasattr(self, "shields_popup") and self.shields_popup.isVisible():
+            self.shields_popup.lbl_count.setText(str(SHIELDS_CORE.total_blocked))
 
-    def open_shields_panel(self):
-        dlg = AegisShieldsDialog(self, self.interceptor)
-        dlg.exec()
-
-# ── 9. Plantilla HTML Autocontenida (Reloj Vivo, SVG Nítido, Cero Bugs) ──────
-def get_clean_ntp_html(theme_class: str = "theme-cyber") -> str:
+# ── 9. Plantilla HTML de Nueva Pestaña (Estrictamente 4 Colores) ──────────────
+def get_clean_ntp_html(theme_class: str = "theme-dark") -> str:
     return f"""<!DOCTYPE html>
 <html lang="es" class="{theme_class}">
 <head>
@@ -802,37 +957,19 @@ def get_clean_ntp_html(theme_class: str = "theme-cyber") -> str:
   <title>Aegis</title>
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    :root {{
-      --bg: #090d14;
+    
+    :root, .theme-dark {{
+      --bg: #0d1117;
+      --surface: #161b22;
       --text: #f0f6fc;
-      --muted: #8b949e;
-      --accent: #38bdf8;
-      --card-bg: rgba(255, 255, 255, 0.03);
-      --card-border: rgba(255, 255, 255, 0.07);
+      --accent: #388bfd;
     }}
-    .theme-midnight {{
-      --bg: #090a12;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --accent: #818cf8;
-      --card-bg: rgba(129, 140, 248, 0.04);
-      --card-border: rgba(129, 140, 248, 0.12);
-    }}
-    .theme-oled {{
-      --bg: #000000;
-      --text: #ffffff;
-      --muted: #737373;
-      --accent: #10b981;
-      --card-bg: #0a0a0a;
-      --card-border: #1a1a1a;
-    }}
+    
     .theme-light {{
-      --bg: #f8fafc;
-      --text: #0f172a;
-      --muted: #64748b;
-      --accent: #0284c7;
-      --card-bg: #ffffff;
-      --card-border: rgba(0, 0, 0, 0.08);
+      --bg: #f6f8fa;
+      --surface: #ffffff;
+      --text: #1f2328;
+      --accent: #0969da;
     }}
 
     body {{
@@ -846,7 +983,7 @@ def get_clean_ntp_html(theme_class: str = "theme-cyber") -> str:
       justify-content: center;
       padding: 2rem;
       user-select: none;
-      transition: background 0.3s ease, color 0.3s ease;
+      transition: background 0.25s ease, color 0.25s ease;
     }}
 
     .hero {{
@@ -863,11 +1000,11 @@ def get_clean_ntp_html(theme_class: str = "theme-cyber") -> str:
       margin-bottom: 1.5rem;
     }}
     .brand-logo {{
-      width: 36px;
-      height: 36px;
+      width: 38px;
+      height: 38px;
     }}
     .brand-name {{
-      font-size: 1.75rem;
+      font-size: 1.8rem;
       font-weight: 700;
       letter-spacing: -0.5px;
       color: var(--text);
@@ -883,7 +1020,8 @@ def get_clean_ntp_html(theme_class: str = "theme-cyber") -> str:
     }}
     .date {{
       font-size: 0.95rem;
-      color: var(--muted);
+      color: var(--text);
+      opacity: 0.65;
       font-weight: 400;
       margin-bottom: 2.25rem;
       letter-spacing: 0.2px;
@@ -901,20 +1039,19 @@ def get_clean_ntp_html(theme_class: str = "theme-cyber") -> str:
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       text-decoration: none;
       color: var(--text);
-      font-size: 0.8rem;
+      font-size: 0.82rem;
       font-weight: 500;
       padding: 12px 16px;
       border-radius: 12px;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
+      background: var(--surface);
+      border: 1px solid rgba(128, 128, 128, 0.15);
       transition: all 0.2s ease;
-      min-width: 80px;
+      min-width: 82px;
     }}
     .shortcut-card:hover {{
-      background: rgba(255, 255, 255, 0.08);
       border-color: var(--accent);
       transform: translateY(-2px);
     }}
@@ -929,14 +1066,15 @@ def get_clean_ntp_html(theme_class: str = "theme-cyber") -> str:
       align-items: center;
       gap: 8px;
       font-size: 0.75rem;
-      color: var(--muted);
+      color: var(--text);
+      opacity: 0.55;
     }}
     .shield-dot {{
       width: 7px;
       height: 7px;
-      background: #10b981;
+      background: var(--accent);
       border-radius: 50%;
-      box-shadow: 0 0 8px #10b981;
+      box-shadow: 0 0 8px var(--accent);
     }}
   </style>
 </head>
@@ -944,15 +1082,9 @@ def get_clean_ntp_html(theme_class: str = "theme-cyber") -> str:
   <main class="hero">
     <div class="brand-header">
       <svg class="brand-logo" viewBox="0 0 100 100" fill="none">
-        <path d="M50 5 L88 22 V50 C88 74 50 95 50 95 C50 95 12 74 12 50 V22 Z" fill="url(#shield_grad)"/>
-        <path d="M50 14 L80 27 V50 C80 69 50 86 50 86 C50 86 20 69 20 50 V27 Z" fill="#090d14"/>
-        <path d="M42 50 L48 56 L62 42" stroke="#10b981" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-        <defs>
-          <linearGradient id="shield_grad" x1="12" y1="5" x2="88" y2="95">
-            <stop stop-color="#38bdf8"/>
-            <stop offset="1" stop-color="#818cf8"/>
-          </linearGradient>
-        </defs>
+        <path d="M50 5 L88 22 V50 C88 74 50 95 50 95 C50 95 12 74 12 50 V22 Z" fill="var(--accent)"/>
+        <path d="M50 14 L80 27 V50 C80 69 50 86 50 86 C50 86 20 69 20 50 V27 Z" fill="var(--bg)"/>
+        <path d="M42 50 L48 56 L62 42" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <div class="brand-name">Aegis</div>
     </div>
@@ -1014,11 +1146,11 @@ def get_clean_ntp_html(theme_class: str = "theme-cyber") -> str:
 </html>
 """
 
-# ── 10. Punto de Entrada ──────────────────────────────────────────────────────
+# ── 10. Punto de Entrada Principal ────────────────────────────────────────────
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Aegis")
-    app.setApplicationVersion("1.3.0")
+    app.setApplicationVersion("1.3.1")
 
     window = AegisBrowserWindow()
     window.show()
