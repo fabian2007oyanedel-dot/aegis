@@ -325,6 +325,238 @@ def ensure_builtin_userscripts(scripts_dir: Path):
     setInterval(zap, 2000);
 })();
 """, encoding="utf-8")
+
+        timer_bypass_script = scripts_dir / "aegis_timer_bypass.js"
+        if not timer_bypass_script.exists():
+            timer_bypass_script.write_text(r"""// ==UserScript==
+// @name         Aegis Fast Timer & Shortener Bypass
+// @description  Salto instantáneo de temporizadores y acortadores (CurseForge, Mega, Adf.ly, Linkvertise, Sub2Unlock, Mediafire, etc.)
+// @match        *://*/*
+// @run-at       document-start
+// ==/UserScript==
+(function() {
+    'use strict';
+    if (window._aegisBypassLoaded) return;
+    window._aegisBypassLoaded = true;
+
+    function notifyBypass(serviceName) {
+        try {
+            console.log('[Aegis Bypass] Salto de espera activado en: ' + serviceName);
+            const badge = document.createElement('div');
+            badge.id = 'aegis-bypass-badge';
+            badge.style.cssText = 'position:fixed; bottom:20px; right:20px; background:#161b22; color:#58a6ff; border:1px solid #388bfd; border-radius:8px; padding:10px 16px; font-family:-apple-system,sans-serif; font-size:12px; font-weight:600; box-shadow:0 8px 24px rgba(0,0,0,0.5); z-index:2147483647; display:flex; align-items:center; gap:8px; pointer-events:none; transition:opacity 0.4s ease;';
+            badge.innerHTML = '<span style="color:#2ea043; font-size:14px;">⚡</span> Aegis Bypass: Salto de espera en <strong>' + serviceName + '</strong>';
+            (document.body || document.documentElement).appendChild(badge);
+            setTimeout(() => { badge.style.opacity = '0'; setTimeout(() => badge.remove(), 400); }, 2500);
+        } catch(e) {}
+    }
+
+    const host = window.location.hostname.toLowerCase();
+    const path = window.location.pathname.toLowerCase();
+
+    // ── 1. CurseForge (salto de espera de 5s a 0s) ───────────────────────────
+    if (host.includes('curseforge.com')) {
+        function checkCurseForge() {
+            if (path.includes('/download') || path.includes('/files/')) {
+                const directLink = document.querySelector('a.download-link, a[href*="edge.forgecdn.net"], a[href*="media.forgecdn.net"], .download-countdown a, a[data-action="download-link"]');
+                if (directLink && directLink.href && !directLink._aegisClicked) {
+                    directLink._aegisClicked = true;
+                    notifyBypass('CurseForge');
+                    window.location.assign(directLink.href);
+                    return;
+                }
+                const cd = document.querySelector('.download-countdown, [class*="countdown"]');
+                if (cd) {
+                    const links = cd.querySelectorAll('a');
+                    for (const l of links) {
+                        if (l.href && !l._aegisClicked) {
+                            l._aegisClicked = true;
+                            notifyBypass('CurseForge');
+                            window.location.assign(l.href);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        checkCurseForge();
+        setInterval(checkCurseForge, 200);
+    }
+
+    // ── 2. Adf.ly / Ay.gy / J.gs / Q.gs (decodificación directa ysmm) ─────────
+    if (host.includes('adf.ly') || host.includes('ay.gy') || host.includes('j.gs') || host.includes('q.gs')) {
+        function decodeAdfly(ysmm) {
+            try {
+                let left = '', right = '';
+                for (let i = 0; i < ysmm.length; i++) {
+                    if (i % 2 === 0) left += ysmm.charAt(i);
+                    else right = ysmm.charAt(i) + right;
+                }
+                let data = (left + right).split('');
+                for (let i = 0; i < data.length; i++) {
+                    if (/\d/.test(data[i])) {
+                        for (let j = i + 1; j < data.length; j++) {
+                            if (/\d/.test(data[j])) {
+                                let u = Number(data[i]) ^ Number(data[j]);
+                                if (u < 10) data[i] = u.toString();
+                                i = j;
+                                break;
+                            }
+                        }
+                    }
+                }
+                data = data.join('');
+                let decoded = atob(data.slice(16, -16));
+                let dest = decoded.indexOf('http');
+                if (dest !== -1) return decoded.substring(dest);
+                return decoded;
+            } catch(e) { return null; }
+        }
+
+        function checkAdfly() {
+            if (typeof window.ysmm === 'string') {
+                const dest = decodeAdfly(window.ysmm);
+                if (dest && dest.startsWith('http')) {
+                    notifyBypass('Adf.ly');
+                    window.location.replace(dest);
+                    return;
+                }
+            }
+            const scripts = document.getElementsByTagName('script');
+            for (let s of scripts) {
+                const text = s.textContent || '';
+                const m = text.match(/var\s+ysmm\s*=\s*['"]([^'"]+)['"]/);
+                if (m) {
+                    const dest = decodeAdfly(m[1]);
+                    if (dest && dest.startsWith('http')) {
+                        notifyBypass('Adf.ly');
+                        window.location.replace(dest);
+                        return;
+                    }
+                }
+            }
+            const skipBtn = document.querySelector('#skip_buuton, #skip_ad_button, .skip-btn, #skip_button a');
+            if (skipBtn && !skipBtn._aegisClicked) {
+                skipBtn._aegisClicked = true;
+                notifyBypass('Adf.ly (Botón Skip)');
+                skipBtn.click();
+            }
+        }
+        checkAdfly();
+        setInterval(checkAdfly, 250);
+    }
+
+    // ── 3. Mega.nz (cierre de modal de app y descarga directa en navegador) ───
+    if (host.includes('mega.nz')) {
+        function checkMega() {
+            const dismissBtns = document.querySelectorAll('.mega-dialog .close, .dialog-close, button.close, .modal-close, .app-overlay-close');
+            dismissBtns.forEach(b => {
+                if (!b._aegisClicked) {
+                    b._aegisClicked = true;
+                    b.click();
+                }
+            });
+            const dlBtn = document.querySelector('.download-file, button.download, .btn-download-browser, .mega-button.download-btn');
+            if (dlBtn && !dlBtn.disabled && !dlBtn._aegisBypassed) {
+                dlBtn._aegisBypassed = true;
+                notifyBypass('MEGA Web Download');
+            }
+        }
+        setInterval(checkMega, 600);
+    }
+
+    // ── 4. AdFoc.us ──────────────────────────────────────────────────────────
+    if (host.includes('adfoc.us')) {
+        function checkAdfocus() {
+            const skip = document.querySelector('.skip, #showSkip a');
+            if (skip && skip.href && !skip._aegisClicked) {
+                skip._aegisClicked = true;
+                notifyBypass('AdFoc.us');
+                window.location.assign(skip.href);
+            }
+            const m = document.documentElement.innerHTML.match(/click_url\s*=\s*['"]([^'"]+)['"]/);
+            if (m && m[1]) {
+                notifyBypass('AdFoc.us');
+                window.location.assign(m[1]);
+            }
+        }
+        checkAdfocus();
+        setInterval(checkAdfocus, 300);
+    }
+
+    // ── 5. Mediafire ─────────────────────────────────────────────────────────
+    if (host.includes('mediafire.com')) {
+        function checkMediafire() {
+            const dlBtn = document.querySelector('#downloadButton, a.popsok, .input.popsok');
+            if (dlBtn && dlBtn.href && !dlBtn._aegisClicked) {
+                dlBtn._aegisClicked = true;
+                notifyBypass('Mediafire Direct');
+                dlBtn.click();
+            }
+        }
+        setInterval(checkMediafire, 500);
+    }
+
+    // ── 6. Linkvertise & Acortadores con Bloqueos Sociales ───────────────────
+    if (host.includes('linkvertise.com') || host.includes('link-to.net') || host.includes('up-to-down.net') || host.includes('sub2unlock.com') || host.includes('boost.ink') || host.includes('rekonise.com')) {
+        function checkShorteners() {
+            if (typeof window.countdown === 'number') window.countdown = 0;
+            if (typeof window.counter === 'number') window.counter = 0;
+            if (typeof window.seconds === 'number') window.seconds = 0;
+            if (typeof window.waitTime === 'number') window.waitTime = 0;
+
+            const targetLinks = document.querySelectorAll('a[data-url], a[data-target], a[data-href], a.target-link, a.unlock-link');
+            for (let l of targetLinks) {
+                const dest = l.getAttribute('data-url') || l.getAttribute('data-target') || l.getAttribute('data-href');
+                if (dest && dest.startsWith('http') && !l._aegisClicked) {
+                    l._aegisClicked = true;
+                    notifyBypass('Shortener Direct');
+                    window.location.assign(dest);
+                    return;
+                }
+            }
+
+            const freeAccess = document.querySelector('.free-access-btn, button[class*="free-access"], .btn-free, #btn-free');
+            if (freeAccess && !freeAccess._aegisClicked) {
+                freeAccess._aegisClicked = true;
+                freeAccess.click();
+            }
+        }
+        setInterval(checkShorteners, 400);
+    }
+
+    // ── 7. Acelerador Universal de Temporizadores de Descarga ─────────────────
+    function universalTimerBypass() {
+        const timerSelectors = [
+            '#countdown', '#timer', '.countdown', '.timer', '#download-timer',
+            '#downloadTimer', '#wait-time', '#seconds', '#counter',
+            '.download-countdown', '[data-timer]', '[id*="countdown"]', '[id*="timer"]'
+        ];
+        timerSelectors.forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => {
+                if (el && el.innerText && /\d+/.test(el.innerText)) {
+                    el.innerText = '0';
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+        });
+
+        const disabledButtons = document.querySelectorAll('button:disabled, a.disabled, input[type="submit"]:disabled, .btn-disabled');
+        disabledButtons.forEach(btn => {
+            const txt = (btn.innerText || btn.value || '').toLowerCase();
+            if (txt.includes('download') || txt.includes('descargar') || txt.includes('get link') || txt.includes('continuar')) {
+                btn.removeAttribute('disabled');
+                btn.classList.remove('disabled');
+                btn.classList.remove('btn-disabled');
+                btn.style.pointerEvents = 'auto';
+                btn.style.opacity = '1';
+            }
+        });
+    }
+
+    setInterval(universalTimerBypass, 500);
+})();
+""", encoding="utf-8")
     except Exception:
         pass
 
@@ -1323,7 +1555,9 @@ class AegisShieldsPopup(QFrame):
         adv_layout.addWidget(self.cb_video)
 
         self.cb_countdown = QCheckBox("Bypass de temporizadores y acortadores")
-        self.cb_countdown.setChecked(True)
+        is_bypass = self.parent_win.config.get("bypass_countdown", True) if self.parent_win else True
+        self.cb_countdown.setChecked(is_bypass)
+        self.cb_countdown.toggled.connect(self.toggle_countdown_bypass)
         adv_layout.addWidget(self.cb_countdown)
 
         self.advanced_container.hide()
@@ -1354,6 +1588,13 @@ class AegisShieldsPopup(QFrame):
     def toggle_network(self, checked: bool):
         if self.interceptor:
             self.interceptor.enabled = checked
+
+    def toggle_countdown_bypass(self, checked: bool):
+        if self.parent_win:
+            self.parent_win.config["bypass_countdown"] = checked
+            self.parent_win.save_config()
+            self.parent_win.load_userscripts()
+            self.parent_win.show_toast(f"Bypass de temporizadores: {'Activado' if checked else 'Desactivado'}")
 
     def update_site(self, raw_host: str, count: int):
         # Detección inteligente para que nunca muestre "start" ni nombres raros
@@ -3066,12 +3307,12 @@ class AegisSidebarWidget(QFrame):
 
         top_layout.addStretch()
 
-        btn_close = QPushButton("✕")
-        btn_close.setProperty("class", "sidebar-close-btn")
-        btn_close.setFixedSize(24, 24)
-        btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_close.clicked.connect(lambda: self.parent_win.toggle_sidebar())
-        top_layout.addWidget(btn_close)
+        self.btn_close = QPushButton("✕")
+        self.btn_close.setProperty("class", "sidebar-close-btn")
+        self.btn_close.setFixedSize(24, 24)
+        self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_close.clicked.connect(lambda: self.parent_win.toggle_sidebar())
+        top_layout.addWidget(self.btn_close)
 
         main_layout.addWidget(top_bar)
 
@@ -3946,14 +4187,21 @@ class AegisBrowserWindow(QMainWindow):
         try:
             ensure_builtin_userscripts(USERSCRIPTS_DIR)
             USERSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+            self.profile.scripts().clear()
             for s_file in USERSCRIPTS_DIR.glob("*.js"):
+                if s_file.stem == "aegis_timer_bypass" and not self.config.get("bypass_countdown", True):
+                    continue
                 content = s_file.read_text(encoding="utf-8")
                 s = QWebEngineScript()
                 s.setName(s_file.stem)
                 s.setSourceCode(content)
-                s.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+                if s_file.stem in ("aegis_timer_bypass", "ublock_lite"):
+                    s.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+                    s.setRunsOnSubFrames(True)
+                else:
+                    s.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+                    s.setRunsOnSubFrames(False)
                 s.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
-                s.setRunsOnSubFrames(False)
                 self.profile.scripts().insert(s)
         except Exception:
             pass
@@ -5652,6 +5900,13 @@ class AegisBrowserWindow(QMainWindow):
         if view == self.current_view():
             self.url_bar.setText("aegis://extensions")
 
+    def toggle_tab_orientation(self):
+        cur = self.config.get("tab_position", "horizontal")
+        new_pos = "vertical" if cur == "horizontal" else "horizontal"
+        self.config["tab_position"] = new_pos
+        self.save_config()
+        self.update_tab_layout()
+
     def update_tab_layout(self):
         is_vert = self.config.get("tab_position") == "vertical"
         if is_vert:
@@ -5948,6 +6203,8 @@ class AegisBrowserWindow(QMainWindow):
                         self.interceptor.enabled = bool(val)
                     elif k == "search_engine":
                         self.update_search_engine_ui()
+                    elif k == "bypass_countdown":
+                        self.load_userscripts()
                     self.load_settings(view)
                     return
                 elif "open_file" in q:
@@ -7337,6 +7594,8 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
     webrtc_on = "selected" if config.get("webrtc_protection", True) else ""
     webrtc_off = "" if config.get("webrtc_protection", True) else "selected"
 
+    bypass_on = "selected" if config.get("bypass_countdown", True) else ""
+    bypass_off = "" if config.get("bypass_countdown", True) else "selected"
     fp_on = "selected" if config.get("fingerprint_protection", True) else ""
     fp_off = "" if config.get("fingerprint_protection", True) else "selected"
 
@@ -7605,6 +7864,16 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
         <select onchange="updateSetting('fingerprint_protection', this.value === 'true')">
           <option value="true" {fp_on}>Activado</option>
           <option value="false" {fp_off}>Desactivado</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Bypass de temporizadores y acortadores</span>
+          <span class="setting-desc">Salto automático e instantáneo de tiempos de espera en descargas y enlaces (CurseForge, Mega, Adf.ly, Linkvertise, Mediafire, etc.)</span>
+        </div>
+        <select onchange="updateSetting('bypass_countdown', this.value === 'true')">
+          <option value="true" {bypass_on}>Activado (Recomendado)</option>
+          <option value="false" {bypass_off}>Desactivado</option>
         </select>
       </div>
       <div class="setting-row">
@@ -8410,6 +8679,14 @@ def get_extensions_html(theme_class: str = "theme-dark", chrome_extensions: list
         <div class="ext-info">
           <span class="ext-name">Aegis Cosmetic Engine</span>
           <span class="ext-sub">Filtrado cosmético CSS inmediato inyectado en páginas</span>
+        </div>
+        <span style="font-size: 0.8rem; color: #2ea043; font-weight: 600;">Activo</span>
+      </div>
+      <div class="ext-item">
+        <span style="font-size: 1.5rem;">⚡</span>
+        <div class="ext-info">
+          <span class="ext-name">Aegis Fast Timer & Shortener Bypass</span>
+          <span class="ext-sub">Salto automático de temporizadores de espera y countdown en CurseForge, Mega, Adf.ly, Linkvertise, Mediafire y servidores de descarga</span>
         </div>
         <span style="font-size: 0.8rem; color: #2ea043; font-weight: 600;">Activo</span>
       </div>
