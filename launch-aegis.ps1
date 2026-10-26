@@ -6,7 +6,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $CompiledExe = Join-Path $ScriptDir "dist\Aegis\Aegis.exe"
 
 if (Test-Path $CompiledExe) {
-    Write-Host "[>] Iniciando binario nativo Aegis.exe desde dist\Aegis..." -ForegroundColor Cyan
+    Write-Host "[>] Iniciando binario nativo compilado Aegis.exe..." -ForegroundColor Cyan
     Start-Process $CompiledExe -WorkingDirectory (Split-Path -Parent $CompiledExe)
     Write-Host "[OK] Aegis Browser ejecutandose." -ForegroundColor Green
     exit 0

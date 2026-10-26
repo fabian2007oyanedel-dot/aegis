@@ -87,21 +87,55 @@ def find_widevine_cdm() -> tuple[str | None, str | None]:
                 return str(dll).replace("\\", "/"), version
     return None, None
 
-_widevine_dll, _widevine_ver = find_widevine_cdm()
-_widevine_flags = f'--widevine-cdm-path="{_widevine_dll}" --widevine-cdm-version="{_widevine_ver}" ' if _widevine_dll else ""
+# ── Configuración de Entorno para QtWebEngine (Standalone y Python) ───────────
+if getattr(sys, "frozen", False):
+    _exe_dir = Path(sys.executable).resolve().parent
+    _internal_qt = _exe_dir / "_internal" / "PyQt6" / "Qt6"
+    _proc_candidates = [
+        _internal_qt / "bin" / "QtWebEngineProcess.exe",
+        _internal_qt / "QtWebEngineProcess.exe",
+        _exe_dir / "QtWebEngineProcess.exe",
+        _exe_dir / "PyQt6" / "Qt6" / "bin" / "QtWebEngineProcess.exe"
+    ]
+    for _p in _proc_candidates:
+        if _p.exists():
+            os.environ["QTWEBENGINEPROCESS_PATH"] = str(_p)
+            break
+
+    _res_candidates = [
+        _internal_qt / "resources",
+        _exe_dir / "resources",
+        _exe_dir / "PyQt6" / "Qt6" / "resources"
+    ]
+    for _r in _res_candidates:
+        if _r.exists():
+            os.environ["QTWEBENGINE_RESOURCES_PATH"] = str(_r)
+            break
+
+    _loc_candidates = [
+        _internal_qt / "translations",
+        _exe_dir / "translations",
+        _exe_dir / "PyQt6" / "Qt6" / "translations"
+    ]
+    for _l in _loc_candidates:
+        if _l.exists():
+            os.environ["QTWEBENGINE_LOCALES_PATH"] = str(_l)
+            break
+
+    _plug_candidates = [
+        _internal_qt / "plugins",
+        _exe_dir / "plugins",
+        _exe_dir / "PyQt6" / "Qt6" / "plugins"
+    ]
+    for _pl in _plug_candidates:
+        if _pl.exists():
+            os.environ["QT_PLUGIN_PATH"] = str(_pl)
+            break
 
 os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
-    _widevine_flags +
-    "--enable-gpu-rasterization "
-    "--enable-zero-copy "
-    "--ignore-gpu-blocklist "
-    "--enable-accelerated-video-decode "
-    "--enable-accelerated-mjpeg-decode "
-    "--enable-features=VaapiVideoDecoder,D3D11VideoDecoder,HardwareMediaKeyHandling,ParallelDownloading,CanvasOopRasterization,WebContentsDiscarding,IntensiveWakeUpThrottling,BlinkMemorySaver "
+    "--disable-features=AudioServiceSandbox,Translate,OptimizationHints,MediaRouter "
     "--autoplay-policy=no-user-gesture-required "
     "--enable-smooth-scrolling "
-    "--num-raster-threads=4 "
-    "--v8-cache-options=code "
     "--disable-breakpad "
     "--disable-telemetry "
     "--disable-sync "
@@ -110,7 +144,8 @@ os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
     "--disable-wake-on-wifi "
     "--disable-component-update "
     "--disable-client-side-phishing-detection "
-    "--disable-features=Translate,OptimizationHints,MediaRouter "
+    "--webrtc-ip-handling-policy=disable_non_proxied_udp "
+    "--force-webrtc-ip-handling-policy "
     "--js-flags=--expose-gc "
 )
 
@@ -688,32 +723,9 @@ def silent_background_memory_purge(force: bool = False):
 
     gc.collect()
     try:
-        my_pid = os.getpid()
-        child_pids = []
-        h_snap = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
-        if h_snap != wintypes.HANDLE(-1).value and h_snap != 0:
-            pe = PROCESSENTRY32()
-            pe.dwSize = ctypes.sizeof(pe)
-            if kernel32.Process32First(h_snap, ctypes.byref(pe)):
-                while True:
-                    if pe.th32ParentProcessID == my_pid:
-                        child_pids.append(pe.th32ProcessID)
-                    if not kernel32.Process32Next(h_snap, ctypes.byref(pe)):
-                        break
-            kernel32.CloseHandle(h_snap)
-
-        all_pids = [my_pid] + child_pids
-        for pid in all_pids:
-            if pid == my_pid:
-                h = kernel32.GetCurrentProcess()
-                close_needed = False
-            else:
-                h = kernel32.OpenProcess(0x1F0FFF, False, pid)
-                close_needed = True
-            if h:
-                psapi.EmptyWorkingSet(h)
-                if close_needed:
-                    kernel32.CloseHandle(h)
+        h = kernel32.GetCurrentProcess()
+        if h:
+            psapi.EmptyWorkingSet(h)
     except Exception:
         pass
 
@@ -3663,6 +3675,10 @@ class AegisBrowserWindow(QMainWindow):
         self.bookmarks_bar.refresh_bookmarks()
         self.update_omnibox_suggestions()
 
+    def open_find_bar(self):
+        if hasattr(self, 'find_bar'):
+            self.find_bar.show_find()
+
     def toggle_bookmarks_bar(self):
         show = not self.bookmarks_bar.isVisible()
         self.bookmarks_bar.setVisible(show)
@@ -5186,6 +5202,13 @@ class AegisBrowserWindow(QMainWindow):
             pass
 
     def close_tab(self, index: int):
+        if isinstance(index, QWebEngineView):
+            if index in self.views:
+                index = self.views.index(index)
+            else:
+                return
+        if not (0 <= index < len(self.views)):
+            return
         if self.tab_bar.count() > 1:
             view = self.views[index]
             u = view.url().toString()
@@ -7371,15 +7394,42 @@ def get_extensions_html(theme_class: str = "theme-dark", chrome_extensions: list
 """
 
 # ── 13. Punto de Entrada Principal ────────────────────────────────────────────
+def log_crash(msg: str):
+    log_file = Path.home() / ".aegis_browser_error.log"
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+    except Exception:
+        pass
+
+def excepthook(exc_type, exc_value, exc_tb):
+    import traceback
+    tb = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+    log_crash(f"CRITICAL UNHANDLED EXCEPTION:\n{tb}")
+    sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+sys.excepthook = excepthook
+
 def main():
-    app = QApplication(sys.argv)
-    app.setApplicationName("Aegis")
-    app.setApplicationVersion("1.3.4")
+    try:
+        app = QApplication(sys.argv)
+        app.setApplicationName("Aegis")
+        app.setApplicationVersion("1.3.5")
 
-    window = AegisBrowserWindow()
-    window.show()
+        window = AegisBrowserWindow()
+        window.show()
 
-    sys.exit(app.exec())
+        sys.exit(app.exec())
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        log_crash(f"Fatal startup error:\n{tb}")
+        try:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(None, "Error al iniciar Aegis Browser", f"Ocurrió un error al iniciar el navegador:\n{e}\n\nRevisa el archivo de log en: {Path.home() / '.aegis_browser_error.log'}")
+        except Exception:
+            pass
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
