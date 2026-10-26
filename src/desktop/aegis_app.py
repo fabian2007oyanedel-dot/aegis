@@ -24,6 +24,7 @@ import time
 import gc
 import ctypes
 import base64
+import subprocess
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote
 from ctypes import wintypes
@@ -55,19 +56,22 @@ os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QProgressBar, QTabBar, QStackedWidget,
-    QLabel, QCheckBox, QFrame, QAbstractButton
+    QLabel, QCheckBox, QFrame, QAbstractButton, QSizePolicy
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
-    QWebEngineProfile, QWebEngineSettings, QWebEngineUrlRequestInterceptor
+    QWebEngineProfile, QWebEngineSettings, QWebEngineUrlRequestInterceptor,
+    QWebEngineDownloadRequest, QWebEngineScript
 )
 from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer, QByteArray, QBuffer, QIODevice, QSize
-from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QIcon, QPixmap
+from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QIcon, QPixmap, QShortcut, QKeySequence
 from PyQt6.QtSvg import QSvgRenderer
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_FILE = Path.home() / ".aegis_browser_config.json"
 HISTORY_FILE = Path.home() / ".aegis_browser_history.json"
+DOWNLOADS_FILE = Path.home() / ".aegis_browser_downloads.json"
+USERSCRIPTS_DIR = Path.home() / ".aegis_userscripts"
 
 # ── 2. Gestor de Sitios Frecuentes e Historial Real ───────────────────────────
 class HistoryManager:
@@ -126,9 +130,34 @@ class HistoryManager:
                 if clean_title != domain and len(clean_title) < 25:
                     self.data["frequent"][domain]["title"] = clean_title
 
+            # Historial cronológico completo
+            if "history" not in self.data:
+                self.data["history"] = []
+            self.data["history"].insert(0, {
+                "domain": domain,
+                "title": clean_title,
+                "url": url_str,
+                "time": time.time()
+            })
+            if len(self.data["history"]) > 500:
+                self.data["history"] = self.data["history"][:500]
+
             self.save()
         except Exception:
             pass
+
+    def get_history(self, limit: int = 150) -> list:
+        return self.data.get("history", [])[:limit]
+
+    def clear_history(self):
+        self.data["history"] = []
+        self.data["frequent"] = {}
+        self.save()
+
+    def remove_history_item(self, url: str):
+        if "history" in self.data:
+            self.data["history"] = [h for h in self.data["history"] if h.get("url") != url]
+            self.save()
 
     def update_favicon(self, domain: str, icon_data: str):
         if not domain or not icon_data:
@@ -208,6 +237,42 @@ class HistoryManager:
             return defaults
 
         return result
+
+# ── 2.1 Gestor de Descargas Nativas ───────────────────────────────────────────
+class DownloadsManager:
+    def __init__(self):
+        self.downloads = []
+        self.load()
+
+    def load(self):
+        if DOWNLOADS_FILE.exists():
+            try:
+                self.downloads = json.loads(DOWNLOADS_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                self.downloads = []
+
+    def save(self):
+        try:
+            DOWNLOADS_FILE.write_text(json.dumps(self.downloads, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
+
+    def add(self, item: dict):
+        self.downloads.insert(0, item)
+        if len(self.downloads) > 100:
+            self.downloads = self.downloads[:100]
+        self.save()
+
+    def update(self, item_id: str, updates: dict):
+        for d in self.downloads:
+            if d.get("id") == item_id:
+                d.update(updates)
+                break
+        self.save()
+
+    def clear(self):
+        self.downloads = []
+        self.save()
 
 # ── 3. Optimizador Silencioso en Segundo Plano (Sin placebo ni botones falsos) ─
 TH32CS_SNAPPROCESS = 0x00000002
@@ -294,14 +359,9 @@ def hex_to_rgb(h: str) -> str:
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"{r}, {g}, {b}"
 
-def create_shield_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
-    """Genera un icono de escudo vectorial nítido sin emojis medievales de Windows."""
+def svg_to_icon(svg_str: str, size: int = 16) -> QIcon:
     try:
-        svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          <path d="m9 12 2 2 4-4"/>
-        </svg>"""
-        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        renderer = QSvgRenderer(QByteArray(svg_str.encode("utf-8")))
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
@@ -310,6 +370,42 @@ def create_shield_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
         return QIcon(pixmap)
     except Exception:
         return QIcon()
+
+def create_shield_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
+    """Genera un icono de escudo vectorial nítido sin emojis medievales de Windows."""
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <path d="m9 12 2 2 4-4"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_settings_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_download_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_history_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 14 14"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_extension_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
 
 # ── 5. Soporte de Barra de Título Nativa Windows DWM ───────────────────────────
 def apply_windows_dark_title_bar(hwnd, dark: bool = True):
@@ -688,6 +784,151 @@ class AegisShieldsPopup(QFrame):
         self.setStyleSheet(qss)
         self.update()
 
+# ── 10.1 Menú Principal de la Aplicación (Estilo Brave ⋮ Frameless Dropdown) ───
+class AegisAppMenu(QFrame):
+    def __init__(self, parent=None):
+        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setObjectName("AegisAppMenu")
+        self.setFixedWidth(240)
+        self.parent_win = parent
+        self.init_ui()
+
+    def hideEvent(self, event):
+        if self.parent_win:
+            self.parent_win._last_app_menu_close_time = time.time()
+        super().hideEvent(event)
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(2)
+
+        def add_item(text: str, shortcut: str, callback):
+            btn = QPushButton()
+            btn.setProperty("class", "menu-item-btn")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            h_box = QHBoxLayout(btn)
+            h_box.setContentsMargins(10, 6, 10, 6)
+            h_box.setSpacing(8)
+
+            lbl_txt = QLabel(text)
+            lbl_txt.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            lbl_txt.setStyleSheet("background: transparent; border: none; font-size: 12.5px; font-weight: 500;")
+            h_box.addWidget(lbl_txt)
+            h_box.addStretch()
+
+            if shortcut:
+                lbl_sc = QLabel(shortcut)
+                lbl_sc.setProperty("class", "menu-shortcut-lbl")
+                lbl_sc.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+                h_box.addWidget(lbl_sc)
+
+            btn.clicked.connect(lambda: (self.hide(), callback()))
+            layout.addWidget(btn)
+            return btn
+
+        def add_separator():
+            sep = QFrame()
+            sep.setObjectName("MenuSeparator")
+            sep.setFixedHeight(1)
+            layout.addWidget(sep)
+
+        add_item("➕ Nueva pestaña", "Ctrl+T", lambda: self.parent_win.add_new_tab())
+        add_item("🗂️ Nueva ventana", "Ctrl+N", lambda: self.parent_win.open_new_window())
+        add_separator()
+        add_item("📥 Descargas", "Ctrl+J", lambda: self.parent_win.open_internal_page("aegis://downloads"))
+        add_item("🕒 Historial", "Ctrl+H", lambda: self.parent_win.open_internal_page("aegis://history"))
+        add_item("🧩 Extensiones", "Ctrl+Shift+E", lambda: self.parent_win.open_internal_page("aegis://extensions"))
+        add_separator()
+        add_item("⚙️ Configuración", "Alt+S", lambda: self.parent_win.open_internal_page("aegis://settings"))
+        add_separator()
+
+        # Fila de Zoom
+        zoom_widget = QWidget()
+        zoom_layout = QHBoxLayout(zoom_widget)
+        zoom_layout.setContentsMargins(10, 4, 10, 4)
+        zoom_layout.setSpacing(8)
+
+        lbl_zoom = QLabel("Zoom")
+        lbl_zoom.setStyleSheet("font-size: 12px; font-weight: 500;")
+        zoom_layout.addWidget(lbl_zoom)
+        zoom_layout.addStretch()
+
+        btn_zoom_out = QPushButton("−")
+        btn_zoom_out.setProperty("class", "zoom-btn")
+        btn_zoom_out.clicked.connect(lambda: self.parent_win.zoom_out())
+        zoom_layout.addWidget(btn_zoom_out)
+
+        self.lbl_zoom_val = QLabel("100%")
+        self.lbl_zoom_val.setObjectName("ZoomVal")
+        self.lbl_zoom_val.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        zoom_layout.addWidget(self.lbl_zoom_val)
+
+        btn_zoom_in = QPushButton("+")
+        btn_zoom_in.setProperty("class", "zoom-btn")
+        btn_zoom_in.clicked.connect(lambda: self.parent_win.zoom_in())
+        zoom_layout.addWidget(btn_zoom_in)
+
+        layout.addWidget(zoom_widget)
+        add_separator()
+
+        add_item("ℹ️ Acerca de Aegis v1.3.4", "", lambda: self.parent_win.open_internal_page("aegis://settings"))
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        qss = f"""
+            QFrame#AegisAppMenu {{
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 12px;
+            }}
+            QPushButton.menu-item-btn {{
+                background: transparent;
+                border: none;
+                border-radius: 6px;
+                color: {t['text']};
+                padding: 0;
+                min-height: 28px;
+            }}
+            QPushButton.menu-item-btn:hover {{
+                background-color: {t['bg']};
+                color: {t['accent']};
+            }}
+            QLabel.menu-shortcut-lbl {{
+                color: rgba({rgb_text}, 0.45);
+                font-size: 11px;
+                font-family: -apple-system, 'Segoe UI', monospace;
+                background: transparent;
+                border: none;
+            }}
+            QFrame#MenuSeparator {{
+                background-color: rgba({rgb_text}, 0.08);
+                border: none;
+                margin: 3px 6px;
+            }}
+            QPushButton.zoom-btn {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 4px;
+                color: {t['text']};
+                font-size: 13px;
+                font-weight: 700;
+                width: 24px;
+                height: 22px;
+            }}
+            QPushButton.zoom-btn:hover {{
+                border-color: {t['accent']};
+                color: {t['accent']};
+            }}
+            QLabel#ZoomVal {{
+                color: {t['text']};
+                font-size: 11.5px;
+                min-width: 38px;
+            }}
+        """
+        self.setStyleSheet(qss)
+        self.update()
+
 # ── 11. Ventana Principal de Aegis Browser ────────────────────────────────────
 class AegisBrowserWindow(QMainWindow):
     def __init__(self):
@@ -696,15 +937,18 @@ class AegisBrowserWindow(QMainWindow):
         self.resize(1340, 860)
 
         self._last_popup_close_time = 0.0
-        self.current_theme_name = self.load_saved_theme()
+        self._last_app_menu_close_time = 0.0
+        self.config = self.load_config()
+        self.current_theme_name = self.config.get("theme", "Oscuro")
 
-        # Gestor de historial real
+        # Gestores reales (Historial y Descargas Nativas)
         self.history_mgr = HistoryManager()
+        self.downloads_mgr = DownloadsManager()
 
         # Configurar Perfil Chromium
         self.profile = QWebEngineProfile.defaultProfile()
         self.profile.setHttpUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.3"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.4"
         )
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
@@ -714,16 +958,26 @@ class AegisBrowserWindow(QMainWindow):
         self.interceptor = AegisRequestInterceptor(self.on_shield_block)
         self.profile.setUrlRequestInterceptor(self.interceptor)
 
+        # Gestor de Descargas Nativas conectado a Chromium
+        self.profile.downloadRequested.connect(self.on_download_requested)
+
+        # Cargar scripts de usuario (UserScripts)
+        self.load_userscripts()
+
         self.views = []
         self.init_ui()
 
-        # Desplegable estilo Brave
+        # Menús flotantes (Escudos y Menú Principal ⋮ estilo Brave)
         self.shields_popup = AegisShieldsPopup(self, self.interceptor)
+        self.app_menu = AegisAppMenu(self)
+
+        # Atajos de teclado nativos
+        self.setup_shortcuts()
 
         # Aplicar tema inicial
         self.apply_theme(self.current_theme_name)
 
-        # Compactación silenciosa de memoria automática cada 90s (cero placebo, 100% transparente)
+        # Compactación silenciosa de memoria automática cada 90s
         self.auto_purge_timer = QTimer(self)
         self.auto_purge_timer.setInterval(90 * 1000)
         self.auto_purge_timer.timeout.connect(silent_background_memory_purge)
@@ -732,24 +986,151 @@ class AegisBrowserWindow(QMainWindow):
         # Abrir pestaña inicial
         self.add_new_tab()
 
-    def load_saved_theme(self) -> str:
+    def load_config(self) -> dict:
+        default_config = {
+            "theme": "Oscuro",
+            "tab_position": "horizontal",
+            "search_engine": "DuckDuckGo",
+            "shields_enabled": True,
+            "force_dark_mode": True
+        }
         if CONFIG_FILE.exists():
             try:
-                data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-                theme = data.get("theme", "Oscuro")
-                if theme in ("Oscuro", "Claro"):
-                    return theme
-                if "light" in theme.lower() or "claro" in theme.lower():
-                    return "Claro"
+                saved = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+                default_config.update(saved)
             except Exception:
                 pass
-        return "Oscuro"
+        return default_config
 
-    def save_theme(self, theme_name: str):
+    def save_config(self):
         try:
-            CONFIG_FILE.write_text(json.dumps({"theme": theme_name}, indent=2), encoding="utf-8")
+            CONFIG_FILE.write_text(json.dumps(self.config, indent=2, ensure_ascii=False), encoding="utf-8")
         except Exception:
             pass
+
+    def setup_shortcuts(self):
+        QShortcut(QKeySequence("Ctrl+T"), self, lambda: self.add_new_tab())
+        QShortcut(QKeySequence("Ctrl+W"), self, lambda: self.close_tab(self.tab_bar.currentIndex()))
+        QShortcut(QKeySequence("Ctrl+N"), self, self.open_new_window)
+        QShortcut(QKeySequence("Ctrl+J"), self, lambda: self.open_internal_page("aegis://downloads"))
+        QShortcut(QKeySequence("Ctrl+H"), self, lambda: self.open_internal_page("aegis://history"))
+        QShortcut(QKeySequence("Ctrl+Shift+E"), self, lambda: self.open_internal_page("aegis://extensions"))
+        QShortcut(QKeySequence("Alt+S"), self, lambda: self.open_internal_page("aegis://settings"))
+        QShortcut(QKeySequence("Ctrl+L"), self, lambda: (self.url_bar.setFocus(), self.url_bar.selectAll()))
+        QShortcut(QKeySequence("Ctrl+R"), self, self.reload_page)
+        QShortcut(QKeySequence("F5"), self, self.reload_page)
+        QShortcut(QKeySequence("Ctrl+Plus"), self, self.zoom_in)
+        QShortcut(QKeySequence("Ctrl+Equal"), self, self.zoom_in)
+        QShortcut(QKeySequence("Ctrl+Minus"), self, self.zoom_out)
+        QShortcut(QKeySequence("Ctrl+0"), self, self.zoom_reset)
+
+    def load_userscripts(self):
+        try:
+            USERSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+            for s_file in USERSCRIPTS_DIR.glob("*.js"):
+                content = s_file.read_text(encoding="utf-8")
+                s = QWebEngineScript()
+                s.setName(s_file.stem)
+                s.setSourceCode(content)
+                s.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+                s.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+                s.setRunsOnSubFrames(False)
+                self.profile.scripts().insert(s)
+        except Exception:
+            pass
+
+    def on_download_requested(self, download: QWebEngineDownloadRequest):
+        save_dir = Path.home() / "Downloads"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        filename = download.suggestedFileName() or "descarga"
+        download.setDownloadDirectory(str(save_dir))
+        download.setDownloadFileName(filename)
+        full_path = str(save_dir / filename)
+        download.accept()
+
+        download_id = str(int(time.time() * 1000))
+        item = {
+            "id": download_id,
+            "filename": filename,
+            "path": full_path,
+            "url": download.url().toString(),
+            "total_bytes": download.totalBytes(),
+            "received_bytes": 0,
+            "state": "downloading",
+            "time": time.time()
+        }
+        self.downloads_mgr.add(item)
+        download.receivedBytesChanged.connect(lambda: self.on_download_progress(download, download_id))
+        download.isFinishedChanged.connect(lambda: self.on_download_finished(download, download_id))
+
+    def on_download_progress(self, download: QWebEngineDownloadRequest, download_id: str):
+        self.downloads_mgr.update(download_id, {
+            "received_bytes": download.receivedBytes(),
+            "total_bytes": download.totalBytes()
+        })
+
+    def on_download_finished(self, download: QWebEngineDownloadRequest, download_id: str):
+        state_str = "completed" if download.state() == QWebEngineDownloadRequest.DownloadState.DownloadCompleted else "cancelled"
+        self.downloads_mgr.update(download_id, {
+            "state": state_str,
+            "received_bytes": download.receivedBytes(),
+            "total_bytes": download.totalBytes()
+        })
+
+    def toggle_app_menu(self):
+        now = time.time()
+        if hasattr(self, "_last_app_menu_close_time") and (now - self._last_app_menu_close_time < 0.25):
+            return
+
+        if self.app_menu.isVisible():
+            self.app_menu.hide()
+            return
+
+        if self.shields_popup.isVisible():
+            self.shields_popup.hide()
+
+        v = self.current_view()
+        zf = v.zoomFactor() if v else 1.0
+        self.app_menu.lbl_zoom_val.setText(f"{int(zf*100)}%")
+
+        btn_pos = self.btn_more.mapToGlobal(QPoint(0, self.btn_more.height()))
+        popup_x = btn_pos.x() + self.btn_more.width() - self.app_menu.width()
+        popup_y = btn_pos.y() + 6
+        self.app_menu.move(popup_x, popup_y)
+        self.app_menu.show()
+        self.app_menu.raise_()
+
+    def open_new_window(self):
+        win = AegisBrowserWindow()
+        win.show()
+        if not hasattr(QApplication.instance(), "_aegis_windows"):
+            QApplication.instance()._aegis_windows = []
+        QApplication.instance()._aegis_windows.append(win)
+
+    def zoom_in(self):
+        v = self.current_view()
+        if v:
+            zf = round(v.zoomFactor() + 0.1, 1)
+            if zf <= 3.0:
+                v.setZoomFactor(zf)
+                if hasattr(self, "app_menu"):
+                    self.app_menu.lbl_zoom_val.setText(f"{int(zf*100)}%")
+
+    def zoom_out(self):
+        v = self.current_view()
+        if v:
+            zf = round(v.zoomFactor() - 0.1, 1)
+            if zf >= 0.3:
+                v.setZoomFactor(zf)
+                if hasattr(self, "app_menu"):
+                    self.app_menu.lbl_zoom_val.setText(f"{int(zf*100)}%")
+
+    def zoom_reset(self):
+        v = self.current_view()
+        if v:
+            v.setZoomFactor(1.0)
+            if hasattr(self, "app_menu"):
+                self.app_menu.lbl_zoom_val.setText("100%")
 
     def init_ui(self):
         container = QWidget()
@@ -833,6 +1214,13 @@ class AegisBrowserWindow(QMainWindow):
         self.btn_theme_toggle.setToolTip("Cambiar tema (Oscuro / Claro)")
         self.btn_theme_toggle.clicked.connect(self.toggle_theme)
         toolbar_layout.addWidget(self.btn_theme_toggle)
+
+        # Botón Menú Principal (⋮ Tres Puntos al estilo Brave)
+        self.btn_more = QPushButton("⋮")
+        self.btn_more.setObjectName("MoreBtn")
+        self.btn_more.setToolTip("Personalizar y controlar Aegis")
+        self.btn_more.clicked.connect(self.toggle_app_menu)
+        toolbar_layout.addWidget(self.btn_more)
 
         main_layout.addWidget(self.toolbar)
 
@@ -953,6 +1341,19 @@ class AegisBrowserWindow(QMainWindow):
             QPushButton#ThemeToggleBtn:hover {{
                 background-color: {t['surface']};
             }}
+            QPushButton#MoreBtn {{
+                background: transparent;
+                border: none;
+                color: {t['text']};
+                font-size: 17px;
+                font-weight: 700;
+                border-radius: 14px;
+                width: 30px;
+                height: 30px;
+            }}
+            QPushButton#MoreBtn:hover {{
+                background-color: {t['surface']};
+            }}
             QLineEdit#Omnibox {{
                 background-color: {t['surface']};
                 border: 1px solid rgba({rgb_text}, 0.12);
@@ -994,6 +1395,9 @@ class AegisBrowserWindow(QMainWindow):
 
         if hasattr(self, "shields_popup"):
             self.shields_popup.apply_theme(t)
+
+        if hasattr(self, "app_menu"):
+            self.app_menu.apply_theme(t)
 
         for view in self.views:
             if view.url().toString() in ("aegis://start", "about:blank"):
@@ -1052,6 +1456,71 @@ class AegisBrowserWindow(QMainWindow):
         frequent_sites = self.history_mgr.get_frequent_sites(limit=8)
         html = get_clean_ntp_html(t["ntp_class"], frequent_sites)
         view.setHtml(html, QUrl("aegis://start"))
+
+    def open_internal_page(self, url_str: str, new_tab: bool = False):
+        view = self.add_new_tab() if new_tab or not self.current_view() else self.current_view()
+        if not view:
+            return
+
+        if url_str == "aegis://start":
+            self.load_ntp(view)
+        elif url_str == "aegis://settings":
+            self.load_settings(view)
+        elif url_str == "aegis://downloads":
+            self.load_downloads(view)
+        elif url_str == "aegis://history":
+            self.load_history(view)
+        elif url_str == "aegis://extensions":
+            self.load_extensions(view)
+
+    def load_settings(self, view: QWebEngineView):
+        idx = self.views.index(view) if view in self.views else -1
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        if idx != -1:
+            self.tab_bar.setTabIcon(idx, create_settings_icon(t["accent"], 14))
+            self.tab_bar.setTabText(idx, "Configuración")
+        html = get_settings_html(t["ntp_class"], self.config)
+        view.setHtml(html, QUrl("aegis://settings"))
+
+    def load_downloads(self, view: QWebEngineView):
+        idx = self.views.index(view) if view in self.views else -1
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        if idx != -1:
+            self.tab_bar.setTabIcon(idx, create_download_icon(t["accent"], 14))
+            self.tab_bar.setTabText(idx, "Descargas")
+        html = get_downloads_html(t["ntp_class"], self.downloads_mgr.downloads)
+        view.setHtml(html, QUrl("aegis://downloads"))
+
+    def load_history(self, view: QWebEngineView):
+        idx = self.views.index(view) if view in self.views else -1
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        if idx != -1:
+            self.tab_bar.setTabIcon(idx, create_history_icon(t["accent"], 14))
+            self.tab_bar.setTabText(idx, "Historial")
+        html = get_history_html(t["ntp_class"], self.history_mgr.get_history())
+        view.setHtml(html, QUrl("aegis://history"))
+
+    def load_extensions(self, view: QWebEngineView):
+        idx = self.views.index(view) if view in self.views else -1
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        if idx != -1:
+            self.tab_bar.setTabIcon(idx, create_extension_icon(t["accent"], 14))
+            self.tab_bar.setTabText(idx, "Extensiones")
+        scripts = [f.name for f in USERSCRIPTS_DIR.glob("*.js")] if USERSCRIPTS_DIR.exists() else []
+        html = get_extensions_html(t["ntp_class"], scripts)
+        view.setHtml(html, QUrl("aegis://extensions"))
+
+    def update_tab_layout(self):
+        is_vert = self.config.get("tab_position") == "vertical"
+        if is_vert:
+            self.tab_bar.setShape(QTabBar.Shape.RoundedWest)
+            self.tab_header.setFixedWidth(160)
+            self.tab_header.setMaximumHeight(16777215)
+        else:
+            self.tab_bar.setShape(QTabBar.Shape.RoundedNorth)
+            self.tab_header.setFixedHeight(38)
+            self.tab_header.setMaximumWidth(16777215)
+        self.apply_theme(self.current_theme_name)
 
     def on_icon_changed(self, icon: QIcon, view: QWebEngineView):
         if icon.isNull():
@@ -1112,12 +1581,41 @@ class AegisBrowserWindow(QMainWindow):
         if not text:
             return
 
-        if text.startswith("http://") or text.startswith("https://") or text.startswith("file://") or text.startswith("aegis://"):
+        # Atajos directos desde el Omnibox
+        shortcuts = {
+            "settings": "aegis://settings",
+            "config": "aegis://settings",
+            "configuracion": "aegis://settings",
+            "configuración": "aegis://settings",
+            "downloads": "aegis://downloads",
+            "descargas": "aegis://downloads",
+            "history": "aegis://history",
+            "historial": "aegis://history",
+            "extensions": "aegis://extensions",
+            "extensiones": "aegis://extensions",
+            "start": "aegis://start",
+            "inicio": "aegis://start"
+        }
+        if text.lower() in shortcuts:
+            self.open_internal_page(shortcuts[text.lower()])
+            return
+
+        if text.startswith("aegis://"):
+            self.open_internal_page(text)
+            return
+
+        if text.startswith("http://") or text.startswith("https://") or text.startswith("file://"):
             target_url = QUrl(text)
         elif "." in text and " " not in text:
             target_url = QUrl("https://" + text)
         else:
-            target_url = QUrl(f"https://duckduckgo.com/?q={text}")
+            engine = self.config.get("search_engine", "DuckDuckGo")
+            if engine == "Google":
+                target_url = QUrl(f"https://google.com/search?q={text}")
+            elif engine == "Bing":
+                target_url = QUrl(f"https://www.bing.com/search?q={text}")
+            else:
+                target_url = QUrl(f"https://duckduckgo.com/?q={text}")
 
         view = self.current_view()
         if view:
@@ -1142,7 +1640,24 @@ class AegisBrowserWindow(QMainWindow):
     def on_url_changed(self, qurl: QUrl, view: QWebEngineView):
         url_str = qurl.toString()
 
-        # Interceptar acciones desde la página de inicio (Añadir o eliminar sitios frecuentes)
+        # Páginas internas directas
+        if url_str == "aegis://settings":
+            self.load_settings(view)
+            return
+        elif url_str == "aegis://downloads":
+            self.load_downloads(view)
+            return
+        elif url_str == "aegis://history":
+            self.load_history(view)
+            return
+        elif url_str == "aegis://extensions":
+            self.load_extensions(view)
+            return
+        elif url_str == "aegis://start":
+            self.load_ntp(view)
+            return
+
+        # Interceptar acciones desde páginas internas
         if url_str.startswith("aegis://action?"):
             try:
                 parsed = urlparse(url_str)
@@ -1156,6 +1671,47 @@ class AegisBrowserWindow(QMainWindow):
                     data = json.loads(unquote(q["add"][0]))
                     self.history_mgr.add_custom(data.get("title", ""), data.get("url", ""))
                     self.load_ntp(view)
+                    return
+                elif "set_config" in q:
+                    data = json.loads(unquote(q["set_config"][0]))
+                    k, val = data.get("key"), data.get("value")
+                    self.config[k] = val
+                    self.save_config()
+                    if k == "theme":
+                        self.apply_theme(val)
+                    elif k == "tab_position":
+                        self.update_tab_layout()
+                    elif k == "shields_enabled":
+                        self.interceptor.enabled = bool(val)
+                    self.load_settings(view)
+                    return
+                elif "open_file" in q:
+                    file_path = unquote(q["open_file"][0])
+                    if os.path.exists(file_path):
+                        os.startfile(file_path)
+                    return
+                elif "open_folder" in q:
+                    file_path = unquote(q["open_folder"][0])
+                    folder = os.path.dirname(file_path) if os.path.isfile(file_path) else file_path
+                    if os.path.exists(folder):
+                        subprocess.Popen(f'explorer.exe "{folder}"')
+                    return
+                elif "clear_downloads" in q:
+                    self.downloads_mgr.clear()
+                    self.load_downloads(view)
+                    return
+                elif "clear_history" in q:
+                    self.history_mgr.clear_history()
+                    self.load_history(view)
+                    return
+                elif "remove_history" in q:
+                    u = unquote(q["remove_history"][0])
+                    self.history_mgr.remove_history_item(u)
+                    self.load_history(view)
+                    return
+                elif "open_scripts_folder" in q:
+                    USERSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+                    subprocess.Popen(f'explorer.exe "{str(USERSCRIPTS_DIR)}"')
                     return
             except Exception:
                 pass
@@ -1642,11 +2198,796 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
 </html>
 """
 
+# ── 12.1 Helper de Formato de Bytes ───────────────────────────────────────────
+def format_bytes(b: int) -> str:
+    if not b or b < 1024:
+        return f"{b or 0} B"
+    elif b < 1024 * 1024:
+        return f"{b / 1024:.1f} KB"
+    else:
+        return f"{b / (1024 * 1024):.1f} MB"
+
+# ── 12.2 Plantilla HTML de Configuración (aegis://settings) ───────────────────
+def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> str:
+    if config is None:
+        config = {}
+    tab_h = "selected" if config.get("tab_position", "horizontal") == "horizontal" else ""
+    tab_v = "selected" if config.get("tab_position") == "vertical" else ""
+    th_dark = "selected" if config.get("theme", "Oscuro") == "Oscuro" else ""
+    th_light = "selected" if config.get("theme") == "Claro" else ""
+    eng_ddg = "selected" if config.get("search_engine", "DuckDuckGo") == "DuckDuckGo" else ""
+    eng_google = "selected" if config.get("search_engine") == "Google" else ""
+    eng_bing = "selected" if config.get("search_engine") == "Bing" else ""
+    sh_on = "selected" if config.get("shields_enabled", True) else ""
+    sh_off = "" if config.get("shields_enabled", True) else "selected"
+
+    return f"""<!DOCTYPE html>
+<html lang="es" class="{theme_class}">
+<head>
+  <meta charset="UTF-8">
+  <title>Configuración - Aegis</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    :root, .theme-dark {{
+      --bg: #0d1117;
+      --surface: #161b22;
+      --text: #f0f6fc;
+      --accent: #388bfd;
+    }}
+    .theme-light {{
+      --bg: #f6f8fa;
+      --surface: #ffffff;
+      --text: #1f2328;
+      --accent: #0969da;
+    }}
+    body {{
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding: 3rem 1.5rem;
+      display: flex;
+      justify-content: center;
+    }}
+    .container {{
+      width: 100%;
+      max-width: 680px;
+    }}
+    .header {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+    }}
+    .title {{
+      font-size: 1.5rem;
+      font-weight: 700;
+    }}
+    .card {{
+      background: var(--surface);
+      border: 1px solid rgba(128, 128, 128, 0.14);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 1.5rem;
+    }}
+    .card-title {{
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      color: var(--text);
+    }}
+    .setting-row {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(128, 128, 128, 0.08);
+    }}
+    .setting-row:last-child {{
+      border-bottom: none;
+      padding-bottom: 0;
+    }}
+    .setting-info {{
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }}
+    .setting-name {{
+      font-size: 0.9rem;
+      font-weight: 500;
+    }}
+    .setting-desc {{
+      font-size: 0.8rem;
+      opacity: 0.65;
+    }}
+    select, button.action-btn {{
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid rgba(128, 128, 128, 0.25);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+    }}
+    select:focus, button.action-btn:hover {{
+      border-color: var(--accent);
+    }}
+    button.btn-danger {{
+      background: transparent;
+      color: #ff6b6b;
+      border-color: rgba(255, 107, 107, 0.4);
+    }}
+    button.btn-danger:hover {{
+      background: #ff6b6b;
+      color: #ffffff;
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      <h1 class="title">Configuración</h1>
+    </div>
+
+    <!-- 1. Apariencia -->
+    <div class="card">
+      <h2 class="card-title">Diseño y Pestañas</h2>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Orientación de pestañas</span>
+          <span class="setting-desc">Elige entre la barra horizontal tradicional o el panel vertical lateral</span>
+        </div>
+        <select onchange="updateSetting('tab_position', this.value)">
+          <option value="horizontal" {tab_h}>Horizontal clásica (arriba)</option>
+          <option value="vertical" {tab_v}>Vertical lateral (estilo Arc / Zen)</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Tema de interfaz</span>
+          <span class="setting-desc">Paleta estricta de 4 colores de alto contraste</span>
+        </div>
+        <select onchange="updateSetting('theme', this.value)">
+          <option value="Oscuro" {th_dark}>Oscuro</option>
+          <option value="Claro" {th_light}>Claro</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 2. Búsqueda -->
+    <div class="card">
+      <h2 class="card-title">Motor de Búsqueda</h2>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Buscador predeterminado</span>
+          <span class="setting-desc">Utilizado al escribir directamente en el Omnibox</span>
+        </div>
+        <select onchange="updateSetting('search_engine', this.value)">
+          <option value="DuckDuckGo" {eng_ddg}>DuckDuckGo (Privado, sin rastreo)</option>
+          <option value="Google" {eng_google}>Google</option>
+          <option value="Bing" {eng_bing}>Bing</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 3. Privacidad y Escudos -->
+    <div class="card">
+      <h2 class="card-title">Escudos y Rendimiento</h2>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Aegis Shields</span>
+          <span class="setting-desc">Bloqueo de socket a nivel de red Rust FFI</span>
+        </div>
+        <select onchange="updateSetting('shields_enabled', this.value === 'true')">
+          <option value="true" {sh_on}>Activado (Recomendado)</option>
+          <option value="false" {sh_off}>Desactivado</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Compactación silenciosa de RAM</span>
+          <span class="setting-desc">NT kernel WorkingSet compaction cada 90s (cero placebo)</span>
+        </div>
+        <span style="font-size: 0.85rem; color: var(--accent); font-weight: 600;">100% Automático</span>
+      </div>
+    </div>
+
+    <!-- 4. Datos -->
+    <div class="card">
+      <h2 class="card-title">Datos de Navegación</h2>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Historial y sitios frecuentes</span>
+          <span class="setting-desc">Borrar todas las visitas guardadas en este equipo</span>
+        </div>
+        <button class="action-btn btn-danger" onclick="clearHistory()">Borrar Historial</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function updateSetting(key, val) {{
+      const payload = JSON.stringify({{key: key, value: val}});
+      window.location.href = 'aegis://action?set_config=' + encodeURIComponent(payload);
+    }}
+    function clearHistory() {{
+      if (confirm('¿Deseas borrar todo el historial de navegación?')) {{
+        window.location.href = 'aegis://action?clear_history=1';
+      }}
+    }}
+  </script>
+</body>
+</html>
+"""
+
+# ── 12.3 Plantilla HTML de Descargas (aegis://downloads) ──────────────────────
+def get_downloads_html(theme_class: str = "theme-dark", downloads: list = None) -> str:
+    if downloads is None:
+        downloads = []
+
+    items_html = ""
+    if not downloads:
+        items_html = """
+        <div style="text-align: center; padding: 4rem 1rem; opacity: 0.6;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 1rem;">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <p style="font-size: 1rem;">No hay descargas recientes</p>
+        </div>
+        """
+    else:
+        for d in downloads:
+            fname = d.get("filename", "archivo")
+            fpath = d.get("path", "")
+            size_str = format_bytes(d.get("total_bytes", 0))
+            state = d.get("state", "completed")
+            state_label = "Descargando..." if state == "downloading" else "Completado"
+            state_color = "var(--accent)" if state == "downloading" else "#2ea043"
+
+            items_html += f"""
+            <div class="download-item">
+              <div class="dl-icon">📦</div>
+              <div class="dl-info">
+                <span class="dl-name">{fname}</span>
+                <span class="dl-sub">{size_str} • <span style="color: {state_color}; font-weight: 600;">{state_label}</span></span>
+              </div>
+              <div class="dl-actions">
+                <button class="action-btn" onclick="openFile('{fpath}')">Abrir</button>
+                <button class="action-btn" onclick="openFolder('{fpath}')">Mostrar en carpeta</button>
+              </div>
+            </div>
+            """
+
+    clear_btn = '<button class="action-btn" onclick="clearDownloads()">Limpiar historial</button>' if downloads else ''
+
+    return f"""<!DOCTYPE html>
+<html lang="es" class="{theme_class}">
+<head>
+  <meta charset="UTF-8">
+  <title>Descargas - Aegis</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    :root, .theme-dark {{
+      --bg: #0d1117;
+      --surface: #161b22;
+      --text: #f0f6fc;
+      --accent: #388bfd;
+    }}
+    .theme-light {{
+      --bg: #f6f8fa;
+      --surface: #ffffff;
+      --text: #1f2328;
+      --accent: #0969da;
+    }}
+    body {{
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding: 3rem 1.5rem;
+      display: flex;
+      justify-content: center;
+    }}
+    .container {{
+      width: 100%;
+      max-width: 680px;
+    }}
+    .header {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+    }}
+    .title {{
+      font-size: 1.5rem;
+      font-weight: 700;
+    }}
+    .download-item {{
+      background: var(--surface);
+      border: 1px solid rgba(128, 128, 128, 0.14);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }}
+    .dl-icon {{
+      font-size: 1.5rem;
+    }}
+    .dl-info {{
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      overflow: hidden;
+    }}
+    .dl-name {{
+      font-size: 0.9rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
+    .dl-sub {{
+      font-size: 0.8rem;
+      opacity: 0.7;
+    }}
+    .dl-actions {{
+      display: flex;
+      gap: 8px;
+    }}
+    button.action-btn {{
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid rgba(128, 128, 128, 0.25);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+    }}
+    button.action-btn:hover {{
+      border-color: var(--accent);
+      color: var(--accent);
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      <h1 class="title">Descargas</h1>
+      <div style="flex: 1;"></div>
+      {clear_btn}
+    </div>
+
+    {items_html}
+  </div>
+
+  <script>
+    function openFile(p) {{
+      window.location.href = 'aegis://action?open_file=' + encodeURIComponent(p);
+    }}
+    function openFolder(p) {{
+      window.location.href = 'aegis://action?open_folder=' + encodeURIComponent(p);
+    }}
+    function clearDownloads() {{
+      window.location.href = 'aegis://action?clear_downloads=1';
+    }}
+  </script>
+</body>
+</html>
+"""
+
+# ── 12.4 Plantilla HTML de Historial (aegis://history) ────────────────────────
+def get_history_html(theme_class: str = "theme-dark", history_items: list = None) -> str:
+    if history_items is None:
+        history_items = []
+
+    items_html = ""
+    if not history_items:
+        items_html = """
+        <div style="text-align: center; padding: 4rem 1rem; opacity: 0.6;">
+          <p style="font-size: 1rem;">No hay páginas en el historial</p>
+        </div>
+        """
+    else:
+        for h in history_items:
+            title = h.get("title") or h.get("domain", "Página")
+            url = h.get("url", "#")
+            dom = h.get("domain", "")
+            t_str = time.strftime("%H:%M", time.localtime(h.get("time", time.time())))
+
+            items_html += f"""
+            <div class="history-item" data-search="{title.lower()} {dom.lower()}">
+              <span class="hist-time">{t_str}</span>
+              <div class="hist-info">
+                <a href="{url}" class="hist-title">{title}</a>
+                <span class="hist-domain">{dom}</span>
+              </div>
+              <button class="btn-remove" onclick="removeHistory('{url}')" title="Eliminar de historial">×</button>
+            </div>
+            """
+
+    clear_btn = '<button class="action-btn btn-danger" onclick="clearAllHistory()">Borrar todo el historial</button>' if history_items else ''
+
+    return f"""<!DOCTYPE html>
+<html lang="es" class="{theme_class}">
+<head>
+  <meta charset="UTF-8">
+  <title>Historial - Aegis</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    :root, .theme-dark {{
+      --bg: #0d1117;
+      --surface: #161b22;
+      --text: #f0f6fc;
+      --accent: #388bfd;
+    }}
+    .theme-light {{
+      --bg: #f6f8fa;
+      --surface: #ffffff;
+      --text: #1f2328;
+      --accent: #0969da;
+    }}
+    body {{
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding: 3rem 1.5rem;
+      display: flex;
+      justify-content: center;
+    }}
+    .container {{
+      width: 100%;
+      max-width: 680px;
+    }}
+    .header {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+    }}
+    .title {{
+      font-size: 1.5rem;
+      font-weight: 700;
+    }}
+    .search-box {{
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid rgba(128, 128, 128, 0.2);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 0.9rem;
+      outline: none;
+      margin-bottom: 1.5rem;
+    }}
+    .search-box:focus {{
+      border-color: var(--accent);
+    }}
+    .history-item {{
+      background: var(--surface);
+      border: 1px solid rgba(128, 128, 128, 0.12);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }}
+    .hist-time {{
+      font-size: 0.8rem;
+      opacity: 0.55;
+      font-variant-numeric: tabular-nums;
+      min-width: 42px;
+    }}
+    .hist-info {{
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+      overflow: hidden;
+    }}
+    .hist-title {{
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
+    .hist-title:hover {{
+      color: var(--accent);
+    }}
+    .hist-domain {{
+      font-size: 0.75rem;
+      opacity: 0.6;
+    }}
+    .btn-remove {{
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 16px;
+      cursor: pointer;
+      opacity: 0.5;
+      padding: 4px;
+    }}
+    .btn-remove:hover {{
+      opacity: 1;
+      color: #ff6b6b;
+    }}
+    button.action-btn {{
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid rgba(128, 128, 128, 0.25);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+    }}
+    button.btn-danger:hover {{
+      background: #ff6b6b;
+      color: #ffffff;
+      border-color: #ff6b6b;
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 14 14"/>
+      </svg>
+      <h1 class="title">Historial</h1>
+      <div style="flex: 1;"></div>
+      {clear_btn}
+    </div>
+
+    <input type="text" id="searchBox" class="search-box" placeholder="Buscar en el historial..." oninput="filterHistory()" />
+
+    <div id="histList">
+      {items_html}
+    </div>
+  </div>
+
+  <script>
+    function filterHistory() {{
+      const q = document.getElementById('searchBox').value.toLowerCase();
+      const items = document.querySelectorAll('.history-item');
+      items.forEach(el => {{
+        const txt = el.getAttribute('data-search') || '';
+        el.style.display = txt.includes(q) ? 'flex' : 'none';
+      }});
+    }}
+    function removeHistory(u) {{
+      window.location.href = 'aegis://action?remove_history=' + encodeURIComponent(u);
+    }}
+    function clearAllHistory() {{
+      if (confirm('¿Deseas vaciar todo el historial?')) {{
+        window.location.href = 'aegis://action?clear_history=1';
+      }}
+    }}
+  </script>
+</body>
+</html>
+"""
+
+# ── 12.5 Plantilla HTML de Extensiones (aegis://extensions) ───────────────────
+def get_extensions_html(theme_class: str = "theme-dark", scripts: list = None) -> str:
+    if scripts is None:
+        scripts = []
+
+    scripts_html = ""
+    if not scripts:
+        scripts_html = """
+        <div style="padding: 12px; opacity: 0.65; font-size: 0.85rem;">
+          No hay scripts de usuario (.user.js) instalados en la carpeta.
+        </div>
+        """
+    else:
+        for s in scripts:
+            scripts_html += f"""
+            <div class="ext-item">
+              <span class="ext-icon">📄</span>
+              <div class="ext-info">
+                <span class="ext-name">{s}</span>
+                <span class="ext-sub">Script de usuario activo</span>
+              </div>
+              <span style="font-size: 0.8rem; color: #2ea043; font-weight: 600;">Inyectado</span>
+            </div>
+            """
+
+    return f"""<!DOCTYPE html>
+<html lang="es" class="{theme_class}">
+<head>
+  <meta charset="UTF-8">
+  <title>Extensiones - Aegis</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    :root, .theme-dark {{
+      --bg: #0d1117;
+      --surface: #161b22;
+      --text: #f0f6fc;
+      --accent: #388bfd;
+    }}
+    .theme-light {{
+      --bg: #f6f8fa;
+      --surface: #ffffff;
+      --text: #1f2328;
+      --accent: #0969da;
+    }}
+    body {{
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding: 3rem 1.5rem;
+      display: flex;
+      justify-content: center;
+    }}
+    .container {{
+      width: 100%;
+      max-width: 680px;
+    }}
+    .header {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+    }}
+    .title {{
+      font-size: 1.5rem;
+      font-weight: 700;
+    }}
+    .card {{
+      background: var(--surface);
+      border: 1px solid rgba(128, 128, 128, 0.14);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 1.5rem;
+    }}
+    .card-title {{
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      color: var(--text);
+    }}
+    .ext-item {{
+      background: var(--bg);
+      border: 1px solid rgba(128, 128, 128, 0.12);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }}
+    .ext-icon {{
+      font-size: 1.4rem;
+    }}
+    .ext-info {{
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      flex: 1;
+    }}
+    .ext-name {{
+      font-size: 0.9rem;
+      font-weight: 600;
+    }}
+    .ext-sub {{
+      font-size: 0.8rem;
+      opacity: 0.65;
+    }}
+    button.action-btn {{
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid rgba(128, 128, 128, 0.25);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+    }}
+    button.action-btn:hover {{
+      border-color: var(--accent);
+      color: var(--accent);
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+        <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+      </svg>
+      <h1 class="title">Extensiones y Módulos</h1>
+    </div>
+
+    <!-- Módulos de Aegis Nativos -->
+    <div class="card">
+      <h2 class="card-title">Motores Nativos de Aegis Shields (Activos)</h2>
+      <div class="ext-item">
+        <span class="ext-icon">🛡️</span>
+        <div class="ext-info">
+          <span class="ext-name">Aegis Shields Rust Core</span>
+          <span class="ext-sub">Bloqueo de red socket Rust FFI con reglas EasyList y uBlock</span>
+        </div>
+        <span style="font-size: 0.8rem; color: #2ea043; font-weight: 600;">Activo</span>
+      </div>
+      <div class="ext-item">
+        <span class="ext-icon">⚡</span>
+        <div class="ext-info">
+          <span class="ext-name">Aegis Video & Countdown Defuser</span>
+          <span class="ext-sub">Bypass de anuncios en video, muros anti-adblock y acortadores</span>
+        </div>
+        <span style="font-size: 0.8rem; color: #2ea043; font-weight: 600;">Activo</span>
+      </div>
+      <div class="ext-item">
+        <span class="ext-icon">🎨</span>
+        <div class="ext-info">
+          <span class="ext-name">Aegis Cosmetic Engine</span>
+          <span class="ext-sub">Filtrado cosmético CSS inmediato inyectado en páginas</span>
+        </div>
+        <span style="font-size: 0.8rem; color: #2ea043; font-weight: 600;">Activo</span>
+      </div>
+    </div>
+
+    <!-- Scripts de usuario -->
+    <div class="card">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <h2 class="card-title" style="margin-bottom: 0;">Scripts de Usuario (UserScripts)</h2>
+        <button class="action-btn" onclick="openScriptsFolder()">📂 Abrir carpeta de scripts</button>
+      </div>
+      <p style="font-size: 0.8rem; opacity: 0.7; margin-bottom: 14px;">
+        Coloca tus scripts <code>.js</code> o <code>.user.js</code> en la carpeta de scripts para inyectarlos automáticamente en todas las páginas web.
+      </p>
+      {scripts_html}
+    </div>
+  </div>
+
+  <script>
+    function openScriptsFolder() {{
+      window.location.href = 'aegis://action?open_scripts_folder=1';
+    }}
+  </script>
+</body>
+</html>
+"""
+
 # ── 13. Punto de Entrada Principal ────────────────────────────────────────────
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Aegis")
-    app.setApplicationVersion("1.3.3")
+    app.setApplicationVersion("1.3.4")
 
     window = AegisBrowserWindow()
     window.show()
