@@ -31,6 +31,8 @@ import zipfile
 import io
 import urllib.request
 import shutil
+import sqlite3
+import tempfile
 from pathlib import Path
 import secrets
 import string
@@ -167,15 +169,37 @@ from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QIcon, QPixmap, QShortcu
 from PyQt6.QtSvg import QSvgRenderer
 
 BASE_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent.parent
-CONFIG_FILE = Path.home() / ".aegis_browser_config.json"
-HISTORY_FILE = Path.home() / ".aegis_browser_history.json"
-DOWNLOADS_FILE = Path.home() / ".aegis_browser_downloads.json"
-BOOKMARKS_FILE = Path.home() / ".aegis_browser_bookmarks.json"
-SESSION_FILE = Path.home() / ".aegis_browser_session.json"
-READING_LIST_FILE = Path.home() / ".aegis_reading_list.json"
-USERSCRIPTS_DIR = Path.home() / ".aegis_userscripts"
-EXTENSIONS_DIR = Path.home() / ".aegis_extensions"
-PROFILE_DIR = Path.home() / ".aegis_profile"
+
+# Detección y activación de Modo Portable (100% autocontenido en USB o carpeta sin tocar el sistema)
+IS_PORTABLE = (
+    (BASE_DIR / "portable.dat").exists() or 
+    (BASE_DIR / "data").exists() or 
+    "--portable" in sys.argv
+)
+
+if IS_PORTABLE:
+    DATA_DIR = BASE_DIR / "data"
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_FILE = DATA_DIR / "aegis_browser_config.json"
+    HISTORY_FILE = DATA_DIR / "aegis_browser_history.json"
+    DOWNLOADS_FILE = DATA_DIR / "aegis_browser_downloads.json"
+    BOOKMARKS_FILE = DATA_DIR / "aegis_browser_bookmarks.json"
+    SESSION_FILE = DATA_DIR / "aegis_browser_session.json"
+    READING_LIST_FILE = DATA_DIR / "aegis_reading_list.json"
+    USERSCRIPTS_DIR = DATA_DIR / "userscripts"
+    EXTENSIONS_DIR = DATA_DIR / "extensions"
+    PROFILE_DIR = DATA_DIR / "profile"
+else:
+    DATA_DIR = Path.home()
+    CONFIG_FILE = Path.home() / ".aegis_browser_config.json"
+    HISTORY_FILE = Path.home() / ".aegis_browser_history.json"
+    DOWNLOADS_FILE = Path.home() / ".aegis_browser_downloads.json"
+    BOOKMARKS_FILE = Path.home() / ".aegis_browser_bookmarks.json"
+    SESSION_FILE = Path.home() / ".aegis_browser_session.json"
+    READING_LIST_FILE = Path.home() / ".aegis_reading_list.json"
+    USERSCRIPTS_DIR = Path.home() / ".aegis_userscripts"
+    EXTENSIONS_DIR = Path.home() / ".aegis_extensions"
+    PROFILE_DIR = Path.home() / ".aegis_profile"
 
 def ensure_builtin_userscripts(scripts_dir: Path):
     """Pre-instala extensiones populares integradas y ligeras en Aegis (Steam Helper, SponsorBlock, Smart Dark, AdBlock Zapper)."""
@@ -814,6 +838,216 @@ class BookmarksManager:
 
     def is_bookmarked(self, url: str) -> bool:
         return any(b.get("url") == url for b in self.bookmarks)
+
+# ── 2.3.5 Importador de Datos desde Brave Browser ─────────────────────────────
+class BraveImporter:
+    """Importador universal de datos locales desde Brave Browser (Historial, Marcadores y Accesos Frecuentes)."""
+
+    @staticmethod
+    def get_default_brave_user_data_path() -> Path:
+        local_app_data = Path(os.environ.get("LOCALAPPDATA", ""))
+        return local_app_data / "BraveSoftware" / "Brave-Browser" / "User Data"
+
+    @staticmethod
+    def find_brave_profiles(user_data_path: Path = None) -> list[dict]:
+        """Escanea y detecta todos los perfiles de usuario de Brave."""
+        if user_data_path is None:
+            user_data_path = BraveImporter.get_default_brave_user_data_path()
+        profiles = []
+        if not user_data_path.exists():
+            return profiles
+        try:
+            for item in user_data_path.iterdir():
+                if item.is_dir() and ((item / "History").exists() or (item / "Bookmarks").exists()):
+                    hist_count, bm_count = BraveImporter.get_profile_stats(item)
+                    profiles.append({
+                        "name": item.name,
+                        "path": item,
+                        "history_count": hist_count,
+                        "bookmarks_count": bm_count
+                    })
+        except Exception:
+            pass
+        profiles.sort(key=lambda x: (x["name"] != "Default", x["name"]))
+        return profiles
+
+    @staticmethod
+    def get_profile_stats(profile_dir: Path) -> tuple[int, int]:
+        hist_count = 0
+        bm_count = 0
+        hist_file = profile_dir / "History"
+        bm_file = profile_dir / "Bookmarks"
+        if hist_file.exists():
+            tmp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                    tmp_path = tmp.name
+                shutil.copy2(hist_file, tmp_path)
+                conn = sqlite3.connect(tmp_path)
+                cur = conn.cursor()
+                cur.execute("SELECT count(*) FROM urls WHERE hidden = 0")
+                hist_count = cur.fetchone()[0]
+                conn.close()
+            except Exception:
+                pass
+            finally:
+                if tmp_path and os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except Exception:
+                        pass
+
+        if bm_file.exists():
+            try:
+                data = json.loads(bm_file.read_text(encoding="utf-8"))
+                def _count(node):
+                    c = 0
+                    if isinstance(node, dict):
+                        if node.get("type") == "url":
+                            c += 1
+                        for child in node.get("children", []):
+                            c += _count(child)
+                    return c
+                for root in data.get("roots", {}).values():
+                    bm_count += _count(root)
+            except Exception:
+                pass
+        return hist_count, bm_count
+
+    @staticmethod
+    def import_all(profile_dir: Path, history_mgr, bookmark_mgr, import_hist: bool = True, import_bm: bool = True) -> tuple[int, int]:
+        imported_hist = 0
+        imported_bm = 0
+
+        hist_file = profile_dir / "History"
+
+        # 1. Importar Historial y Frecuentes
+        if import_hist and hist_file.exists():
+            tmp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                    tmp_path = tmp.name
+                shutil.copy2(hist_file, tmp_path)
+                conn = sqlite3.connect(tmp_path)
+                cur = conn.cursor()
+                cur.execute("SELECT url, title, visit_count, last_visit_time FROM urls WHERE hidden = 0 ORDER BY last_visit_time DESC")
+                rows = cur.fetchall()
+                conn.close()
+
+                existing_urls = {h.get("url") for h in history_mgr.data.get("history", [])}
+                new_entries = []
+
+                for url_str, title, visit_count, last_visit_time in rows:
+                    if not url_str or not (url_str.startswith("http://") or url_str.startswith("https://")):
+                        continue
+                    try:
+                        unix_time = max(0.0, (last_visit_time - 11644473600000000) / 1000000.0) if last_visit_time > 11644473600000000 else time.time()
+                    except Exception:
+                        unix_time = time.time()
+
+                    parsed = urlparse(url_str)
+                    domain = parsed.netloc.lower()
+                    if domain.startswith("www."):
+                        domain = domain[4:]
+                    clean_title = title.strip() if title and title.strip() else domain
+
+                    if "frequent" not in history_mgr.data:
+                        history_mgr.data["frequent"] = {}
+                    if domain and domain not in history_mgr.data["frequent"]:
+                        history_mgr.data["frequent"][domain] = {
+                            "domain": domain,
+                            "title": clean_title,
+                            "url": f"{parsed.scheme}://{parsed.netloc}",
+                            "visits": int(visit_count) if visit_count else 1,
+                            "last_visited": unix_time,
+                            "favicon": ""
+                        }
+                    elif domain and domain in history_mgr.data["frequent"]:
+                        history_mgr.data["frequent"][domain]["visits"] += int(visit_count or 1)
+
+                    if url_str not in existing_urls:
+                        existing_urls.add(url_str)
+                        new_entries.append({
+                            "domain": domain,
+                            "title": clean_title,
+                            "url": url_str,
+                            "time": unix_time
+                        })
+                        imported_hist += 1
+
+                if "history" not in history_mgr.data:
+                    history_mgr.data["history"] = []
+                history_mgr.data["history"] = (new_entries + history_mgr.data["history"])[:5000]
+                history_mgr.save()
+            except Exception as e:
+                print(f"Error importando historial de Brave: {e}")
+            finally:
+                if tmp_path and os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except Exception:
+                        pass
+
+        # 2. Importar Marcadores
+        if import_bm:
+            bm_file = profile_dir / "Bookmarks"
+            existing_bm_urls = {b.get("url") for b in bookmark_mgr.bookmarks}
+            if bm_file.exists():
+                try:
+                    data = json.loads(bm_file.read_text(encoding="utf-8"))
+                    def _extract_bms(node):
+                        nonlocal imported_bm
+                        if isinstance(node, dict):
+                            if node.get("type") == "url":
+                                u = node.get("url", "")
+                                name = node.get("name", "") or u
+                                if u and u not in existing_bm_urls:
+                                    existing_bm_urls.add(u)
+                                    bookmark_mgr.bookmarks.append({
+                                        "title": name,
+                                        "url": u,
+                                        "created": time.time()
+                                    })
+                                    imported_bm += 1
+                            for child in node.get("children", []):
+                                _extract_bms(child)
+                    for root in data.get("roots", {}).values():
+                        _extract_bms(root)
+                    bookmark_mgr.save()
+                except Exception as e:
+                    print(f"Error importando marcadores de Brave: {e}")
+
+            # Si no había archivo Bookmarks o estaba vacío, importar los 15 sitios más visitados de Brave como marcadores
+            if imported_bm == 0 and hist_file.exists():
+                tmp_path = None
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                        tmp_path = tmp.name
+                    shutil.copy2(hist_file, tmp_path)
+                    conn = sqlite3.connect(tmp_path)
+                    cur = conn.cursor()
+                    cur.execute("SELECT url, title FROM urls WHERE hidden = 0 AND length(title) > 0 AND (url LIKE 'https://%' OR url LIKE 'http://%') ORDER BY visit_count DESC LIMIT 15")
+                    for top_url, top_title in cur.fetchall():
+                        if top_url not in existing_bm_urls:
+                            existing_bm_urls.add(top_url)
+                            bookmark_mgr.bookmarks.append({
+                                "title": top_title.strip(),
+                                "url": top_url,
+                                "created": time.time()
+                            })
+                            imported_bm += 1
+                    conn.close()
+                    bookmark_mgr.save()
+                except Exception:
+                    pass
+                finally:
+                    if tmp_path and os.path.exists(tmp_path):
+                        try:
+                            os.remove(tmp_path)
+                        except Exception:
+                            pass
+
+        return imported_hist, imported_bm
 
 # ── 2.4 Gestor de Extensiones de Chrome Web Store (Chromium Nativo) ───────────
 CHROME_EXT_ID_RE = re.compile(r"([a-p]{32})", re.IGNORECASE)
@@ -1785,6 +2019,7 @@ class AegisAppMenu(QFrame):
         add_separator()
 
         add_item("clear_data", "Borrar datos de navegación", "Ctrl+Shift+Del", lambda: self.parent_win.open_clear_data_dialog())
+        add_item("import_brave", "Importar datos de Brave...", "", lambda: self.parent_win.open_brave_import_dialog())
         add_item("settings", "Configuración", "Alt+S", lambda: self.parent_win.open_internal_page("aegis://settings"))
         add_separator()
 
@@ -3232,6 +3467,213 @@ class AegisClearDataDialog(QDialog):
             }}
             QPushButton.clear-confirm-btn:hover {{
                 background-color: #b62324;
+            }}
+        """
+        self.setStyleSheet(qss)
+
+# ── 10.3.9.5 Diálogo de Importación de Datos de Brave Browser ──────────────────
+class AegisBraveImportDialog(QDialog):
+    def __init__(self, parent_win=None):
+        super().__init__(parent_win)
+        self.parent_win = parent_win
+        self.setWindowTitle("Importar datos de Brave Browser - Aegis")
+        self.setFixedWidth(480)
+        self.detected_profiles = BraveImporter.find_brave_profiles()
+        self.init_ui()
+        if self.parent_win:
+            t = THEMES.get(self.parent_win.current_theme_name, THEMES["Oscuro"])
+            self.apply_theme(t)
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(22, 22, 22, 22)
+        layout.setSpacing(14)
+
+        header = QLabel("🦁 Importar datos de Brave Browser")
+        header.setStyleSheet("font-weight: 700; font-size: 16px;")
+        layout.addWidget(header)
+
+        desc = QLabel(
+            "Transfiere de manera local, privada y segura tu historial de navegación, "
+            "páginas frecuentes y marcadores guardados desde Brave hacia Aegis Browser."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet("font-size: 12px; color: #8b949e; line-height: 1.4;")
+        layout.addWidget(desc)
+
+        profile_row = QHBoxLayout()
+        lbl_profile = QLabel("Perfil de origen:")
+        lbl_profile.setStyleSheet("font-size: 12px; font-weight: 600;")
+        self.combo_profile = QComboBox()
+        self.combo_profile.setObjectName("BraveProfileCombo")
+
+        if self.detected_profiles:
+            for p in self.detected_profiles:
+                h = p['history_count']
+                b = p['bookmarks_count']
+                self.combo_profile.addItem(f"{p['name']} ({h:,} visitas, {b} marcadores)".replace(',', '.'), p['path'])
+        else:
+            self.combo_profile.addItem("No se detectó instalación estándar de Brave", None)
+
+        profile_row.addWidget(lbl_profile)
+        profile_row.addWidget(self.combo_profile, 1)
+
+        self.btn_browse = QPushButton("Examinar...")
+        self.btn_browse.setStyleSheet("padding: 4px 10px; font-size: 12px;")
+        self.btn_browse.clicked.connect(self.browse_custom_profile)
+        profile_row.addWidget(self.btn_browse)
+        layout.addLayout(profile_row)
+
+        self.lbl_stats = QLabel("")
+        self.lbl_stats.setStyleSheet("font-size: 12px; font-weight: 500; color: #388bfd;")
+        layout.addWidget(self.lbl_stats)
+        self.update_stats_label()
+        self.combo_profile.currentIndexChanged.connect(self.update_stats_label)
+
+        options_box = QFrame()
+        options_box.setObjectName("BraveOptionsBox")
+        box_layout = QVBoxLayout(options_box)
+        box_layout.setContentsMargins(12, 10, 12, 10)
+        box_layout.setSpacing(8)
+
+        self.chk_history = QCheckBox("Historial de navegación (visitas, títulos y fechas)")
+        self.chk_history.setChecked(True)
+        self.chk_frequent = QCheckBox("Sitios frecuentes y accesos directos de Nueva Pestaña")
+        self.chk_frequent.setChecked(True)
+        self.chk_bookmarks = QCheckBox("Marcadores y barra de favoritos")
+        self.chk_bookmarks.setChecked(True)
+
+        box_layout.addWidget(self.chk_history)
+        box_layout.addWidget(self.chk_frequent)
+        box_layout.addWidget(self.chk_bookmarks)
+        layout.addWidget(options_box)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        self.btn_cancel = QPushButton("Cancelar")
+        self.btn_cancel.setProperty("class", "clear-cancel-btn")
+        self.btn_cancel.clicked.connect(self.reject)
+        btn_row.addWidget(self.btn_cancel)
+
+        self.btn_import = QPushButton("Importar a Aegis")
+        self.btn_import.setProperty("class", "clear-confirm-btn")
+        self.btn_import.clicked.connect(self.execute_import)
+        btn_row.addWidget(self.btn_import)
+
+        layout.addLayout(btn_row)
+
+    def browse_custom_profile(self):
+        folder = QFileDialog.getExistingDirectory(self, "Seleccionar carpeta de perfil de Brave (contiene History o Bookmarks)")
+        if folder:
+            p = Path(folder)
+            h, b = BraveImporter.get_profile_stats(p)
+            self.combo_profile.insertItem(0, f"Personalizado: {p.name} ({h:,} visitas, {b} marcadores)".replace(',', '.'), p)
+            self.combo_profile.setCurrentIndex(0)
+
+    def update_stats_label(self):
+        curr_path = self.combo_profile.currentData()
+        if curr_path and isinstance(curr_path, Path):
+            h, b = BraveImporter.get_profile_stats(curr_path)
+            self.lbl_stats.setText(f"✓ {h:,} páginas en historial y {b} marcadores listos para importar.".replace(',', '.'))
+            self.btn_import.setEnabled(True)
+        else:
+            self.lbl_stats.setText("⚠️ Selecciona la carpeta de Brave con el botón Examinar.")
+            self.btn_import.setEnabled(False)
+
+    def execute_import(self):
+        if not self.parent_win:
+            self.accept()
+            return
+        curr_path = self.combo_profile.currentData()
+        if not curr_path or not isinstance(curr_path, Path):
+            QMessageBox.warning(self, "Perfil no válido", "Por favor selecciona un perfil válido de Brave.")
+            return
+
+        do_hist = self.chk_history.isChecked()
+        do_bm = self.chk_bookmarks.isChecked()
+
+        if not do_hist and not do_bm:
+            QMessageBox.information(self, "Nada que importar", "Selecciona al menos una opción para importar.")
+            return
+
+        self.btn_import.setEnabled(False)
+        self.btn_import.setText("Importando...")
+        QApplication.processEvents()
+
+        h_count, b_count = BraveImporter.import_all(
+            curr_path,
+            self.parent_win.history_mgr,
+            self.parent_win.bookmark_mgr,
+            import_hist=do_hist,
+            import_bm=do_bm
+        )
+
+        self.parent_win.update_bookmarks_bar()
+        self.parent_win.load_userscripts()
+        
+        cur_tab = self.parent_win.current_tab_widget()
+        if cur_tab:
+            v_url = getattr(cur_tab, "_aegis_virtual_url", "")
+            if v_url in ("aegis://history", "aegis://start"):
+                self.parent_win.open_internal_page(v_url)
+
+        msg = f"¡Importación completada con éxito!\n\n• {h_count:,} elementos agregados al historial y frecuentes.\n• {b_count} marcadores añadidos.".replace(',', '.')
+        QMessageBox.information(self, "🦁 Importación de Brave Exitosa", msg)
+        self.parent_win.show_toast(f"✓ Datos de Brave importados ({h_count} visitas, {b_count} marcadores)")
+        self.accept()
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        qss = f"""
+            QDialog {{
+                background-color: {t['surface']};
+                color: {t['text']};
+            }}
+            QLabel {{
+                color: {t['text']};
+            }}
+            QFrame#BraveOptionsBox {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.12);
+                border-radius: 8px;
+            }}
+            QComboBox#BraveProfileCombo {{
+                background-color: {t['bg']};
+                color: {t['text']};
+                border: 1px solid rgba({rgb_text}, 0.2);
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-size: 12px;
+            }}
+            QCheckBox {{
+                color: {t['text']};
+                font-size: 12px;
+                spacing: 6px;
+            }}
+            QPushButton.clear-cancel-btn {{
+                background: transparent;
+                border: 1px solid rgba({rgb_text}, 0.25);
+                border-radius: 6px;
+                color: {t['text']};
+                padding: 6px 14px;
+                font-size: 12px;
+                font-weight: 500;
+            }}
+            QPushButton.clear-cancel-btn:hover {{
+                background-color: {t['bg']};
+            }}
+            QPushButton.clear-confirm-btn {{
+                background-color: {t['accent']};
+                border: none;
+                border-radius: 6px;
+                color: #ffffff;
+                padding: 6px 16px;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+            QPushButton.clear-confirm-btn:hover {{
+                opacity: 0.9;
             }}
         """
         self.setStyleSheet(qss)
@@ -4763,6 +5205,10 @@ class AegisBrowserWindow(QMainWindow):
         dlg.apply_theme(t)
         dlg.exec()
 
+    def open_brave_import_dialog(self):
+        dlg = AegisBraveImportDialog(self)
+        dlg.exec()
+
     def copy_clean_url(self):
         cur = self.current_view()
         if cur:
@@ -6243,6 +6689,9 @@ class AegisBrowserWindow(QMainWindow):
                     return
                 elif "open_clear_data_modal" in q:
                     self.open_clear_data_dialog()
+                    return
+                elif "import_brave" in q or "import_brave" in url_str:
+                    self.open_brave_import_dialog()
                     return
                 elif "open_scripts_folder" in q:
                     USERSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -7893,6 +8342,13 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
         </div>
         <button class="action-btn btn-danger" onclick="openClearDataModal()">Borrar Datos... (Ctrl+Shift+Del)</button>
       </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-name">Importar datos desde Brave Browser</span>
+          <span class="setting-desc">Transfiere de forma segura y 100% local tu historial, sitios frecuentes y marcadores guardados en Brave</span>
+        </div>
+        <button class="action-btn" style="background:#388bfd;color:#ffffff;border:none;" onclick="openBraveImportModal()">🦁 Importar desde Brave...</button>
+      </div>
     </div>
 
     <!-- 4. Pestañas y Rendimiento -->
@@ -7990,6 +8446,9 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
     }}
     function openClearDataModal() {{
       window.location.href = 'aegis://action?open_clear_data_modal=1';
+    }}
+    function openBraveImportModal() {{
+      window.location.href = 'aegis://action?import_brave=1';
     }}
   </script>
 </body>
