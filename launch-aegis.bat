@@ -4,7 +4,7 @@ cd /d "%~dp0"
 title Aegis Browser
 
 echo ==============================================================================
-echo                      INICIANDO AEGIS BROWSER v1.3.3
+echo                      INICIANDO AEGIS BROWSER v1.3.4
 echo            (Navegador Nativo con Chromium Engine y Rust Shields)
 echo ==============================================================================
 echo.

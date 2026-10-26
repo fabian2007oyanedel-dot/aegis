@@ -1236,6 +1236,10 @@ class AegisBrowserWindow(QMainWindow):
         self.stack = QStackedWidget()
         main_layout.addWidget(self.stack)
 
+    def save_theme(self, theme_name: str):
+        self.config["theme"] = theme_name
+        self.save_config()
+
     def toggle_theme(self):
         new_theme = "Claro" if self.current_theme_name == "Oscuro" else "Oscuro"
         self.apply_theme(new_theme)
