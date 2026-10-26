@@ -25,6 +25,12 @@ import gc
 import ctypes
 import base64
 import subprocess
+import re
+import struct
+import zipfile
+import io
+import urllib.request
+import shutil
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote, quote
 from ctypes import wintypes
@@ -76,6 +82,8 @@ HISTORY_FILE = Path.home() / ".aegis_browser_history.json"
 DOWNLOADS_FILE = Path.home() / ".aegis_browser_downloads.json"
 BOOKMARKS_FILE = Path.home() / ".aegis_browser_bookmarks.json"
 USERSCRIPTS_DIR = Path.home() / ".aegis_userscripts"
+EXTENSIONS_DIR = Path.home() / ".aegis_extensions"
+PROFILE_DIR = Path.home() / ".aegis_profile"
 
 # ── 2. Gestor de Sitios Frecuentes e Historial Real ───────────────────────────
 class HistoryManager:
@@ -326,6 +334,222 @@ class BookmarksManager:
 
     def is_bookmarked(self, url: str) -> bool:
         return any(b.get("url") == url for b in self.bookmarks)
+
+# ── 2.4 Gestor de Extensiones de Chrome Web Store (Chromium Nativo) ───────────
+CHROME_EXT_ID_RE = re.compile(r"([a-p]{32})", re.IGNORECASE)
+
+def extract_extension_id(text: str) -> str | None:
+    if not text:
+        return None
+    text = text.strip()
+    if len(text) == 32 and re.fullmatch(r"[a-zA-Z]{32}", text):
+        return text.lower()
+    m = CHROME_EXT_ID_RE.findall(text)
+    if m:
+        return m[-1].lower()
+    return None
+
+def _resolve_msg(text: str, locales_dir: Path) -> str:
+    if not isinstance(text, str) or not (text.startswith("__MSG_") and text.endswith("__")):
+        return text
+    msg_key = text[6:-2]
+    if locales_dir.exists():
+        for loc in ["es", "es_419", "es_ES", "en", "en_US", "en_GB"]:
+            loc_file = locales_dir / loc / "messages.json"
+            if loc_file.exists():
+                try:
+                    msgs = json.loads(loc_file.read_text(encoding="utf-8"))
+                    if msg_key in msgs and "message" in msgs[msg_key]:
+                        return msgs[msg_key]["message"]
+                except Exception:
+                    pass
+    return text
+
+def download_and_extract_crx(extension_id: str, dest_dir: Path) -> Path:
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    ext_dir = dest_dir / extension_id
+    if ext_dir.exists() and (ext_dir / "manifest.json").exists():
+        return ext_dir
+
+    url = (
+        f"https://clients2.google.com/service/update2/crx?"
+        f"response=redirect&prodversion=130.0.0.0&acceptformat=crx2,crx3&x=id%3D{extension_id}%26uc"
+    )
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    })
+
+    with urllib.request.urlopen(req, timeout=25) as resp:
+        data = resp.read()
+
+    if data[:4] != b"Cr24":
+        raise ValueError("El archivo recibido no es una extensión CRX válida de Google.")
+
+    version = struct.unpack("<I", data[4:8])[0]
+    if version == 2:
+        pub_len = struct.unpack("<I", data[8:12])[0]
+        sig_len = struct.unpack("<I", data[12:16])[0]
+        zip_offset = 16 + pub_len + sig_len
+    elif version == 3:
+        header_len = struct.unpack("<I", data[8:12])[0]
+        zip_offset = 12 + header_len
+    else:
+        raise ValueError(f"Versión CRX no compatible: {version}")
+
+    zip_data = data[zip_offset:]
+    ext_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(io.BytesIO(zip_data)) as z:
+        z.extractall(ext_dir)
+
+    return ext_dir
+
+def get_extension_info(ext_dir: Path) -> dict:
+    manifest_file = ext_dir / "manifest.json"
+    if not manifest_file.exists():
+        return {}
+    try:
+        data = json.loads(manifest_file.read_text(encoding="utf-8"))
+        locales_dir = ext_dir / "_locales"
+        name = _resolve_msg(data.get("name", ext_dir.name), locales_dir)
+        desc = _resolve_msg(data.get("description", ""), locales_dir)
+        ver = data.get("version", "1.0")
+
+        icon_b64 = None
+        icons_field = data.get("icons", {})
+        if isinstance(icons_field, dict) and icons_field:
+            for k in ["48", "128", "32", "16", list(icons_field.keys())[0]]:
+                if k in icons_field:
+                    icon_path = ext_dir / icons_field[k]
+                    if icon_path.exists():
+                        try:
+                            raw = icon_path.read_bytes()
+                            ext = icon_path.suffix.lower().lstrip(".") or "png"
+                            icon_b64 = f"data:image/{ext};base64,{base64.b64encode(raw).decode('ascii')}"
+                            break
+                        except Exception:
+                            pass
+        return {
+            "id": ext_dir.name,
+            "name": name,
+            "version": ver,
+            "description": desc,
+            "icon_b64": icon_b64,
+            "path": str(ext_dir)
+        }
+    except Exception as e:
+        return {"id": ext_dir.name, "name": ext_dir.name, "version": "1.0", "description": "", "icon_b64": None, "path": str(ext_dir)}
+
+class ChromeExtensionManager:
+    def __init__(self, base_dir: Path = EXTENSIONS_DIR):
+        self.base_dir = base_dir
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+
+    def get_installed_extensions(self) -> list[dict]:
+        results = []
+        if not self.base_dir.exists():
+            return results
+        for d in self.base_dir.iterdir():
+            if d.is_dir() and (d / "manifest.json").exists():
+                info = get_extension_info(d)
+                if info:
+                    results.append(info)
+        return results
+
+    def is_installed(self, ext_id: str) -> bool:
+        if not ext_id:
+            return False
+        return (self.base_dir / ext_id / "manifest.json").exists()
+
+    def install(self, text_or_id: str, profile: QWebEngineProfile = None) -> tuple[bool, str, dict]:
+        ext_id = extract_extension_id(text_or_id)
+        if not ext_id:
+            return False, "No se encontró un ID válido de extensión de Google Chrome.", {}
+
+        try:
+            ext_dir = download_and_extract_crx(ext_id, self.base_dir)
+            info = get_extension_info(ext_dir)
+            if profile and not profile.isOffTheRecord():
+                profile.extensionManager().loadExtension(str(ext_dir))
+            return True, "Extensión instalada correctamente.", info
+        except Exception as e:
+            return False, str(e), {}
+
+    def uninstall(self, ext_id: str, profile: QWebEngineProfile = None) -> tuple[bool, str]:
+        if not ext_id:
+            return False, "ID de extensión no válido."
+        ext_dir = self.base_dir / ext_id
+        if profile and not profile.isOffTheRecord():
+            mgr = profile.extensionManager()
+            for info in mgr.extensions():
+                if info.id() == ext_id or Path(info.path()).name == ext_id:
+                    try:
+                        mgr.unloadExtension(info)
+                    except Exception:
+                        pass
+                    break
+        if ext_dir.exists():
+            try:
+                shutil.rmtree(ext_dir, ignore_errors=True)
+            except Exception as e:
+                return False, f"Error eliminando archivos: {e}"
+        return True, "Extensión eliminada correctamente."
+
+    def load_all_into_profile(self, profile: QWebEngineProfile):
+        if not profile or profile.isOffTheRecord():
+            return
+        mgr = profile.extensionManager()
+        for ext in self.get_installed_extensions():
+            try:
+                mgr.loadExtension(ext["path"])
+            except Exception:
+                pass
+
+_SHARED_PERSISTENT_PROFILE = None
+
+def get_shared_profile() -> QWebEngineProfile:
+    global _SHARED_PERSISTENT_PROFILE
+    if _SHARED_PERSISTENT_PROFILE is None:
+        PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+        storage_dir = PROFILE_DIR / "storage"
+        cache_dir = PROFILE_DIR / "cache"
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        app = QApplication.instance()
+        _SHARED_PERSISTENT_PROFILE = QWebEngineProfile("aegis_profile", app)
+        _SHARED_PERSISTENT_PROFILE.setPersistentStoragePath(str(storage_dir))
+        _SHARED_PERSISTENT_PROFILE.setCachePath(str(cache_dir))
+        _SHARED_PERSISTENT_PROFILE.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
+        _SHARED_PERSISTENT_PROFILE.setHttpUserAgent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.5"
+        )
+        _SHARED_PERSISTENT_PROFILE.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
+        _SHARED_PERSISTENT_PROFILE.settings().setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
+        _SHARED_PERSISTENT_PROFILE.settings().setAttribute(QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, True)
+    return _SHARED_PERSISTENT_PROFILE
+
+class AegisToast(QLabel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("AegisToast")
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.hide()
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self.hide)
+
+    def show_message(self, text: str, duration_ms: int = 3500):
+        self.setText(text)
+        self.adjustSize()
+        self.setFixedSize(max(self.sizeHint().width() + 36, 260), 38)
+        if self.parent():
+            p_width = self.parent().width()
+            p_height = self.parent().height()
+            x = (p_width - self.width()) // 2
+            y = p_height - self.height() - 32
+            self.move(x, y)
+        self.show()
+        self.raise_()
+        self._timer.start(duration_ms)
 
 # ── 3. Optimizador Silencioso en Segundo Plano (Sin placebo ni botones falsos) ─
 TH32CS_SNAPPROCESS = 0x00000002
@@ -1225,7 +1449,7 @@ class AegisExtensionsPopup(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.setObjectName("AegisExtensionsPopup")
-        self.setFixedWidth(340)
+        self.setFixedWidth(350)
         self.parent_win = parent
         self.init_ui()
 
@@ -1244,6 +1468,14 @@ class AegisExtensionsPopup(QFrame):
         lbl_title.setStyleSheet("font-weight: 700; font-size: 13.5px;")
         header.addWidget(lbl_title)
         layout.addLayout(header)
+
+        # Card de Extensiones de Chrome Web Store
+        self.chrome_card = QFrame()
+        self.chrome_card.setObjectName("ExtensionCard")
+        self.chrome_inner_layout = QVBoxLayout(self.chrome_card)
+        self.chrome_inner_layout.setContentsMargins(10, 8, 10, 8)
+        self.chrome_inner_layout.setSpacing(4)
+        layout.addWidget(self.chrome_card)
 
         # Card de Aegis Shields
         shields_card = QFrame()
@@ -1283,6 +1515,12 @@ class AegisExtensionsPopup(QFrame):
         sep.setFixedHeight(1)
         layout.addWidget(sep)
 
+        btn_store = QPushButton("🛍️ Abrir Chrome Web Store")
+        btn_store.setProperty("class", "menu-item-btn")
+        btn_store.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_store.clicked.connect(self.open_chrome_store)
+        layout.addWidget(btn_store)
+
         btn_folder = QPushButton("📁 Abrir carpeta de scripts (.js)")
         btn_folder.setProperty("class", "menu-item-btn")
         btn_folder.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1294,6 +1532,15 @@ class AegisExtensionsPopup(QFrame):
         btn_manage.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_manage.clicked.connect(lambda: (self.hide(), self.parent_win.open_internal_page("aegis://extensions")))
         layout.addWidget(btn_manage)
+
+    def open_chrome_store(self):
+        self.hide()
+        if self.parent_win:
+            v = self.parent_win.current_view()
+            if v:
+                v.load(QUrl("https://chromewebstore.google.com"))
+            else:
+                self.parent_win.add_new_tab("https://chromewebstore.google.com")
 
     def on_shields_toggled(self, checked: bool):
         if self.parent_win and hasattr(self.parent_win, "interceptor"):
@@ -1309,6 +1556,38 @@ class AegisExtensionsPopup(QFrame):
         self.hide()
 
     def refresh_state(self):
+        # 1. Extensiones Chrome Web Store
+        while self.chrome_inner_layout.count():
+            item = self.chrome_inner_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        lbl_c = QLabel("Extensiones Chrome Web Store")
+        lbl_c.setStyleSheet("font-weight: 600; font-size: 12.5px;")
+        self.chrome_inner_layout.addWidget(lbl_c)
+
+        exts = self.parent_win.extensions_mgr.get_installed_extensions() if (self.parent_win and hasattr(self.parent_win, "extensions_mgr")) else []
+        if exts:
+            lbl_c_status = QLabel(f"✓ {len(exts)} activa(s)")
+            lbl_c_status.setStyleSheet("font-size: 11px; color: #2ea043; font-weight: 500;")
+            self.chrome_inner_layout.addWidget(lbl_c_status)
+            for ext in exts[:3]:
+                name = ext.get("name", "Extensión")
+                ver = ext.get("version", "")
+                lbl_name = QLabel(f"• {name} (v{ver})")
+                lbl_name.setStyleSheet("font-size: 11px; opacity: 0.85;")
+                self.chrome_inner_layout.addWidget(lbl_name)
+            if len(exts) > 3:
+                lbl_more = QLabel(f"+ {len(exts) - 3} más en aegis://extensions")
+                lbl_more.setStyleSheet("font-size: 10.5px; opacity: 0.6;")
+                self.chrome_inner_layout.addWidget(lbl_more)
+        else:
+            lbl_none_c = QLabel("Sin extensiones de Chrome instaladas")
+            lbl_none_c.setStyleSheet("font-size: 11px; opacity: 0.6;")
+            self.chrome_inner_layout.addWidget(lbl_none_c)
+
+        # 2. UserScripts
         while self.sc_inner_layout.count():
             item = self.sc_inner_layout.takeAt(0)
             w = item.widget()
@@ -1675,34 +1954,34 @@ class AegisBrowserWindow(QMainWindow):
         self.config = self.load_config()
         self.current_theme_name = self.config.get("theme", "Oscuro")
 
-        # Gestores reales (Historial, Descargas Nativas y Marcadores)
+        # Gestores reales (Historial, Descargas Nativas, Marcadores y Extensiones Chrome)
         self.history_mgr = HistoryManager()
         self.downloads_mgr = DownloadsManager()
         self.bookmarks_mgr = BookmarksManager()
+        self.extensions_mgr = ChromeExtensionManager()
         self.closed_tabs = []
 
         # Configurar Perfil Chromium
+        self.interceptor = AegisRequestInterceptor(self.on_shield_block)
         if self.is_incognito:
             self.profile = QWebEngineProfile(self)
+            self.profile.setHttpUserAgent(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.5"
+            )
+            self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
+            self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
+            self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, True)
+            self.profile.setUrlRequestInterceptor(self.interceptor)
+            self.profile.downloadRequested.connect(self.on_download_requested)
+            self.load_userscripts()
         else:
-            self.profile = QWebEngineProfile.defaultProfile()
-
-        self.profile.setHttpUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.5"
-        )
-        self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
-        self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
-        self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, True)
-
-        # Interceptor de peticiones de red
-        self.interceptor = AegisRequestInterceptor(self.on_shield_block)
-        self.profile.setUrlRequestInterceptor(self.interceptor)
-
-        # Gestor de Descargas Nativas conectado a Chromium
-        self.profile.downloadRequested.connect(self.on_download_requested)
-
-        # Cargar scripts de usuario (UserScripts)
-        self.load_userscripts()
+            self.profile = get_shared_profile()
+            if not getattr(self.profile, "_aegis_configured", False):
+                self.profile._aegis_configured = True
+                self.profile.setUrlRequestInterceptor(self.interceptor)
+                self.profile.downloadRequested.connect(self.on_download_requested)
+                self.load_userscripts()
+                self.extensions_mgr.load_all_into_profile(self.profile)
 
         self.views = []
         self.init_ui()
@@ -1713,8 +1992,9 @@ class AegisBrowserWindow(QMainWindow):
         self.downloads_popup = AegisDownloadsPopup(self)
         self.extensions_popup = AegisExtensionsPopup(self)
 
-        # Barra de búsqueda flotante en página (Ctrl+F)
+        # Barra de búsqueda flotante en página (Ctrl+F) y Toast de notificaciones
         self.find_bar = FindInPageWidget(self)
+        self.toast = AegisToast(self)
 
         # Atajos de teclado nativos
         self.setup_shortcuts()
@@ -1735,6 +2015,10 @@ class AegisBrowserWindow(QMainWindow):
         super().resizeEvent(event)
         if hasattr(self, "find_bar") and self.find_bar.isVisible():
             self.find_bar.reposition()
+        if hasattr(self, "toast") and self.toast.isVisible():
+            x = (self.width() - self.toast.width()) // 2
+            y = self.height() - self.toast.height() - 32
+            self.toast.move(x, y)
 
     def load_config(self) -> dict:
         default_config = {
@@ -2100,6 +2384,11 @@ class AegisBrowserWindow(QMainWindow):
             "historial": "aegis://history",
             "extensions": "aegis://extensions",
             "extensiones": "aegis://extensions",
+            "chrome://extensions": "aegis://extensions",
+            "chrome://settings": "aegis://settings",
+            "chrome://downloads": "aegis://downloads",
+            "chrome://history": "aegis://history",
+            "about:extensions": "aegis://extensions",
             "start": "aegis://start",
             "inicio": "aegis://start"
         }
@@ -2345,6 +2634,15 @@ class AegisBrowserWindow(QMainWindow):
 
         toolbar_layout.addWidget(self.url_bar)
 
+        # Botón dinámico de instalación de Chrome Web Store (🧩 Añadir a Aegis)
+        self.btn_webstore_install = QPushButton("🧩 Añadir a Aegis")
+        self.btn_webstore_install.setObjectName("WebstoreInstallBtn")
+        self.btn_webstore_install.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_webstore_install.setToolTip("Instalar esta extensión de Chrome Web Store en Aegis")
+        self.btn_webstore_install.clicked.connect(self.on_webstore_install_clicked)
+        self.btn_webstore_install.hide()
+        toolbar_layout.addWidget(self.btn_webstore_install)
+
         # Botón Estrella Marcador (☆ / ★)
         self.btn_bookmark = QPushButton("☆")
         self.btn_bookmark.setObjectName("BookmarkBtn")
@@ -2539,6 +2837,33 @@ class AegisBrowserWindow(QMainWindow):
             }}
             QPushButton#BookmarkBtn:hover {{
                 background-color: {t['surface']};
+            }}
+            QPushButton#WebstoreInstallBtn {{
+                background-color: {t['accent']};
+                color: #ffffff;
+                border: none;
+                border-radius: 13px;
+                padding: 4px 12px;
+                font-size: 11.5px;
+                font-weight: 600;
+                height: 22px;
+            }}
+            QPushButton#WebstoreInstallBtn:hover {{
+                background-color: {t['accent']};
+                opacity: 0.9;
+            }}
+            QPushButton#WebstoreInstallBtn:disabled {{
+                background-color: rgba({rgb_text}, 0.1);
+                color: #2ea043;
+            }}
+            QLabel#AegisToast {{
+                background-color: {t['surface']};
+                color: {t['text']};
+                border: 1.5px solid {t['accent']};
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                padding: 4px 16px;
             }}
             QPushButton#DownloadsBtn {{
                 background: transparent;
@@ -2823,7 +3148,8 @@ class AegisBrowserWindow(QMainWindow):
             self.tab_bar.setTabText(idx, "Extensiones")
         view._aegis_virtual_url = "aegis://extensions"
         scripts = [f.name for f in USERSCRIPTS_DIR.glob("*.js")] if USERSCRIPTS_DIR.exists() else []
-        html = get_extensions_html(t["ntp_class"], scripts)
+        chrome_exts = self.extensions_mgr.get_installed_extensions()
+        html = get_extensions_html(t["ntp_class"], chrome_exts, scripts)
         view.setHtml(html, QUrl("aegis://extensions"))
         if view == self.current_view():
             self.url_bar.setText("aegis://extensions")
@@ -3025,6 +3351,27 @@ class AegisBrowserWindow(QMainWindow):
                     USERSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
                     subprocess.Popen(f'explorer.exe "{str(USERSCRIPTS_DIR)}"')
                     return
+                elif "install_extension" in q:
+                    ext_id = unquote(q["install_extension"][0])
+                    self.install_extension_flow(ext_id, view)
+                    return
+                elif "remove_extension" in q:
+                    ext_id = unquote(q["remove_extension"][0])
+                    ok, msg = self.extensions_mgr.uninstall(ext_id, self.profile)
+                    self.show_toast(msg)
+                    if hasattr(self, "extensions_popup"):
+                        self.extensions_popup.refresh_state()
+                    if getattr(view, "_aegis_virtual_url", "") == "aegis://extensions":
+                        self.load_extensions(view)
+                    return
+                elif "install_input" in q:
+                    input_val = unquote(q["install_input"][0])
+                    ext_id = extract_extension_id(input_val)
+                    if not ext_id:
+                        self.show_toast("No se reconoció un enlace o ID válido de Chrome Web Store.")
+                    else:
+                        self.install_extension_flow(ext_id, view)
+                    return
             except Exception:
                 pass
             return
@@ -3042,6 +3389,22 @@ class AegisBrowserWindow(QMainWindow):
             else:
                 self.url_bar.setText(url_str)
 
+            # Detección y botón dinámico para Chrome Web Store
+            is_cws = ("chromewebstore.google.com/detail" in url_str or "chrome.google.com/webstore/detail" in url_str)
+            ext_id = extract_extension_id(url_str) if is_cws else None
+            if hasattr(self, "btn_webstore_install"):
+                if is_cws and ext_id:
+                    self.btn_webstore_install.setProperty("ext_id", ext_id)
+                    if self.extensions_mgr.is_installed(ext_id):
+                        self.btn_webstore_install.setText("✓ Instalada")
+                        self.btn_webstore_install.setEnabled(False)
+                    else:
+                        self.btn_webstore_install.setText("🧩 Añadir a Aegis")
+                        self.btn_webstore_install.setEnabled(True)
+                    self.btn_webstore_install.show()
+                else:
+                    self.btn_webstore_install.hide()
+
             # Actualizar botón de estrella de marcadores
             if hasattr(self, "bookmarks_mgr") and hasattr(self, "btn_bookmark"):
                 is_bm = self.bookmarks_mgr.is_bookmarked(url_str)
@@ -3049,6 +3412,49 @@ class AegisBrowserWindow(QMainWindow):
                 accent = THEMES[self.current_theme_name]["accent"]
                 self.btn_bookmark.setStyleSheet(f"color: {accent};" if is_bm else "")
                 self.btn_bookmark.setToolTip("Marcador guardado (Click para quitar)" if is_bm else "Añadir esta pestaña a marcadores (Ctrl+D)")
+
+    def on_webstore_install_clicked(self):
+        ext_id = self.btn_webstore_install.property("ext_id")
+        if ext_id:
+            self.install_extension_flow(ext_id, self.current_view())
+
+    def install_extension_flow(self, ext_id: str, view=None):
+        if hasattr(self, "btn_webstore_install"):
+            self.btn_webstore_install.setText("⏳ Instalando...")
+            self.btn_webstore_install.setEnabled(False)
+            self.btn_webstore_install.show()
+        QApplication.processEvents()
+
+        ok, msg, info = self.extensions_mgr.install(ext_id, self.profile)
+        if ok:
+            name = info.get("name", ext_id)
+            if hasattr(self, "btn_webstore_install"):
+                self.btn_webstore_install.setText("✓ Instalada")
+                self.btn_webstore_install.setEnabled(False)
+            self.show_toast(f"🧩 '{name}' se instaló y activó correctamente en Aegis.")
+            if view:
+                view.page().runJavaScript("""
+                    try {
+                        const b = document.getElementById('aegis-inject-install-btn');
+                        if (b) {
+                            b.outerHTML = '<span style="color:#2ea043; background:rgba(46,160,67,0.15); padding:5px 12px; border-radius:8px; font-size:12px;">✓ Instalada</span>';
+                        }
+                    } catch(e) {}
+                """)
+            if hasattr(self, "extensions_popup"):
+                self.extensions_popup.refresh_state()
+            cur = self.current_view()
+            if cur and getattr(cur, "_aegis_virtual_url", "") == "aegis://extensions":
+                self.load_extensions(cur)
+        else:
+            if hasattr(self, "btn_webstore_install"):
+                self.btn_webstore_install.setText("❌ Error")
+                self.btn_webstore_install.setEnabled(True)
+            self.show_toast(f"Error al instalar: {msg}")
+
+    def show_toast(self, text: str):
+        if hasattr(self, "toast"):
+            self.toast.show_message(text)
 
     def on_load_progress(self, progress: int):
         if progress < 100:
@@ -3117,6 +3523,78 @@ class AegisBrowserWindow(QMainWindow):
             js = SHIELDS_CORE.get_injected_scripts(current_url)
             if js:
                 view.page().runJavaScript(js)
+
+            # Banner interactivo en páginas de extensiones de Chrome Web Store
+            if "chromewebstore.google.com/detail" in current_url or "chrome.google.com/webstore/detail" in current_url:
+                ext_id = extract_extension_id(current_url)
+                if ext_id:
+                    is_inst = self.extensions_mgr.is_installed(ext_id)
+                    t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+                    accent_col = t["accent"]
+                    bg_col = t["surface"]
+                    text_col = t["text"]
+                    inject_script = f"""
+                    (() => {{
+                        try {{
+                            if (document.getElementById('aegis-cws-banner')) return;
+                            const bar = document.createElement('div');
+                            bar.id = 'aegis-cws-banner';
+                            bar.style.position = 'fixed';
+                            bar.style.bottom = '24px';
+                            bar.style.right = '24px';
+                            bar.style.zIndex = '2147483647';
+                            bar.style.backgroundColor = '{bg_col}';
+                            bar.style.color = '{text_col}';
+                            bar.style.border = '1.5px solid {accent_col}';
+                            bar.style.borderRadius = '12px';
+                            bar.style.padding = '10px 18px';
+                            bar.style.fontFamily = '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+                            bar.style.fontSize = '13px';
+                            bar.style.fontWeight = '600';
+                            bar.style.display = 'flex';
+                            bar.style.alignItems = 'center';
+                            bar.style.gap = '14px';
+                            bar.style.boxShadow = '0 8px 32px rgba(0,0,0,0.45)';
+
+                            const isInst = {json.dumps(is_inst)};
+                            const extId = {json.dumps(ext_id)};
+
+                            bar.innerHTML = `
+                                <span style="display:flex; align-items:center; gap:8px;">
+                                    <span style="font-size:18px;">🧩</span>
+                                    <span>Aegis Browser</span>
+                                </span>
+                                ${{isInst ?
+                                    '<span style="color:#2ea043; background:rgba(46,160,67,0.15); padding:5px 12px; border-radius:8px; font-size:12px;">✓ Instalada</span>' :
+                                    `<button id="aegis-inject-install-btn" style="background:{accent_col}; color:#ffffff; border:none; border-radius:8px; padding:6px 14px; font-weight:700; cursor:pointer; font-size:12.5px;">Añadir a Aegis</button>`
+                                }}
+                            `;
+                            document.body.appendChild(bar);
+
+                            const btn = document.getElementById('aegis-inject-install-btn');
+                            if (btn) {{
+                                btn.onclick = () => {{
+                                    btn.textContent = '⏳ Instalando...';
+                                    btn.disabled = true;
+                                    window.location.href = 'aegis://action?install_extension=' + extId;
+                                }};
+                            }}
+
+                            document.addEventListener('click', (e) => {{
+                                const b = e.target.closest('button, [role="button"]');
+                                if (b && !b.id.includes('aegis')) {{
+                                    const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
+                                    if (txt.includes('añadir a chrome') || txt.includes('add to chrome') || txt.includes('agregar a chrome')) {{
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        window.location.href = 'aegis://action?install_extension=' + extId;
+                                    }}
+                                }}
+                            }}, true);
+                        }} catch(e) {{}}
+                    }})();
+                    """
+                    view.page().runJavaScript(inject_script)
 
     def on_shield_block(self):
         self.shield_btn.setText(f" {SHIELDS_CORE.total_blocked}")
@@ -4209,9 +4687,56 @@ def get_history_html(theme_class: str = "theme-dark", history_items: list = None
 """
 
 # ── 12.5 Plantilla HTML de Extensiones (aegis://extensions) ───────────────────
-def get_extensions_html(theme_class: str = "theme-dark", scripts: list = None) -> str:
+def get_extensions_html(theme_class: str = "theme-dark", chrome_extensions: list = None, scripts: list = None) -> str:
+    # Compatibilidad inteligente si se invoca con la firma anterior (theme_class, scripts)
+    if chrome_extensions is not None and len(chrome_extensions) > 0 and isinstance(chrome_extensions[0], str):
+        scripts = chrome_extensions
+        chrome_extensions = []
+
+    if chrome_extensions is None:
+        chrome_extensions = []
     if scripts is None:
         scripts = []
+
+    chrome_exts_html = ""
+    if not chrome_extensions:
+        chrome_exts_html = """
+        <div style="padding: 24px; text-align: center; opacity: 0.8; font-size: 0.88rem; line-height: 1.6;">
+          <p style="margin-bottom: 14px;">No tienes extensiones de Google Chrome instaladas todavía.</p>
+          <button class="action-btn-primary" onclick="openWebStore()">
+            🛍️ Explorar la Chrome Web Store
+          </button>
+        </div>
+        """
+    else:
+        for ext in chrome_extensions:
+            eid = ext.get("id", "")
+            name = ext.get("name", eid)
+            ver = ext.get("version", "1.0")
+            desc = ext.get("description", "")
+            icon_b64 = ext.get("icon_b64")
+            if icon_b64:
+                icon_tag = f'<img src="{icon_b64}" width="32" height="32" style="border-radius: 6px; object-fit: contain;" alt="" />'
+            else:
+                icon_tag = '<span style="font-size: 1.5rem;">🧩</span>'
+
+            chrome_exts_html += f"""
+            <div class="ext-item">
+              <div class="ext-icon-box">{icon_tag}</div>
+              <div class="ext-info">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span class="ext-name">{name}</span>
+                  <span class="ext-badge">v{ver}</span>
+                </div>
+                {f'<span class="ext-sub">{desc}</span>' if desc else ''}
+                <span class="ext-id">ID: {eid}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 0.8rem; color: #2ea043; font-weight: 600;">● Activa</span>
+                <button class="action-btn-danger" onclick="removeExtension('{eid}')">Eliminar</button>
+              </div>
+            </div>
+            """
 
     scripts_html = ""
     if not scripts:
@@ -4263,15 +4788,20 @@ def get_extensions_html(theme_class: str = "theme-dark", scripts: list = None) -
     }}
     .container {{
       width: 100%;
-      max-width: 680px;
+      max-width: 720px;
     }}
     .header {{
       display: flex;
       align-items: center;
-      gap: 12px;
+      justify-content: space-between;
       margin-bottom: 2rem;
       padding-bottom: 1rem;
       border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+    }}
+    .header-left {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }}
     .title {{
       font-size: 1.5rem;
@@ -4298,24 +4828,71 @@ def get_extensions_html(theme_class: str = "theme-dark", scripts: list = None) -
       margin-bottom: 8px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
     }}
-    .ext-icon {{
-      font-size: 1.4rem;
+    .ext-icon-box {{
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
     }}
     .ext-info {{
       display: flex;
       flex-direction: column;
       gap: 3px;
       flex: 1;
+      min-width: 0;
     }}
     .ext-name {{
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
+    .ext-badge {{
+      font-size: 0.72rem;
+      padding: 2px 7px;
+      border-radius: 10px;
+      background: rgba(128, 128, 128, 0.15);
+      opacity: 0.85;
+      font-weight: 500;
     }}
     .ext-sub {{
       font-size: 0.8rem;
       opacity: 0.65;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }}
+    .ext-id {{
+      font-family: monospace;
+      font-size: 0.72rem;
+      opacity: 0.45;
+      margin-top: 2px;
+    }}
+    .search-row {{
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }}
+    .ext-search-input {{
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid rgba(128, 128, 128, 0.25);
+      border-radius: 8px;
+      padding: 9px 14px;
+      color: var(--text);
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }}
+    .ext-search-input:focus {{
+      border-color: var(--accent);
     }}
     button.action-btn {{
       background: var(--bg);
@@ -4327,27 +4904,83 @@ def get_extensions_html(theme_class: str = "theme-dark", scripts: list = None) -
       font-weight: 500;
       cursor: pointer;
       outline: none;
+      transition: all 0.15s ease;
     }}
     button.action-btn:hover {{
       border-color: var(--accent);
       color: var(--accent);
+    }}
+    button.action-btn-primary {{
+      background: var(--accent);
+      color: #ffffff;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      outline: none;
+      transition: opacity 0.15s;
+    }}
+    button.action-btn-primary:hover {{
+      opacity: 0.9;
+    }}
+    button.action-btn-danger {{
+      background: transparent;
+      color: #f85149;
+      border: 1px solid rgba(248, 81, 73, 0.35);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+      transition: all 0.15s ease;
+    }}
+    button.action-btn-danger:hover {{
+      background: rgba(248, 81, 73, 0.15);
+      border-color: #f85149;
     }}
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
-        <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
-      </svg>
-      <h1 class="title">Extensiones y Módulos</h1>
+      <div class="header-left">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+          <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+        </svg>
+        <h1 class="title">Extensiones y Complementos</h1>
+      </div>
+      <button class="action-btn-primary" onclick="openWebStore()">🛍️ Chrome Web Store</button>
+    </div>
+
+    <!-- Instalador por URL o ID -->
+    <div class="card">
+      <h2 class="card-title">Instalar Extensión desde Chrome Web Store</h2>
+      <p style="font-size: 0.82rem; opacity: 0.75; line-height: 1.4;">
+        Pega el enlace de la extensión en la Chrome Web Store o introduce su ID de 32 caracteres para instalarla directamente en Aegis.
+      </p>
+      <form onsubmit="installFromInput(event)" class="search-row">
+        <input id="extInput" type="text" placeholder="https://chromewebstore.google.com/detail/... o ID de extensión" class="ext-search-input" />
+        <button type="submit" class="action-btn-primary">Instalar</button>
+      </form>
+    </div>
+
+    <!-- Extensiones de Chrome Web Store Instaladas -->
+    <div class="card">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <h2 class="card-title" style="margin-bottom: 0;">Extensiones de Chrome Instaladas</h2>
+        <button class="action-btn" onclick="openWebStore()">+ Añadir más</button>
+      </div>
+      {chrome_exts_html}
     </div>
 
     <!-- Módulos de Aegis Nativos -->
     <div class="card">
       <h2 class="card-title">Motores Nativos de Aegis Shields (Activos)</h2>
       <div class="ext-item">
-        <span class="ext-icon">🛡️</span>
+        <span style="font-size: 1.5rem;">🛡️</span>
         <div class="ext-info">
           <span class="ext-name">Aegis Shields Rust Core</span>
           <span class="ext-sub">Bloqueo de red socket Rust FFI con reglas EasyList y uBlock</span>
@@ -4355,7 +4988,7 @@ def get_extensions_html(theme_class: str = "theme-dark", scripts: list = None) -
         <span style="font-size: 0.8rem; color: #2ea043; font-weight: 600;">Activo</span>
       </div>
       <div class="ext-item">
-        <span class="ext-icon">⚡</span>
+        <span style="font-size: 1.5rem;">⚡</span>
         <div class="ext-info">
           <span class="ext-name">Aegis Video & Countdown Defuser</span>
           <span class="ext-sub">Bypass de anuncios en video, muros anti-adblock y acortadores</span>
@@ -4363,7 +4996,7 @@ def get_extensions_html(theme_class: str = "theme-dark", scripts: list = None) -
         <span style="font-size: 0.8rem; color: #2ea043; font-weight: 600;">Activo</span>
       </div>
       <div class="ext-item">
-        <span class="ext-icon">🎨</span>
+        <span style="font-size: 1.5rem;">🎨</span>
         <div class="ext-info">
           <span class="ext-name">Aegis Cosmetic Engine</span>
           <span class="ext-sub">Filtrado cosmético CSS inmediato inyectado en páginas</span>
@@ -4386,8 +5019,23 @@ def get_extensions_html(theme_class: str = "theme-dark", scripts: list = None) -
   </div>
 
   <script>
+    function openWebStore() {{
+      window.location.href = 'https://chromewebstore.google.com';
+    }}
     function openScriptsFolder() {{
       window.location.href = 'aegis://action?open_scripts_folder=1';
+    }}
+    function removeExtension(extId) {{
+      if (confirm('¿Deseas desinstalar esta extensión de Aegis Browser?')) {{
+        window.location.href = 'aegis://action?remove_extension=' + encodeURIComponent(extId);
+      }}
+    }}
+    function installFromInput(e) {{
+      e.preventDefault();
+      const val = document.getElementById('extInput').value.trim();
+      if (val) {{
+        window.location.href = 'aegis://action?install_input=' + encodeURIComponent(val);
+      }}
     }}
   </script>
 </body>
