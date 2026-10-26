@@ -26,7 +26,7 @@ import ctypes
 import base64
 import subprocess
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs, unquote
+from urllib.parse import urlparse, parse_qs, unquote, quote
 from ctypes import wintypes
 
 # ── 1. Hardening Extremo de Chromium (CPU, RAM y Rendimiento de Renderizado) ──
@@ -46,7 +46,9 @@ os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
     "--disable-background-networking "
     "--disable-component-update "
     "--disable-client-side-phishing-detection "
-    "--enable-features=WebContentsDiscarding,IntensiveWakeUpThrottling,ParallelDownloading,CanvasOopRasterization,PurgeAndSuspend,BlinkMemorySaver "
+    "--enable-features=WebContentsDiscarding,IntensiveWakeUpThrottling,ParallelDownloading,CanvasOopRasterization,PurgeAndSuspend,BlinkMemorySaver,WebContentsForceDark "
+    "--force-dark-mode "
+    "--blink-settings=forceDarkModeEnabled=true "
     "--disable-features=Translate,OptimizationHints,MediaRouter "
     "--num-raster-threads=2 "
     "--v8-cache-options=code "
@@ -56,14 +58,15 @@ os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QProgressBar, QTabBar, QStackedWidget,
-    QLabel, QCheckBox, QFrame, QAbstractButton, QSizePolicy
+    QLabel, QCheckBox, QFrame, QAbstractButton, QSizePolicy,
+    QMenu, QCompleter
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
     QWebEngineProfile, QWebEngineSettings, QWebEngineUrlRequestInterceptor,
-    QWebEngineDownloadRequest, QWebEngineScript
+    QWebEngineDownloadRequest, QWebEngineScript, QWebEnginePage
 )
-from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer, QByteArray, QBuffer, QIODevice, QSize
+from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer, QByteArray, QBuffer, QIODevice, QSize, QStringListModel
 from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QIcon, QPixmap, QShortcut, QKeySequence
 from PyQt6.QtSvg import QSvgRenderer
 
@@ -71,6 +74,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_FILE = Path.home() / ".aegis_browser_config.json"
 HISTORY_FILE = Path.home() / ".aegis_browser_history.json"
 DOWNLOADS_FILE = Path.home() / ".aegis_browser_downloads.json"
+BOOKMARKS_FILE = Path.home() / ".aegis_browser_bookmarks.json"
 USERSCRIPTS_DIR = Path.home() / ".aegis_userscripts"
 
 # ── 2. Gestor de Sitios Frecuentes e Historial Real ───────────────────────────
@@ -273,6 +277,55 @@ class DownloadsManager:
     def clear(self):
         self.downloads = []
         self.save()
+
+# ── 2.2 Helper Global de Formato de Bytes ─────────────────────────────────────
+def format_bytes(b: int) -> str:
+    if not b or b < 1024:
+        return f"{b or 0} B"
+    elif b < 1024 * 1024:
+        return f"{b / 1024:.1f} KB"
+    else:
+        return f"{b / (1024 * 1024):.1f} MB"
+
+# ── 2.3 Gestor de Marcadores y Favoritos (Bookmarks) ──────────────────────────
+class BookmarksManager:
+    def __init__(self):
+        self.bookmarks = []
+        self.load()
+
+    def load(self):
+        if BOOKMARKS_FILE.exists():
+            try:
+                self.bookmarks = json.loads(BOOKMARKS_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                self.bookmarks = []
+        else:
+            self.bookmarks = [
+                {"title": "DuckDuckGo", "url": "https://duckduckgo.com"},
+                {"title": "GitHub", "url": "https://github.com"},
+                {"title": "Wikipedia", "url": "https://wikipedia.org"}
+            ]
+            self.save()
+
+    def save(self):
+        try:
+            BOOKMARKS_FILE.write_text(json.dumps(self.bookmarks, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
+
+    def add(self, title: str, url: str) -> bool:
+        if any(b.get("url") == url for b in self.bookmarks):
+            return False
+        self.bookmarks.append({"title": title, "url": url, "created": time.time()})
+        self.save()
+        return True
+
+    def remove(self, url: str):
+        self.bookmarks = [b for b in self.bookmarks if b.get("url") != url]
+        self.save()
+
+    def is_bookmarked(self, url: str) -> bool:
+        return any(b.get("url") == url for b in self.bookmarks)
 
 # ── 3. Optimizador Silencioso en Segundo Plano (Sin placebo ni botones falsos) ─
 TH32CS_SNAPPROCESS = 0x00000002
@@ -789,7 +842,7 @@ class AegisAppMenu(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.setObjectName("AegisAppMenu")
-        self.setFixedWidth(240)
+        self.setFixedWidth(260)
         self.parent_win = parent
         self.init_ui()
 
@@ -835,10 +888,17 @@ class AegisAppMenu(QFrame):
 
         add_item("➕ Nueva pestaña", "Ctrl+T", lambda: self.parent_win.add_new_tab())
         add_item("🗂️ Nueva ventana", "Ctrl+N", lambda: self.parent_win.open_new_window())
+        add_item("🕶️ Ventana privada", "Ctrl+Shift+N", lambda: self.parent_win.open_incognito_window())
+        add_item("↩️ Reabrir pestaña cerrada", "Ctrl+Shift+T", lambda: self.parent_win.reopen_closed_tab())
         add_separator()
+        add_item("⭐ Barra de marcadores", "Ctrl+Shift+B", lambda: self.parent_win.toggle_bookmarks_bar())
         add_item("📥 Descargas", "Ctrl+J", lambda: self.parent_win.open_internal_page("aegis://downloads"))
         add_item("🕒 Historial", "Ctrl+H", lambda: self.parent_win.open_internal_page("aegis://history"))
         add_item("🧩 Extensiones", "Ctrl+Shift+E", lambda: self.parent_win.open_internal_page("aegis://extensions"))
+        add_separator()
+        add_item("🔍 Buscar en la página", "Ctrl+F", lambda: self.parent_win.find_bar.show_find())
+        add_item("🔇 Silenciar pestaña", "Ctrl+M", lambda: self.parent_win.toggle_mute_current_tab())
+        add_item("🛠️ DevTools / Inspeccionar", "F12", lambda: self.parent_win.open_devtools())
         add_separator()
         add_item("⚙️ Configuración", "Alt+S", lambda: self.parent_win.open_internal_page("aegis://settings"))
         add_separator()
@@ -872,7 +932,7 @@ class AegisAppMenu(QFrame):
         layout.addWidget(zoom_widget)
         add_separator()
 
-        add_item("ℹ️ Acerca de Aegis v1.3.4", "", lambda: self.parent_win.open_internal_page("aegis://settings"))
+        add_item("ℹ️ Acerca de Aegis v1.3.5", "", lambda: self.parent_win.open_internal_page("aegis://settings"))
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
@@ -929,26 +989,581 @@ class AegisAppMenu(QFrame):
         self.setStyleSheet(qss)
         self.update()
 
+# ── 10.2 Panel Desplegable de Descargas (Directo desde la Toolbar) ─────────────
+class AegisDownloadsPopup(QFrame):
+    def __init__(self, parent=None):
+        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setObjectName("AegisDownloadsPopup")
+        self.setFixedWidth(340)
+        self.parent_win = parent
+        self.init_ui()
+
+    def hideEvent(self, event):
+        if self.parent_win:
+            self.parent_win._last_downloads_close_time = time.time()
+        super().hideEvent(event)
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        header = QHBoxLayout()
+        lbl_title = QLabel("Descargas recientes")
+        lbl_title.setStyleSheet("font-weight: 700; font-size: 13.5px;")
+        header.addWidget(lbl_title)
+        header.addStretch()
+
+        btn_folder = QPushButton("📁 Abrir Carpeta")
+        btn_folder.setProperty("class", "mini-action-btn")
+        btn_folder.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_folder.clicked.connect(self.open_downloads_folder)
+        header.addWidget(btn_folder)
+        layout.addLayout(header)
+
+        self.list_container = QVBoxLayout()
+        self.list_container.setSpacing(6)
+        layout.addLayout(self.list_container)
+
+        self.refresh_list()
+
+        sep = QFrame()
+        sep.setObjectName("MenuSeparator")
+        sep.setFixedHeight(1)
+        layout.addWidget(sep)
+
+        footer = QHBoxLayout()
+        btn_all = QPushButton("Ver todas las descargas")
+        btn_all.setProperty("class", "menu-item-btn")
+        btn_all.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_all.clicked.connect(lambda: (self.hide(), self.parent_win.open_internal_page("aegis://downloads")))
+        footer.addWidget(btn_all)
+
+        btn_clear = QPushButton("Limpiar lista")
+        btn_clear.setProperty("class", "menu-item-btn")
+        btn_clear.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_clear.clicked.connect(self.clear_downloads)
+        footer.addWidget(btn_clear)
+        layout.addLayout(footer)
+
+    def open_downloads_folder(self):
+        folder = Path.home() / "Downloads"
+        folder.mkdir(parents=True, exist_ok=True)
+        subprocess.Popen(f'explorer.exe "{str(folder)}"')
+        self.hide()
+
+    def clear_downloads(self):
+        if self.parent_win and hasattr(self.parent_win, "downloads_mgr"):
+            self.parent_win.downloads_mgr.clear()
+            self.refresh_list()
+
+    def refresh_list(self):
+        while self.list_container.count():
+            item = self.list_container.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        downloads = self.parent_win.downloads_mgr.downloads if (self.parent_win and hasattr(self.parent_win, "downloads_mgr")) else []
+        if not downloads:
+            lbl_empty = QLabel("No hay descargas recientes")
+            lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_empty.setStyleSheet("padding: 16px; opacity: 0.6; font-size: 12px;")
+            self.list_container.addWidget(lbl_empty)
+            return
+
+        for d in downloads[:5]:
+            card = QFrame()
+            card.setProperty("class", "download-popup-card")
+            c_layout = QVBoxLayout(card)
+            c_layout.setContentsMargins(10, 8, 10, 8)
+            c_layout.setSpacing(5)
+
+            top_row = QHBoxLayout()
+            fname = d.get("filename", "Descarga")
+            display_name = fname if len(fname) <= 24 else fname[:22] + "…"
+            lbl_name = QLabel(display_name)
+            lbl_name.setStyleSheet("font-weight: 600; font-size: 12px;")
+            top_row.addWidget(lbl_name)
+            top_row.addStretch()
+
+            state = d.get("state", "completed")
+            total = d.get("total_bytes", 0)
+            sz_str = format_bytes(total) if total > 0 else ""
+            status_text = f"{sz_str} · Completado" if state == "completed" else ("Descargando..." if state == "downloading" else "Cancelado")
+            lbl_status = QLabel(status_text)
+            lbl_status.setStyleSheet("font-size: 11px; opacity: 0.7;")
+            top_row.addWidget(lbl_status)
+            c_layout.addLayout(top_row)
+
+            btn_row = QHBoxLayout()
+            btn_row.setSpacing(6)
+            p = d.get("path", "")
+            btn_open = QPushButton("Abrir")
+            btn_open.setProperty("class", "mini-action-btn")
+            btn_open.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_open.clicked.connect(lambda checked, path=p: self.open_file(path))
+            btn_row.addWidget(btn_open)
+
+            btn_show = QPushButton("Carpeta")
+            btn_show.setProperty("class", "mini-action-btn")
+            btn_show.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_show.clicked.connect(lambda checked, path=p: self.open_folder(path))
+            btn_row.addWidget(btn_show)
+            btn_row.addStretch()
+            c_layout.addLayout(btn_row)
+
+            self.list_container.addWidget(card)
+
+    def open_file(self, path: str):
+        if path and os.path.exists(path):
+            try:
+                os.startfile(path)
+                self.hide()
+            except Exception:
+                pass
+
+    def open_folder(self, path: str):
+        if path:
+            folder = os.path.dirname(path) if os.path.isfile(path) else path
+            if os.path.exists(folder):
+                cmd = f'explorer.exe /select,"{path}"' if os.path.isfile(path) else f'explorer.exe "{folder}"'
+                subprocess.Popen(cmd)
+                self.hide()
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        qss = f"""
+            QFrame#AegisDownloadsPopup {{
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 12px;
+            }}
+            QFrame.download-popup-card {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.08);
+                border-radius: 8px;
+            }}
+            QLabel {{
+                color: {t['text']};
+            }}
+            QPushButton.mini-action-btn {{
+                background: transparent;
+                color: {t['accent']};
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 4px;
+                padding: 3px 8px;
+                font-size: 11px;
+                font-weight: 500;
+            }}
+            QPushButton.mini-action-btn:hover {{
+                background-color: {t['accent']};
+                color: #ffffff;
+            }}
+            QPushButton.menu-item-btn {{
+                background: transparent;
+                border: none;
+                border-radius: 6px;
+                color: {t['text']};
+                padding: 6px 10px;
+                font-size: 12px;
+            }}
+            QPushButton.menu-item-btn:hover {{
+                background-color: {t['bg']};
+                color: {t['accent']};
+            }}
+            QFrame#MenuSeparator {{
+                background-color: rgba({rgb_text}, 0.08);
+                border: none;
+                margin: 2px 0;
+            }}
+        """
+        self.setStyleSheet(qss)
+        self.update()
+
+# ── 10.3 Panel Desplegable de Extensiones y UserScripts (Toolbar) ─────────────
+class AegisExtensionsPopup(QFrame):
+    def __init__(self, parent=None):
+        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setObjectName("AegisExtensionsPopup")
+        self.setFixedWidth(340)
+        self.parent_win = parent
+        self.init_ui()
+
+    def hideEvent(self, event):
+        if self.parent_win:
+            self.parent_win._last_extensions_close_time = time.time()
+        super().hideEvent(event)
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        header = QHBoxLayout()
+        lbl_title = QLabel("Extensiones y Complementos")
+        lbl_title.setStyleSheet("font-weight: 700; font-size: 13.5px;")
+        header.addWidget(lbl_title)
+        layout.addLayout(header)
+
+        # Card de Aegis Shields
+        shields_card = QFrame()
+        shields_card.setObjectName("ExtensionCard")
+        sc_layout = QHBoxLayout(shields_card)
+        sc_layout.setContentsMargins(10, 8, 10, 8)
+
+        info_l = QVBoxLayout()
+        info_l.setSpacing(2)
+        lbl_s_title = QLabel("Aegis Shields Core")
+        lbl_s_title.setStyleSheet("font-weight: 600; font-size: 12.5px;")
+        lbl_s_sub = QLabel("Bloqueador nativo en Rust (Adblock + Minería)")
+        lbl_s_sub.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        info_l.addWidget(lbl_s_title)
+        info_l.addWidget(lbl_s_sub)
+        sc_layout.addLayout(info_l)
+        sc_layout.addStretch()
+
+        is_enabled = self.parent_win.interceptor.enabled if (self.parent_win and hasattr(self.parent_win, "interceptor")) else True
+        self.sw_shields = ToggleSwitch(checked=is_enabled, parent=shields_card)
+        self.sw_shields.toggled.connect(self.on_shields_toggled)
+        sc_layout.addWidget(self.sw_shields)
+        layout.addWidget(shields_card)
+
+        # Card de UserScripts
+        self.scripts_card = QFrame()
+        self.scripts_card.setObjectName("ExtensionCard")
+        self.sc_inner_layout = QVBoxLayout(self.scripts_card)
+        self.sc_inner_layout.setContentsMargins(10, 8, 10, 8)
+        self.sc_inner_layout.setSpacing(4)
+        layout.addWidget(self.scripts_card)
+
+        self.refresh_state()
+
+        sep = QFrame()
+        sep.setObjectName("MenuSeparator")
+        sep.setFixedHeight(1)
+        layout.addWidget(sep)
+
+        btn_folder = QPushButton("📁 Abrir carpeta de scripts (.js)")
+        btn_folder.setProperty("class", "menu-item-btn")
+        btn_folder.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_folder.clicked.connect(self.open_scripts_folder)
+        layout.addWidget(btn_folder)
+
+        btn_manage = QPushButton("⚙️ Administrar extensiones")
+        btn_manage.setProperty("class", "menu-item-btn")
+        btn_manage.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_manage.clicked.connect(lambda: (self.hide(), self.parent_win.open_internal_page("aegis://extensions")))
+        layout.addWidget(btn_manage)
+
+    def on_shields_toggled(self, checked: bool):
+        if self.parent_win and hasattr(self.parent_win, "interceptor"):
+            self.parent_win.interceptor.enabled = checked
+            self.parent_win.config["shields_enabled"] = checked
+            self.parent_win.save_config()
+            if hasattr(self.parent_win, "shields_popup"):
+                self.parent_win.shields_popup.main_switch.setChecked(checked)
+
+    def open_scripts_folder(self):
+        USERSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+        subprocess.Popen(f'explorer.exe "{str(USERSCRIPTS_DIR)}"')
+        self.hide()
+
+    def refresh_state(self):
+        while self.sc_inner_layout.count():
+            item = self.sc_inner_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        lbl_s = QLabel("Scripts de Usuario (UserScripts)")
+        lbl_s.setStyleSheet("font-weight: 600; font-size: 12.5px;")
+        self.sc_inner_layout.addWidget(lbl_s)
+
+        scripts = list(USERSCRIPTS_DIR.glob("*.js")) if USERSCRIPTS_DIR.exists() else []
+        if scripts:
+            lbl_status = QLabel(f"✓ {len(scripts)} scripts activos cargados")
+            lbl_status.setStyleSheet("font-size: 11px; color: #2ea043; font-weight: 500;")
+            self.sc_inner_layout.addWidget(lbl_status)
+            for s in scripts[:3]:
+                lbl_name = QLabel(f"• {s.name}")
+                lbl_name.setStyleSheet("font-size: 11px; opacity: 0.8;")
+                self.sc_inner_layout.addWidget(lbl_name)
+        else:
+            lbl_none = QLabel("No hay scripts instalados aún")
+            lbl_none.setStyleSheet("font-size: 11px; opacity: 0.6;")
+            self.sc_inner_layout.addWidget(lbl_none)
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        qss = f"""
+            QFrame#AegisExtensionsPopup {{
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 12px;
+            }}
+            QFrame#ExtensionCard {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.08);
+                border-radius: 8px;
+            }}
+            QLabel {{
+                color: {t['text']};
+            }}
+            QPushButton.menu-item-btn {{
+                background: transparent;
+                border: none;
+                border-radius: 6px;
+                color: {t['text']};
+                padding: 6px 10px;
+                font-size: 12px;
+            }}
+            QPushButton.menu-item-btn:hover {{
+                background-color: {t['bg']};
+                color: {t['accent']};
+            }}
+            QFrame#MenuSeparator {{
+                background-color: rgba({rgb_text}, 0.08);
+                border: none;
+                margin: 2px 0;
+            }}
+        """
+        self.setStyleSheet(qss)
+        if hasattr(self, "sw_shields"):
+            self.sw_shields.update_colors(t["accent"], t["bg"])
+        self.update()
+
+# ── 10.4 Barra de Marcadores Horizontal (Ctrl+Shift+B) ────────────────────────
+class AegisBookmarksBar(QWidget):
+    def __init__(self, parent_win):
+        super().__init__(parent_win)
+        self.parent_win = parent_win
+        self.setObjectName("BookmarksBar")
+        self.setFixedHeight(30)
+        self.bar_layout = QHBoxLayout(self)
+        self.bar_layout.setContentsMargins(10, 2, 10, 2)
+        self.bar_layout.setSpacing(6)
+        self.refresh_bookmarks()
+
+    def refresh_bookmarks(self):
+        while self.bar_layout.count():
+            item = self.bar_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        lbl_icon = QLabel("⭐")
+        lbl_icon.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        self.bar_layout.addWidget(lbl_icon)
+
+        bookmarks = self.parent_win.bookmarks_mgr.bookmarks if (self.parent_win and hasattr(self.parent_win, "bookmarks_mgr")) else []
+        for b in bookmarks[:15]:
+            title = b.get("title", "Marcador")
+            display_title = title if len(title) <= 18 else title[:16] + "…"
+            btn = QPushButton(display_title)
+            btn.setProperty("class", "bookmark-item-btn")
+            btn.setToolTip(f"{title}\n{b.get('url', '')}")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            url = b.get("url", "")
+            btn.clicked.connect(lambda checked, u=url: self.parent_win.navigate_direct(u))
+            btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            btn.customContextMenuRequested.connect(lambda pt, b_item=b: self.show_context_menu(pt, b_item))
+            self.bar_layout.addWidget(btn)
+
+        self.bar_layout.addStretch()
+
+    def show_context_menu(self, point: QPoint, bookmark_item: dict):
+        menu = QMenu(self)
+        if hasattr(self.parent_win, "current_qss"):
+            menu.setStyleSheet(self.parent_win.current_qss)
+        act_open_new = menu.addAction("Abrir en nueva pestaña")
+        act_copy = menu.addAction("Copiar dirección")
+        menu.addSeparator()
+        act_delete = menu.addAction("Eliminar marcador")
+
+        action = menu.exec(self.mapToGlobal(point))
+        if action == act_open_new:
+            self.parent_win.add_new_tab(bookmark_item.get("url", ""))
+        elif action == act_copy:
+            QApplication.clipboard().setText(bookmark_item.get("url", ""))
+        elif action == act_delete:
+            self.parent_win.bookmarks_mgr.remove(bookmark_item.get("url", ""))
+            self.refresh_bookmarks()
+            self.parent_win.update_omnibox_suggestions()
+
+# ── 10.5 Widget Flotante de Búsqueda en Página (Ctrl+F) ───────────────────────
+class FindInPageWidget(QFrame):
+    def __init__(self, parent_win):
+        super().__init__(parent_win)
+        self.parent_win = parent_win
+        self.setObjectName("FindInPageBar")
+        self.setFixedWidth(340)
+        self.setFixedHeight(38)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(6)
+
+        self.input = QLineEdit()
+        self.input.setObjectName("FindInput")
+        self.input.setPlaceholderText("Buscar en la página...")
+        self.input.textChanged.connect(self.on_text_changed)
+        self.input.returnPressed.connect(self.find_next)
+        layout.addWidget(self.input)
+
+        self.lbl_count = QLabel("")
+        self.lbl_count.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        layout.addWidget(self.lbl_count)
+
+        self.btn_prev = QPushButton("▲")
+        self.btn_prev.setProperty("class", "mini-nav-btn")
+        self.btn_prev.setToolTip("Anterior (Shift+Enter)")
+        self.btn_prev.clicked.connect(self.find_prev)
+        layout.addWidget(self.btn_prev)
+
+        self.btn_next = QPushButton("▼")
+        self.btn_next.setProperty("class", "mini-nav-btn")
+        self.btn_next.setToolTip("Siguiente (Enter)")
+        self.btn_next.clicked.connect(self.find_next)
+        layout.addWidget(self.btn_next)
+
+        self.btn_close = QPushButton("✕")
+        self.btn_close.setProperty("class", "mini-nav-btn")
+        self.btn_close.setToolTip("Cerrar (Esc)")
+        self.btn_close.clicked.connect(self.close_find)
+        layout.addWidget(self.btn_close)
+
+        self.hide()
+
+    def show_find(self):
+        self.show()
+        self.raise_()
+        self.input.setFocus()
+        self.input.selectAll()
+        self.reposition()
+
+    def reposition(self):
+        tb_h = self.parent_win.toolbar.height() if hasattr(self.parent_win, "toolbar") else 40
+        bm_h = self.parent_win.bookmarks_bar.height() if (hasattr(self.parent_win, "bookmarks_bar") and self.parent_win.bookmarks_bar.isVisible()) else 0
+        top_offset = tb_h + bm_h + 40
+        x = max(10, self.parent_win.width() - self.width() - 25)
+        self.move(x, top_offset)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.close_find()
+            return
+        super().keyPressEvent(event)
+
+    def on_text_changed(self, text):
+        v = self.parent_win.current_view()
+        if v:
+            if text:
+                v.findText(text)
+            else:
+                v.findText("")
+                self.lbl_count.setText("")
+
+    def find_next(self):
+        v = self.parent_win.current_view()
+        if v and self.input.text():
+            v.findText(self.input.text())
+
+    def find_prev(self):
+        v = self.parent_win.current_view()
+        if v and self.input.text():
+            v.findText(self.input.text(), QWebEnginePage.FindFlag.FindBackward)
+
+    def close_find(self):
+        v = self.parent_win.current_view()
+        if v:
+            v.findText("")
+        self.lbl_count.setText("")
+        self.hide()
+
+    def apply_theme(self, t: dict):
+        rgb_text = hex_to_rgb(t["text"])
+        qss = f"""
+            QFrame#FindInPageBar {{
+                background-color: {t['surface']};
+                border: 1px solid rgba({rgb_text}, 0.2);
+                border-radius: 8px;
+            }}
+            QLineEdit#FindInput {{
+                background-color: {t['bg']};
+                border: 1px solid rgba({rgb_text}, 0.15);
+                border-radius: 4px;
+                color: {t['text']};
+                padding: 3px 8px;
+                font-size: 12px;
+                selection-background-color: {t['accent']};
+            }}
+            QLineEdit#FindInput:focus {{
+                border-color: {t['accent']};
+            }}
+            QLabel {{
+                color: {t['text']};
+            }}
+            QPushButton.mini-nav-btn {{
+                background: transparent;
+                border: none;
+                border-radius: 4px;
+                color: {t['text']};
+                width: 22px;
+                height: 22px;
+                font-size: 12px;
+            }}
+            QPushButton.mini-nav-btn:hover {{
+                background-color: {t['bg']};
+                color: {t['accent']};
+            }}
+        """
+        self.setStyleSheet(qss)
+        self.update()
+
+# ── 10.6 Vista Web Personalizada con Menú Contextual Temático ─────────────────
+class AegisWebView(QWebEngineView):
+    def __init__(self, browser_win=None):
+        super().__init__()
+        self.browser_win = browser_win
+
+    def contextMenuEvent(self, event):
+        menu = self.createStandardContextMenu()
+        if menu:
+            if self.browser_win and hasattr(self.browser_win, "current_qss"):
+                menu.setStyleSheet(self.browser_win.current_qss)
+            menu.exec(event.globalPos())
+
 # ── 11. Ventana Principal de Aegis Browser ────────────────────────────────────
 class AegisBrowserWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, is_incognito: bool = False):
         super().__init__()
-        self.setWindowTitle("Aegis")
+        self.is_incognito = is_incognito
+        title = "Aegis Browser [Ventana Privada / Incógnito]" if is_incognito else "Aegis"
+        self.setWindowTitle(title)
         self.resize(1340, 860)
 
         self._last_popup_close_time = 0.0
         self._last_app_menu_close_time = 0.0
+        self._last_downloads_close_time = 0.0
+        self._last_extensions_close_time = 0.0
         self.config = self.load_config()
         self.current_theme_name = self.config.get("theme", "Oscuro")
 
-        # Gestores reales (Historial y Descargas Nativas)
+        # Gestores reales (Historial, Descargas Nativas y Marcadores)
         self.history_mgr = HistoryManager()
         self.downloads_mgr = DownloadsManager()
+        self.bookmarks_mgr = BookmarksManager()
+        self.closed_tabs = []
 
         # Configurar Perfil Chromium
-        self.profile = QWebEngineProfile.defaultProfile()
+        if self.is_incognito:
+            self.profile = QWebEngineProfile(self)
+        else:
+            self.profile = QWebEngineProfile.defaultProfile()
+
         self.profile.setHttpUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.4"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.5"
         )
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
@@ -967,9 +1582,14 @@ class AegisBrowserWindow(QMainWindow):
         self.views = []
         self.init_ui()
 
-        # Menús flotantes (Escudos y Menú Principal ⋮ estilo Brave)
+        # Menús flotantes y paneles desplegables dedicados
         self.shields_popup = AegisShieldsPopup(self, self.interceptor)
         self.app_menu = AegisAppMenu(self)
+        self.downloads_popup = AegisDownloadsPopup(self)
+        self.extensions_popup = AegisExtensionsPopup(self)
+
+        # Barra de búsqueda flotante en página (Ctrl+F)
+        self.find_bar = FindInPageWidget(self)
 
         # Atajos de teclado nativos
         self.setup_shortcuts()
@@ -986,13 +1606,19 @@ class AegisBrowserWindow(QMainWindow):
         # Abrir pestaña inicial
         self.add_new_tab()
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "find_bar") and self.find_bar.isVisible():
+            self.find_bar.reposition()
+
     def load_config(self) -> dict:
         default_config = {
             "theme": "Oscuro",
             "tab_position": "horizontal",
             "search_engine": "DuckDuckGo",
             "shields_enabled": True,
-            "force_dark_mode": True
+            "force_dark_mode": True,
+            "show_bookmarks_bar": True
         }
         if CONFIG_FILE.exists():
             try:
@@ -1011,11 +1637,19 @@ class AegisBrowserWindow(QMainWindow):
     def setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+T"), self, lambda: self.add_new_tab())
         QShortcut(QKeySequence("Ctrl+W"), self, lambda: self.close_tab(self.tab_bar.currentIndex()))
+        QShortcut(QKeySequence("Ctrl+Shift+T"), self, self.reopen_closed_tab)
         QShortcut(QKeySequence("Ctrl+N"), self, self.open_new_window)
+        QShortcut(QKeySequence("Ctrl+Shift+N"), self, self.open_incognito_window)
         QShortcut(QKeySequence("Ctrl+J"), self, lambda: self.open_internal_page("aegis://downloads"))
         QShortcut(QKeySequence("Ctrl+H"), self, lambda: self.open_internal_page("aegis://history"))
         QShortcut(QKeySequence("Ctrl+Shift+E"), self, lambda: self.open_internal_page("aegis://extensions"))
         QShortcut(QKeySequence("Alt+S"), self, lambda: self.open_internal_page("aegis://settings"))
+        QShortcut(QKeySequence("Ctrl+D"), self, self.toggle_bookmark_active_page)
+        QShortcut(QKeySequence("Ctrl+Shift+B"), self, self.toggle_bookmarks_bar)
+        QShortcut(QKeySequence("Ctrl+F"), self, self.find_bar.show_find)
+        QShortcut(QKeySequence("Ctrl+M"), self, self.toggle_mute_current_tab)
+        QShortcut(QKeySequence("F12"), self, self.open_devtools)
+        QShortcut(QKeySequence("Ctrl+Shift+I"), self, self.open_devtools)
         QShortcut(QKeySequence("Ctrl+L"), self, lambda: (self.url_bar.setFocus(), self.url_bar.selectAll()))
         QShortcut(QKeySequence("Ctrl+R"), self, self.reload_page)
         QShortcut(QKeySequence("F5"), self, self.reload_page)
@@ -1060,6 +1694,10 @@ class AegisBrowserWindow(QMainWindow):
             "time": time.time()
         }
         self.downloads_mgr.add(item)
+        if hasattr(self, "downloads_popup") and self.downloads_popup.isVisible():
+            self.downloads_popup.refresh_list()
+        self.btn_downloads.setText("📥 1")
+
         download.receivedBytesChanged.connect(lambda: self.on_download_progress(download, download_id))
         download.isFinishedChanged.connect(lambda: self.on_download_finished(download, download_id))
 
@@ -1068,6 +1706,8 @@ class AegisBrowserWindow(QMainWindow):
             "received_bytes": download.receivedBytes(),
             "total_bytes": download.totalBytes()
         })
+        if hasattr(self, "downloads_popup") and self.downloads_popup.isVisible():
+            self.downloads_popup.refresh_list()
 
     def on_download_finished(self, download: QWebEngineDownloadRequest, download_id: str):
         state_str = "completed" if download.state() == QWebEngineDownloadRequest.DownloadState.DownloadCompleted else "cancelled"
@@ -1076,6 +1716,9 @@ class AegisBrowserWindow(QMainWindow):
             "received_bytes": download.receivedBytes(),
             "total_bytes": download.totalBytes()
         })
+        self.btn_downloads.setText("📥")
+        if hasattr(self, "downloads_popup") and self.downloads_popup.isVisible():
+            self.downloads_popup.refresh_list()
 
     def toggle_app_menu(self):
         now = time.time()
@@ -1086,8 +1729,9 @@ class AegisBrowserWindow(QMainWindow):
             self.app_menu.hide()
             return
 
-        if self.shields_popup.isVisible():
-            self.shields_popup.hide()
+        if self.shields_popup.isVisible(): self.shields_popup.hide()
+        if self.downloads_popup.isVisible(): self.downloads_popup.hide()
+        if self.extensions_popup.isVisible(): self.extensions_popup.hide()
 
         v = self.current_view()
         zf = v.zoomFactor() if v else 1.0
@@ -1099,6 +1743,185 @@ class AegisBrowserWindow(QMainWindow):
         self.app_menu.move(popup_x, popup_y)
         self.app_menu.show()
         self.app_menu.raise_()
+
+    def toggle_downloads_popup(self):
+        now = time.time()
+        if hasattr(self, "_last_downloads_close_time") and (now - self._last_downloads_close_time < 0.25):
+            return
+
+        if self.downloads_popup.isVisible():
+            self.downloads_popup.hide()
+            return
+
+        if self.shields_popup.isVisible(): self.shields_popup.hide()
+        if self.app_menu.isVisible(): self.app_menu.hide()
+        if self.extensions_popup.isVisible(): self.extensions_popup.hide()
+
+        self.downloads_popup.refresh_list()
+        btn_pos = self.btn_downloads.mapToGlobal(QPoint(0, self.btn_downloads.height()))
+        popup_x = btn_pos.x() + self.btn_downloads.width() - self.downloads_popup.width()
+        popup_y = btn_pos.y() + 6
+        self.downloads_popup.move(popup_x, popup_y)
+        self.downloads_popup.show()
+        self.downloads_popup.raise_()
+
+    def toggle_extensions_popup(self):
+        now = time.time()
+        if hasattr(self, "_last_extensions_close_time") and (now - self._last_extensions_close_time < 0.25):
+            return
+
+        if self.extensions_popup.isVisible():
+            self.extensions_popup.hide()
+            return
+
+        if self.shields_popup.isVisible(): self.shields_popup.hide()
+        if self.app_menu.isVisible(): self.app_menu.hide()
+        if self.downloads_popup.isVisible(): self.downloads_popup.hide()
+
+        self.extensions_popup.refresh_state()
+        btn_pos = self.btn_extensions.mapToGlobal(QPoint(0, self.btn_extensions.height()))
+        popup_x = btn_pos.x() + self.btn_extensions.width() - self.extensions_popup.width()
+        popup_y = btn_pos.y() + 6
+        self.extensions_popup.move(popup_x, popup_y)
+        self.extensions_popup.show()
+        self.extensions_popup.raise_()
+
+    def toggle_bookmark_active_page(self):
+        v = self.current_view()
+        if not v:
+            return
+        url_str = v.url().toString()
+        if not url_str or url_str in ("aegis://start", "about:blank") or url_str.startswith("aegis://"):
+            return
+        title = v.title() or url_str
+        accent = THEMES[self.current_theme_name]["accent"]
+        if self.bookmarks_mgr.is_bookmarked(url_str):
+            self.bookmarks_mgr.remove(url_str)
+            self.btn_bookmark.setText("☆")
+            self.btn_bookmark.setStyleSheet("")
+            self.btn_bookmark.setToolTip("Añadir esta pestaña a marcadores (Ctrl+D)")
+        else:
+            self.bookmarks_mgr.add(title, url_str)
+            self.btn_bookmark.setText("★")
+            self.btn_bookmark.setStyleSheet(f"color: {accent};")
+            self.btn_bookmark.setToolTip("Marcador guardado (Click para quitar)")
+        self.bookmarks_bar.refresh_bookmarks()
+        self.update_omnibox_suggestions()
+
+    def toggle_bookmarks_bar(self):
+        show = not self.bookmarks_bar.isVisible()
+        self.bookmarks_bar.setVisible(show)
+        self.config["show_bookmarks_bar"] = show
+        self.save_config()
+        if hasattr(self, "find_bar") and self.find_bar.isVisible():
+            self.find_bar.reposition()
+
+    def toggle_mute_current_tab(self):
+        v = self.current_view()
+        if v:
+            v.page().setAudioMuted(not v.page().isAudioMuted())
+            self.on_tab_audio_state_changed(v)
+
+    def on_tab_audio_state_changed(self, view: QWebEngineView):
+        if view in self.views:
+            idx = self.views.index(view)
+            title = view.title() or "Página"
+            if view.url().toString() in ("aegis://start", "about:blank"):
+                title = "Nueva Pestaña"
+            display_title = title if len(title) <= 14 else title[:12] + "…"
+            if view.page().isAudioMuted():
+                display_title += " 🔇"
+            elif view.page().recentlyAudible():
+                display_title += " 🔊"
+            self.tab_bar.setTabText(idx, display_title)
+
+    def on_tab_bar_context_menu(self, point: QPoint):
+        idx = self.tab_bar.tabAt(point)
+        menu = QMenu(self)
+        if hasattr(self, "current_qss"):
+            menu.setStyleSheet(self.current_qss)
+
+        act_new = menu.addAction("➕ Nueva pestaña")
+        act_reload = act_mute = act_close = act_close_others = None
+        if idx != -1:
+            view = self.views[idx]
+            act_reload = menu.addAction("↻ Recargar pestaña")
+            is_muted = view.page().isAudioMuted()
+            act_mute = menu.addAction("🔇 Reactivar sonido" if is_muted else "🔊 Silenciar pestaña")
+            menu.addSeparator()
+            act_close = menu.addAction("✕ Cerrar pestaña")
+            act_close_others = menu.addAction("✕ Cerrar otras pestañas")
+
+        act_reopen = None
+        if self.closed_tabs:
+            menu.addSeparator()
+            act_reopen = menu.addAction("↩️ Reabrir pestaña cerrada")
+
+        action = menu.exec(self.tab_bar.mapToGlobal(point))
+        if action == act_new:
+            self.add_new_tab()
+        elif action == act_reload and idx != -1:
+            self.views[idx].reload()
+        elif action == act_mute and idx != -1:
+            self.views[idx].page().setAudioMuted(not self.views[idx].page().isAudioMuted())
+            self.on_tab_audio_state_changed(self.views[idx])
+        elif action == act_close and idx != -1:
+            self.close_tab(idx)
+        elif action == act_close_others and idx != -1:
+            for i in reversed(range(len(self.views))):
+                if i != idx:
+                    self.close_tab(i)
+        elif action == act_reopen:
+            self.reopen_closed_tab()
+
+    def reopen_closed_tab(self):
+        if self.closed_tabs:
+            url, title = self.closed_tabs.pop()
+            self.add_new_tab(url)
+
+    def open_incognito_window(self):
+        win = AegisBrowserWindow(is_incognito=True)
+        win.show()
+        if not hasattr(QApplication.instance(), "_aegis_windows"):
+            QApplication.instance()._aegis_windows = []
+        QApplication.instance()._aegis_windows.append(win)
+
+    def open_devtools(self):
+        v = self.current_view()
+        if not v:
+            return
+        if not hasattr(v, "_devtools_win") or v._devtools_win is None:
+            devtools_view = QWebEngineView()
+            v.page().setDevToolsPage(devtools_view.page())
+            dw = QMainWindow(self)
+            dw.setWindowTitle(f"Herramientas de Desarrollador - {v.title()}")
+            dw.setCentralWidget(devtools_view)
+            dw.resize(920, 620)
+            v._devtools_win = dw
+        v._devtools_win.show()
+        v._devtools_win.raise_()
+
+    def navigate_direct(self, url: str):
+        v = self.current_view()
+        if not v:
+            v = self.add_new_tab(url)
+        else:
+            v.load(QUrl(url))
+
+    def update_omnibox_suggestions(self):
+        if not hasattr(self, "completer_model"):
+            return
+        suggestions = set()
+        for b in self.bookmarks_mgr.bookmarks:
+            suggestions.add(b.get("url", ""))
+        for s in self.history_mgr.data.get("frequent", {}).values():
+            suggestions.add(s.get("url", ""))
+        for s in self.history_mgr.data.get("custom", []):
+            suggestions.add(s.get("url", ""))
+        for h in self.history_mgr.data.get("history_log", [])[:40]:
+            suggestions.add(h.get("url", ""))
+        clean_list = [u for u in suggestions if u and not u.startswith("aegis://") and not u.startswith("about:")]
+        self.completer_model.setStringList(sorted(clean_list))
 
     def open_new_window(self):
         win = AegisBrowserWindow()
@@ -1150,6 +1973,8 @@ class AegisBrowserWindow(QMainWindow):
         self.tab_bar.setTabsClosable(True)
         self.tab_bar.setMovable(True)
         self.tab_bar.setIconSize(QSize(16, 16))
+        self.tab_bar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tab_bar.customContextMenuRequested.connect(self.on_tab_bar_context_menu)
         self.tab_bar.currentChanged.connect(self.on_tab_changed)
         self.tab_bar.tabCloseRequested.connect(self.close_tab)
         tab_header_layout.addWidget(self.tab_bar)
@@ -1184,7 +2009,7 @@ class AegisBrowserWindow(QMainWindow):
 
         self.btn_reload = QPushButton("↻")
         self.btn_reload.setProperty("class", "nav-btn")
-        self.btn_reload.setToolTip("Recargar")
+        self.btn_reload.setToolTip("Recargar (F5)")
         self.btn_reload.clicked.connect(self.reload_page)
         toolbar_layout.addWidget(self.btn_reload)
 
@@ -1197,16 +2022,47 @@ class AegisBrowserWindow(QMainWindow):
         # Omnibox Cápsula
         self.url_bar = QLineEdit()
         self.url_bar.setObjectName("Omnibox")
-        self.url_bar.setPlaceholderText("Buscar en la web o ingresar dirección...")
+        placeholder = "Navegación Privada (Sin historial ni cookies)..." if self.is_incognito else "Buscar en la web o ingresar dirección..."
+        self.url_bar.setPlaceholderText(placeholder)
         self.url_bar.returnPressed.connect(self.navigate_to_url)
+
+        # Autocompletado del Omnibox
+        self.completer_model = QStringListModel()
+        self.completer = QCompleter(self.completer_model, self)
+        self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self.url_bar.setCompleter(self.completer)
+        self.update_omnibox_suggestions()
+
         toolbar_layout.addWidget(self.url_bar)
 
-        # Botón Escudo Aegis Shields (Icono vectorial y borde neutral normal)
+        # Botón Estrella Marcador (☆ / ★)
+        self.btn_bookmark = QPushButton("☆")
+        self.btn_bookmark.setObjectName("BookmarkBtn")
+        self.btn_bookmark.setToolTip("Añadir esta pestaña a marcadores (Ctrl+D)")
+        self.btn_bookmark.clicked.connect(self.toggle_bookmark_active_page)
+        toolbar_layout.addWidget(self.btn_bookmark)
+
+        # Botón Escudo Aegis Shields
         self.shield_btn = QPushButton(" 0")
         self.shield_btn.setObjectName("ShieldBtn")
-        self.shield_btn.setToolTip("Aegis Shields: Click para desplegar panel")
+        self.shield_btn.setToolTip("Aegis Shields: Click para desplegar panel de protección")
         self.shield_btn.clicked.connect(self.toggle_shields_popup)
         toolbar_layout.addWidget(self.shield_btn)
+
+        # Botón Desplegable de Descargas (📥)
+        self.btn_downloads = QPushButton("📥")
+        self.btn_downloads.setObjectName("DownloadsBtn")
+        self.btn_downloads.setToolTip("Descargas: Click para desplegar panel")
+        self.btn_downloads.clicked.connect(self.toggle_downloads_popup)
+        toolbar_layout.addWidget(self.btn_downloads)
+
+        # Botón Desplegable de Extensiones (🧩)
+        self.btn_extensions = QPushButton("🧩")
+        self.btn_extensions.setObjectName("ExtensionsBtn")
+        self.btn_extensions.setToolTip("Extensiones y Scripts: Click para desplegar panel")
+        self.btn_extensions.clicked.connect(self.toggle_extensions_popup)
+        toolbar_layout.addWidget(self.btn_extensions)
 
         # Botón de Cambio Rápido de Tema (Oscuro / Claro)
         self.btn_theme_toggle = QPushButton("☀️")
@@ -1224,7 +2080,13 @@ class AegisBrowserWindow(QMainWindow):
 
         main_layout.addWidget(self.toolbar)
 
-        # ── 3. Micro Barra de Progreso (2px) ──────────────────────────────────
+        # ── 3. Barra de Marcadores Horizontal ─────────────────────────────────
+        self.bookmarks_bar = AegisBookmarksBar(self)
+        if not self.config.get("show_bookmarks_bar", True):
+            self.bookmarks_bar.hide()
+        main_layout.addWidget(self.bookmarks_bar)
+
+        # ── 4. Micro Barra de Progreso (2px) ──────────────────────────────────
         self.progress_bar = QProgressBar()
         self.progress_bar.setObjectName("MicroProgress")
         self.progress_bar.setTextVisible(False)
@@ -1232,7 +2094,7 @@ class AegisBrowserWindow(QMainWindow):
         self.progress_bar.hide()
         main_layout.addWidget(self.progress_bar)
 
-        # ── 4. Contenedor de Vistas Web ───────────────────────────────────────
+        # ── 5. Contenedor de Vistas Web ───────────────────────────────────────
         self.stack = QStackedWidget()
         main_layout.addWidget(self.stack)
 
@@ -1261,6 +2123,10 @@ class AegisBrowserWindow(QMainWindow):
 
         apply_windows_dark_title_bar(self.winId(), dark=is_dark)
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.ForceDarkMode, is_dark)
+
+        # Actualizar color de fondo de todas las páginas para erradicar destellos blancos
+        for view in self.views:
+            view.page().setBackgroundColor(QColor(t["bg"]))
 
         rgb_text = hex_to_rgb(t["text"])
         rgb_accent = hex_to_rgb(t["accent"])
@@ -1333,6 +2199,42 @@ class AegisBrowserWindow(QMainWindow):
                 background-color: {t['surface']};
                 color: {t['text']};
             }}
+            QPushButton#BookmarkBtn {{
+                background: transparent;
+                border: none;
+                color: {t['text']};
+                font-size: 16px;
+                border-radius: 14px;
+                width: 28px;
+                height: 28px;
+            }}
+            QPushButton#BookmarkBtn:hover {{
+                background-color: {t['surface']};
+            }}
+            QPushButton#DownloadsBtn {{
+                background: transparent;
+                border: none;
+                color: {t['text']};
+                font-size: 15px;
+                border-radius: 14px;
+                width: 30px;
+                height: 30px;
+            }}
+            QPushButton#DownloadsBtn:hover {{
+                background-color: {t['surface']};
+            }}
+            QPushButton#ExtensionsBtn {{
+                background: transparent;
+                border: none;
+                color: {t['text']};
+                font-size: 15px;
+                border-radius: 14px;
+                width: 30px;
+                height: 30px;
+            }}
+            QPushButton#ExtensionsBtn:hover {{
+                background-color: {t['surface']};
+            }}
             QPushButton#ThemeToggleBtn {{
                 background: transparent;
                 border: none;
@@ -1384,6 +2286,23 @@ class AegisBrowserWindow(QMainWindow):
                 background-color: {t['surface']};
                 border-color: rgba({rgb_text}, 0.28);
             }}
+            QWidget#BookmarksBar {{
+                background-color: {t['bg']};
+                border-bottom: 1px solid rgba({rgb_text}, 0.08);
+            }}
+            QPushButton.bookmark-item-btn {{
+                background: transparent;
+                border: none;
+                border-radius: 4px;
+                color: {t['text']};
+                padding: 2px 8px;
+                font-size: 12px;
+                font-weight: 500;
+            }}
+            QPushButton.bookmark-item-btn:hover {{
+                background-color: {t['surface']};
+                color: {t['accent']};
+            }}
             QProgressBar#MicroProgress {{
                 background-color: transparent;
                 border: none;
@@ -1391,7 +2310,31 @@ class AegisBrowserWindow(QMainWindow):
             QProgressBar#MicroProgress::chunk {{
                 background-color: {t['accent']};
             }}
+            QMenu {{
+                background-color: {t['surface']};
+                color: {t['text']};
+                border: 1px solid rgba({rgb_text}, 0.18);
+                border-radius: 8px;
+                padding: 4px;
+            }}
+            QMenu::item {{
+                background-color: transparent;
+                padding: 6px 20px 6px 10px;
+                border-radius: 4px;
+                color: {t['text']};
+                font-size: 12.5px;
+            }}
+            QMenu::item:selected {{
+                background-color: {t['bg']};
+                color: {t['accent']};
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background-color: rgba({rgb_text}, 0.08);
+                margin: 4px 6px;
+            }}
         """
+        self.current_qss = qss
         self.setStyleSheet(qss)
 
         if hasattr(self, "shield_btn"):
@@ -1402,6 +2345,18 @@ class AegisBrowserWindow(QMainWindow):
 
         if hasattr(self, "app_menu"):
             self.app_menu.apply_theme(t)
+
+        if hasattr(self, "downloads_popup"):
+            self.downloads_popup.apply_theme(t)
+
+        if hasattr(self, "extensions_popup"):
+            self.extensions_popup.apply_theme(t)
+
+        if hasattr(self, "find_bar"):
+            self.find_bar.apply_theme(t)
+
+        if hasattr(self, "bookmarks_bar"):
+            self.bookmarks_bar.refresh_bookmarks()
 
         for view in self.views:
             if view.url().toString() in ("aegis://start", "about:blank"):
@@ -1416,6 +2371,10 @@ class AegisBrowserWindow(QMainWindow):
             self.shields_popup.hide()
             return
 
+        if self.app_menu.isVisible(): self.app_menu.hide()
+        if self.downloads_popup.isVisible(): self.downloads_popup.hide()
+        if self.extensions_popup.isVisible(): self.extensions_popup.hide()
+
         view = self.current_view()
         url = view.url() if view else QUrl()
         host = url.host() if url else ""
@@ -1429,9 +2388,14 @@ class AegisBrowserWindow(QMainWindow):
         self.shields_popup.raise_()
 
     def add_new_tab(self, url_str: str = "") -> QWebEngineView:
-        view = QWebEngineView()
+        view = AegisWebView(self)
         view._aegis_target_url = url_str
-        view.setPage(view.page())
+
+        page = QWebEnginePage(self.profile, view)
+        view.setPage(page)
+
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        view.page().setBackgroundColor(QColor(t["bg"]))
 
         tab_idx = self.tab_bar.addTab("Nueva Pestaña")
         stack_idx = self.stack.addWidget(view)
@@ -1441,6 +2405,9 @@ class AegisBrowserWindow(QMainWindow):
         view.loadProgress.connect(self.on_load_progress)
         view.loadFinished.connect(lambda ok, v=view: self.on_load_finished(ok, v))
         view.iconChanged.connect(lambda icon, v=view: self.on_icon_changed(icon, v))
+
+        view.page().recentlyAudibleChanged.connect(lambda audible, v=view: self.on_tab_audio_state_changed(v))
+        view.page().audioMutedChanged.connect(lambda muted, v=view: self.on_tab_audio_state_changed(v))
 
         if url_str:
             view.load(QUrl(url_str))
@@ -1555,7 +2522,15 @@ class AegisBrowserWindow(QMainWindow):
 
     def close_tab(self, index: int):
         if self.tab_bar.count() > 1:
-            view = self.views.pop(index)
+            view = self.views[index]
+            u = view.url().toString()
+            t = view.title()
+            if u and u not in ("aegis://start", "about:blank") and not u.startswith("aegis://"):
+                self.closed_tabs.append((u, t))
+                if len(self.closed_tabs) > 25:
+                    self.closed_tabs.pop(0)
+
+            self.views.pop(index)
             self.tab_bar.removeTab(index)
             self.stack.removeWidget(view)
             view.deleteLater()
@@ -1614,12 +2589,16 @@ class AegisBrowserWindow(QMainWindow):
             target_url = QUrl("https://" + text)
         else:
             engine = self.config.get("search_engine", "DuckDuckGo")
+            is_dark = (self.current_theme_name == "Oscuro")
+            encoded_query = quote(text)
             if engine == "Google":
-                target_url = QUrl(f"https://google.com/search?q={text}")
+                dark_param = "&cs=1" if is_dark else ""
+                target_url = QUrl(f"https://google.com/search?q={encoded_query}{dark_param}")
             elif engine == "Bing":
-                target_url = QUrl(f"https://www.bing.com/search?q={text}")
+                target_url = QUrl(f"https://www.bing.com/search?q={encoded_query}")
             else:
-                target_url = QUrl(f"https://duckduckgo.com/?q={text}")
+                dark_param = "&kae=d&k1=-1" if is_dark else ""
+                target_url = QUrl(f"https://duckduckgo.com/?q={encoded_query}{dark_param}")
 
         view = self.current_view()
         if view:
@@ -1698,7 +2677,8 @@ class AegisBrowserWindow(QMainWindow):
                     file_path = unquote(q["open_folder"][0])
                     folder = os.path.dirname(file_path) if os.path.isfile(file_path) else file_path
                     if os.path.exists(folder):
-                        subprocess.Popen(f'explorer.exe "{folder}"')
+                        cmd = f'explorer.exe /select,"{file_path}"' if os.path.isfile(file_path) else f'explorer.exe "{folder}"'
+                        subprocess.Popen(cmd)
                     return
                 elif "clear_downloads" in q:
                     self.downloads_mgr.clear()
@@ -1722,11 +2702,21 @@ class AegisBrowserWindow(QMainWindow):
             return
 
         if view == self.current_view():
-            if url_str in ("aegis://start", "about:blank"):
+            # Sanitizar estrictamente el Omnibox para que jamás muestre acciones ni código JS
+            if url_str in ("aegis://start", "about:blank") or url_str.startswith("aegis://action") or "encodeURIComponent" in url_str:
                 self.url_bar.setText("")
-                self.url_bar.setPlaceholderText("Buscar en la web o ingresar dirección...")
+                placeholder = "Navegación Privada (Sin historial ni cookies)..." if getattr(self, "is_incognito", False) else "Buscar en la web o ingresar dirección..."
+                self.url_bar.setPlaceholderText(placeholder)
             else:
                 self.url_bar.setText(url_str)
+
+            # Actualizar botón de estrella de marcadores
+            if hasattr(self, "bookmarks_mgr") and hasattr(self, "btn_bookmark"):
+                is_bm = self.bookmarks_mgr.is_bookmarked(url_str)
+                self.btn_bookmark.setText("★" if is_bm else "☆")
+                accent = THEMES[self.current_theme_name]["accent"]
+                self.btn_bookmark.setStyleSheet(f"color: {accent};" if is_bm else "")
+                self.btn_bookmark.setToolTip("Marcador guardado (Click para quitar)" if is_bm else "Añadir esta pestaña a marcadores (Ctrl+D)")
 
     def on_load_progress(self, progress: int):
         if progress < 100:
@@ -1760,12 +2750,18 @@ class AegisBrowserWindow(QMainWindow):
 
         idx = self.views.index(view) if view in self.views else -1
         if idx != -1:
-            display_title = title if len(title) <= 16 else title[:14] + "…"
+            display_title = title if len(title) <= 14 else title[:12] + "…"
+            if view.page().isAudioMuted():
+                display_title += " 🔇"
+            elif view.page().recentlyAudible():
+                display_title += " 🔊"
             self.tab_bar.setTabText(idx, display_title)
 
         if ok and current_url not in ("aegis://start", "about:blank") and not current_url.startswith("aegis://"):
-            # Registrar visita en historial real para Sitios Frecuentes
-            self.history_mgr.record_visit(current_url, view.title())
+            # Registrar visita en historial real para Sitios Frecuentes (solo navegación normal)
+            if not getattr(self, "is_incognito", False):
+                self.history_mgr.record_visit(current_url, view.title())
+                self.update_omnibox_suggestions()
 
             # Inyección de CSS cosmético
             css = SHIELDS_CORE.get_cosmetic_css(current_url)
@@ -2192,8 +3188,11 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
 
     function saveShortcut() {{
       const name = document.getElementById('siteName').value.trim();
-      const url = document.getElementById('siteUrl').value.trim();
+      let url = document.getElementById('siteUrl').value.trim();
       if (!url) return;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {{
+        url = 'https://' + url;
+      }}
       const payload = JSON.stringify({{title: name || url, url: url}});
       window.location.href = 'aegis://action?add=' + encodeURIComponent(payload);
     }}
@@ -2201,15 +3200,6 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
 </body>
 </html>
 """
-
-# ── 12.1 Helper de Formato de Bytes ───────────────────────────────────────────
-def format_bytes(b: int) -> str:
-    if not b or b < 1024:
-        return f"{b or 0} B"
-    elif b < 1024 * 1024:
-        return f"{b / 1024:.1f} KB"
-    else:
-        return f"{b / (1024 * 1024):.1f} MB"
 
 # ── 12.2 Plantilla HTML de Configuración (aegis://settings) ───────────────────
 def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> str:
