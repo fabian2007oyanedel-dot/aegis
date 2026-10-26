@@ -2,7 +2,7 @@ import sys, os, subprocess, shutil, zipfile, re
 from pathlib import Path
 
 print("="*65)
-print("COMPILANDO AEGIS BROWSER PARA ANDROID (ESTILO KIWI BROWSER - ARM64)")
+print("COMPILANDO AEGIS BROWSER 2.0 (100X MOBILE OVERHAUL - ARM64)")
 print("="*65)
 
 BUILD_TOOLS_DIR = Path(r"C:\Users\PC\AppData\Local\Android\Sdk\build-tools\35.0.0")
@@ -18,7 +18,7 @@ output_dir = Path("dist/android")
 output_dir.mkdir(parents=True, exist_ok=True)
 final_apk = output_dir / "Aegis-arm64-v8a.apk"
 
-work_dir = Path("build/android_kiwi_style")
+work_dir = Path("build/android_100x")
 if work_dir.exists():
     shutil.rmtree(work_dir)
 work_dir.mkdir(parents=True, exist_ok=True)
@@ -35,12 +35,12 @@ compiled_res_dir = work_dir / "compiled_res"
 for d in [src_java_dir, res_values, res_layout, res_drawable, assets_dir, bin_dir, compiled_res_dir]:
     d.mkdir(parents=True, exist_ok=True)
 
-# ── 1. AndroidManifest.xml ────────────────────────────────────────────────────
+# ── 1. AndroidManifest.xml con PiP y permisos completos ───────────────────────
 manifest_content = """<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.aegis.browser"
-    android:versionCode="4"
-    android:versionName="1.4.0">
+    android:versionCode="5"
+    android:versionName="1.5.0">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
 
@@ -60,7 +60,8 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:supportsPictureInPicture="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -79,59 +80,57 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
 """
 (work_dir / "AndroidManifest.xml").write_text(manifest_content, encoding="utf-8")
 
-# ── 2. Vector Drawables (100% SVG nativo, cero emojis) ────────────────────────
+# ── 2. Vector Drawables (100% SVG Nativo, Cero Emojis) ────────────────────────
+def write_svg_vector(filename, color, path_data, alpha="1.0"):
+    content = f"""<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="{color}" android:fillAlpha="{alpha}"
+        android:pathData="{path_data}"/>
+</vector>"""
+    (res_drawable / filename).write_text(content, encoding="utf-8")
+
+# App Icon
 (res_drawable / "ic_launcher.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#0d1117" android:pathData="M0,0h108v108h-108z"/>
-    <path android:fillColor="#00f2fe"
-        android:pathData="M54,18 L86,32 C86,72 68,90 54,98 C40,90 22,72 22,32 Z"/>
-    <path android:fillColor="#1e3c72"
-        android:pathData="M54,22 L82,34 C82,68 66,84 54,92 C42,84 26,68 26,34 Z"/>
-    <path android:fillColor="#ffffff"
-        android:pathData="M54,42 L68,74 L60,74 L56,64 L48,64 L44,74 L36,74 Z M54,52 L50,60 L58,60 Z"/>
+    <path android:fillColor="#090d13" android:pathData="M0,0h108v108h-108z"/>
+    <path android:fillColor="#00f2fe" android:pathData="M54,18 L86,32 C86,72 68,90 54,98 C40,90 22,72 22,32 Z"/>
+    <path android:fillColor="#161b22" android:pathData="M54,23 L82,35 C82,69 66,85 54,93 C42,85 26,69 26,35 Z"/>
+    <path android:fillColor="#00f2fe" android:pathData="M54,42 L68,74 L60,74 L56,64 L48,64 L44,74 L36,74 Z M54,52 L50,60 L58,60 Z"/>
 </vector>
 """, encoding="utf-8")
 
-(res_drawable / "ic_shield.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#388bfd"
-        android:pathData="M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12V5l-9,-4z"/>
-    <path android:fillColor="#00f2fe" android:fillAlpha="0.35"
-        android:pathData="M12,3.18L5,6.3v4.7c0,4.42 2.99,8.56 7,9.77 4.01,-1.21 7,-5.35 7,-9.77V6.3l-7,-3.12z"/>
-</vector>
-""", encoding="utf-8")
+# Iconos principales de navegación
+write_svg_vector("ic_shield.xml", "#388bfd", "M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12V5l-9,-4z")
+write_svg_vector("ic_arrow_back.xml", "#e6edf3", "M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z")
+write_svg_vector("ic_arrow_forward.xml", "#e6edf3", "M12,4l-1.41,1.41L16.17,11H4v2h12.17l-5.58,5.59L12,20l8,-8z")
+write_svg_vector("ic_home.xml", "#e6edf3", "M10,20v-6h4v6h5v-8h3L12,3 2,12h3v8z")
+write_svg_vector("ic_more_vert.xml", "#e6edf3", "M12,8c1.1,0 2,-0.9 2,-2s-0.9,-2 -2,-2 -2,0.9 -2,2 0.9,2 2,2zm0,2c-1.1,0 -2,0.9 -2,2s0.9,2 2,2 2,-0.9 2,-2 -0.9,-2 -2,-2zm0,6c-1.1,0 -2,0.9 -2,2s0.9,2 2,2 2,-0.9 2,-2 -0.9,-2 -2,-2z")
+write_svg_vector("ic_refresh.xml", "#e6edf3", "M17.65,6.35C16.2,4.9 14.21,4 12,4c-4.42,0 -7.99,3.58 -7.99,8s3.57,8 7.99,8c3.73,0 6.84,-2.55 7.73,-6h-2.08c-0.82,2.33 -3.04,4 -5.65,4 -3.31,0 -6,-2.69 -6,-6s2.69,-6 6,-6c1.66,0 3.14,0.69 4.22,1.78L13,11h7V4l-2.35,2.35z")
+write_svg_vector("ic_close.xml", "#8b949e", "M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z")
+write_svg_vector("ic_add.xml", "#ffffff", "M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z")
+write_svg_vector("ic_search.xml", "#8b949e", "M15.5,14h-0.79l-0.28,-0.27C15.41,12.59 16,11.11 16,9.5 16,5.91 13.09,3 9.5,3S3,5.91 3,9.5 5.91,16 9.5,16c1.61,0 3.09,-0.59 4.23,-1.57l0.27,0.28v0.79l5,4.99L20.49,19l-4.99,-5zm-6,0C7.01,14 5,11.99 5,9.5S7.01,5 9.5,5 14,7.01 14,9.5 11.99,14 9.5,14z")
+write_svg_vector("ic_lock.xml", "#3fb950", "M18,8h-1V6c0,-2.76 -2.24,-5 -5,-5S7,3.24 7,6v2H6c-1.1,0 -2,0.9 -2,2v10c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V10c0,-1.1 -0.9,-2 -2,-2zm-6,9c-1.1,0 -2,-0.9 -2,-2s0.9,-2 2,-2 2,0.9 2,2 -0.9,2 -2,2zm3.1,-9H8.9V6c0,-1.71 1.39,-3.1 3.1,-3.1 1.71,0 3.1,1.39 3.1,3.1v2z")
 
-(res_drawable / "ic_arrow_back.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#e6edf3"
-        android:pathData="M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z"/>
-</vector>
-""", encoding="utf-8")
+# Iconos de Menú y Funciones
+write_svg_vector("ic_extension.xml", "#bc8cff", "M20.5,11H19V7c0,-1.1 -0.9,-2 -2,-2h-4V3.5C13,2.12 11.88,1 10.5,1S8,2.12 8,3.5V5H4c-1.1,0 -1.99,0.9 -1.99,2v3.8H3.5c1.49,0 2.7,1.21 2.7,2.7s-1.21,2.7 -2.7,2.7H2V20c0,1.1 0.9,2 2,2h3.8v-1.5c0,-1.49 1.21,-2.7 2.7,-2.7 1.49,0 2.7,1.21 2.7,2.7V22H17c1.1,0 2,-0.9 2,-2v-4h1.5c1.38,0 2.5,-1.12 2.5,-2.5s-1.12,-2.5 -2.5,-2.5z")
+write_svg_vector("ic_star.xml", "#e3b341", "M12,17.27L18.18,21l-1.64,-7.03L22,9.24l-7.19,-0.61L12,2 9.19,8.63 2,9.24l5.46,4.73L5.82,21z")
+write_svg_vector("ic_bookmark.xml", "#58a6ff", "M17,3H7c-1.1,0 -1.99,0.9 -1.99,2L5,21l7,-3 7,3V5c0,-1.1 -0.9,-2 -2,-2z")
+write_svg_vector("ic_history.xml", "#79c0ff", "M13,3c-4.97,0 -9,4.03 -9,9H1l3.89,3.89.07,0.14L9,12H6c0,-3.87 3.13,-7 7,-7s7,3.13 7,7 -3.13,7 -7,7c-1.93,0 -3.68,-0.79 -4.94,-2.06l-1.42,1.42C8.27,19.99 10.51,21 13,21c4.97,0 9,-4.03 9,-9s-4.03,-9 -9,-9zm-1,5v5l4.28,2.54.72,-1.21 -3.5,-2.08V8H12z")
+write_svg_vector("ic_download.xml", "#3fb950", "M19,9h-4V3H9v6H5l7,7 7,-7zM5,18v2h14v-2H5z")
+write_svg_vector("ic_desktop.xml", "#7ee787", "M20,18c1.1,0 1.99,-0.9 1.99,-2L22,5c0,-1.1 -0.9,-2 -2,-2H4c-1.1,0 -2,0.9 -2,2v11c0,1.1 0.9,2 2,2H0c0,1.1 0.9,2 2,2h20c1.1,0 2,-0.9 2,-2h-4zM4,5h16v11H4V5z")
+write_svg_vector("ic_moon.xml", "#d2a8ff", "M12.3,2a10,10 0 0,0 -1.9,0.18 10,10 0 1,0 11.42,11.42A10,10 0 0,0 12.3,2z")
+write_svg_vector("ic_incognito.xml", "#8b949e", "M12,2A10,10 0 0,0 2,12c0,4.42 2.87,8.17 6.84,9.5.5,0.08 0.66,-0.23 0.66,-0.5v-1.69c-2.77,0.6 -3.36,-1.34 -3.36,-1.34 -0.46,-1.16 -1.11,-1.47 -1.11,-1.47 -0.91,-0.62 0.07,-0.6 0.07,-0.6 1,0.07 1.53,1.03 1.53,1.03 0.87,1.52 2.34,1.07 2.91,0.83 0.1,-0.65 0.35,-1.09 0.63,-1.34 -2.22,-0.25 -4.55,-1.11 -4.55,-4.92 0,-1.11 0.38,-2 1.03,-2.71 -0.1,-0.25 -0.45,-1.29 0.1,-2.64 0,0 0.84,-0.27 2.75,1.02 0.79,-0.22 1.65,-0.33 2.5,-0.33 0.85,0 1.71,0.11 2.5,0.33 1.91,-1.29 2.75,-1.02 2.75,-1.02 0.55,1.35 0.2,2.39 0.1,2.64 0.65,0.71 1.03,1.6 1.03,2.71 0,3.82 -2.34,4.66 -4.57,4.91 0.36,0.31 0.69,0.92 0.69,1.85V21c0,0.27 0.16,0.59 0.67,0.5C19.14,20.16 22,16.42 22,12A10,10 0 0,0 12,2z")
+write_svg_vector("ic_delete.xml", "#f85149", "M6,19c0,1.1 0.9,2 2,2h8c1.1,0 2,-0.9 2,-2V7H6v12zM19,4h-3.5l-1,-1h-5l-1,1H5v2h14V4z")
+write_svg_vector("ic_settings.xml", "#8b949e", "M19.14,12.94c0.04,-0.3 0.06,-0.61 0.06,-0.94 0,-0.32 -0.02,-0.64 -0.07,-0.94l2.03,-1.58c0.18,-0.14 0.23,-0.41 0.12,-0.61l-1.92,-3.32c-0.12,-0.22 -0.37,-0.29 -0.59,-0.22l-2.39,0.96c-0.5,-0.38 -1.03,-0.7 -1.62,-0.94l-0.36,-2.54c-0.04,-0.24 -0.24,-0.41 -0.48,-0.41h-3.84c-0.24,0 -0.43,0.17 -0.47,0.41l-0.36,2.54c-0.59,0.24 -1.13,0.57 -1.62,0.94l-2.39,-0.96c-0.22,-0.08 -0.47,0 -0.59,0.22L2.74,8.87c-0.12,0.21 -0.08,0.47 0.12,0.61l2.03,1.58c-0.05,0.3 -0.09,0.63 -0.09,0.94s0.02,0.64 0.07,0.94l-2.03,1.58c-0.18,0.14 -0.23,0.41 -0.12,0.61l1.92,3.32c0.12,0.22 0.37,0.29 0.59,0.22l2.39,-0.96c0.5,0.38 1.03,0.7 1.62,0.94l0.36,2.54c0.05,0.24 0.24,0.41 0.48,0.41h3.84c0.24,0 0.44,-0.17 0.47,-0.41l0.36,-2.54c0.59,-0.24 1.13,-0.56 1.62,-0.94l2.39,0.96c0.22,0.08 0.47,0 0.59,-0.22l1.92,-3.32c0.12,-0.22 0.07,-0.47 -0.12,-0.61l-2.01,-1.58zM12,15.6c-1.98,0 -3.6,-1.62 -3.6,-3.6s1.62,-3.6 3.6,-3.6 3.6,1.62 3.6,3.6 -1.62,3.6 -3.6,3.6z")
+write_svg_vector("ic_movie.xml", "#ff7b72", "M18,4l2,4h-3l-2,-4h-2l2,4h-3l-2,-4H8l2,4H7L5,4H4c-1.1,0 -1.99,0.9 -1.99,2L2,18c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V4h-4z")
+write_svg_vector("ic_file.xml", "#79c0ff", "M14,2H6c-1.1,0 -1.99,0.9 -1.99,2L4,20c0,1.1 0.89,2 1.99,2H18c1.1,0 2,-0.9 2,-2V8l-6,-6zm2,16H8v-2h8v2zm0,-4H8v-2h8v2zm-3,-5V3.5L18.5,9H13z")
+write_svg_vector("ic_play.xml", "#ffffff", "M8,5v14l11,-7z")
 
-(res_drawable / "ic_arrow_forward.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#e6edf3"
-        android:pathData="M12,4l-1.41,1.41L16.17,11H4v2h12.17l-5.58,5.59L12,20l8,-8z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_home.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#e6edf3"
-        android:pathData="M10,20v-6h4v6h5v-8h3L12,3 2,12h3v8z"/>
-</vector>
-""", encoding="utf-8")
-
+# Tab Box con contorno
 (res_drawable / "ic_tab_box.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
@@ -141,137 +140,11 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
 </vector>
 """, encoding="utf-8")
 
-(res_drawable / "ic_more_vert.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#e6edf3"
-        android:pathData="M12,8c1.1,0 2,-0.9 2,-2s-0.9,-2 -2,-2 -2,0.9 -2,2 0.9,2 2,2zm0,2c-1.1,0 -2,0.9 -2,2s0.9,2 2,2 2,-0.9 2,-2 -0.9,-2 -2,-2zm0,6c-1.1,0 -2,0.9 -2,2s0.9,2 2,2 2,-0.9 2,-2 -0.9,-2 -2,-2z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_refresh.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#e6edf3"
-        android:pathData="M17.65,6.35C16.2,4.9 14.21,4 12,4c-4.42,0 -7.99,3.58 -7.99,8s3.57,8 7.99,8c3.73,0 6.84,-2.55 7.73,-6h-2.08c-0.82,2.33 -3.04,4 -5.65,4 -3.31,0 -6,-2.69 -6,-6s2.69,-6 6,-6c1.66,0 3.14,0.69 4.22,1.78L13,11h7V4l-2.35,2.35z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_close.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#8b949e"
-        android:pathData="M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_add.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#ffffff"
-        android:pathData="M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_extension.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#bc8cff"
-        android:pathData="M20.5,11H19V7c0,-1.1 -0.9,-2 -2,-2h-4V3.5C13,2.12 11.88,1 10.5,1S8,2.12 8,3.5V5H4c-1.1,0 -1.99,0.9 -1.99,2v3.8H3.5c1.49,0 2.7,1.21 2.7,2.7s-1.21,2.7 -2.7,2.7H2V20c0,1.1 0.9,2 2,2h3.8v-1.5c0,-1.49 1.21,-2.7 2.7,-2.7 1.49,0 2.7,1.21 2.7,2.7V22H17c1.1,0 2,-0.9 2,-2v-4h1.5c1.38,0 2.5,-1.12 2.5,-2.5s-1.12,-2.5 -2.5,-2.5z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_star.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#e3b341"
-        android:pathData="M12,17.27L18.18,21l-1.64,-7.03L22,9.24l-7.19,-0.61L12,2 9.19,8.63 2,9.24l5.46,4.73L5.82,21z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_bookmark.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#58a6ff"
-        android:pathData="M17,3H7c-1.1,0 -1.99,0.9 -1.99,2L5,21l7,-3 7,3V5c0,-1.1 -0.9,-2 -2,-2z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_history.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#79c0ff"
-        android:pathData="M13,3c-4.97,0 -9,4.03 -9,9H1l3.89,3.89.07,0.14L9,12H6c0,-3.87 3.13,-7 7,-7s7,3.13 7,7 -3.13,7 -7,7c-1.93,0 -3.68,-0.79 -4.94,-2.06l-1.42,1.42C8.27,19.99 10.51,21 13,21c4.97,0 9,-4.03 9,-9s-4.03,-9 -9,-9zm-1,5v5l4.28,2.54.72,-1.21 -3.5,-2.08V8H12z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_desktop.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#7ee787"
-        android:pathData="M20,18c1.1,0 1.99,-0.9 1.99,-2L22,5c0,-1.1 -0.9,-2 -2,-2H4c-1.1,0 -2,0.9 -2,2v11c0,1.1 0.9,2 2,2H0c0,1.1 0.9,2 2,2h20c1.1,0 2,-0.9 2,-2h-4zM4,5h16v11H4V5z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_delete.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#f85149"
-        android:pathData="M6,19c0,1.1 0.9,2 2,2h8c1.1,0 2,-0.9 2,-2V7H6v12zM19,4h-3.5l-1,-1h-5l-1,1H5v2h14V4z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_settings.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#8b949e"
-        android:pathData="M19.14,12.94c0.04,-0.3 0.06,-0.61 0.06,-0.94 0,-0.32 -0.02,-0.64 -0.07,-0.94l2.03,-1.58c0.18,-0.14 0.23,-0.41 0.12,-0.61l-1.92,-3.32c-0.12,-0.22 -0.37,-0.29 -0.59,-0.22l-2.39,0.96c-0.5,-0.38 -1.03,-0.7 -1.62,-0.94l-0.36,-2.54c-0.04,-0.24 -0.24,-0.41 -0.48,-0.41h-3.84c-0.24,0 -0.43,0.17 -0.47,0.41l-0.36,2.54c-0.59,0.24 -1.13,0.57 -1.62,0.94l-2.39,-0.96c-0.22,-0.08 -0.47,0 -0.59,0.22L2.74,8.87c-0.12,0.21 -0.08,0.47 0.12,0.61l2.03,1.58c-0.05,0.3 -0.09,0.63 -0.09,0.94s0.02,0.64 0.07,0.94l-2.03,1.58c-0.18,0.14 -0.23,0.41 -0.12,0.61l1.92,3.32c0.12,0.22 0.37,0.29 0.59,0.22l2.39,-0.96c0.5,0.38 1.03,0.7 1.62,0.94l0.36,2.54c0.05,0.24 0.24,0.41 0.48,0.41h3.84c0.24,0 0.44,-0.17 0.47,-0.41l0.36,-2.54c0.59,-0.24 1.13,-0.56 1.62,-0.94l2.39,0.96c0.22,0.08 0.47,0 0.59,-0.22l1.92,-3.32c0.12,-0.22 0.07,-0.47 -0.12,-0.61l-2.01,-1.58zM12,15.6c-1.98,0 -3.6,-1.62 -3.6,-3.6s1.62,-3.6 3.6,-3.6 3.6,1.62 3.6,3.6 -1.62,3.6 -3.6,3.6z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_movie.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#ff7b72"
-        android:pathData="M18,4l2,4h-3l-2,-4h-2l2,4h-3l-2,-4H8l2,4H7L5,4H4c-1.1,0 -1.99,0.9 -1.99,2L2,18c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V4h-4z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_search.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#8b949e"
-        android:pathData="M15.5,14h-0.79l-0.28,-0.27C15.41,12.59 16,11.11 16,9.5 16,5.91 13.09,3 9.5,3S3,5.91 3,9.5 5.91,16 9.5,16c1.61,0 3.09,-0.59 4.23,-1.57l0.27,0.28v0.79l5,4.99L20.49,19l-4.99,-5zm-6,0C7.01,14 5,11.99 5,9.5S7.01,5 9.5,5 14,7.01 14,9.5 11.99,14 9.5,14z"/>
-</vector>
-""", encoding="utf-8")
-
-(res_drawable / "ic_lock.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#3fb950"
-        android:pathData="M18,8h-1V6c0,-2.76 -2.24,-5 -5,-5S7,3.24 7,6v2H6c-1.1,0 -2,0.9 -2,2v10c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V10c0,-1.1 -0.9,-2 -2,-2zm-6,9c-1.1,0 -2,-0.9 -2,-2s0.9,-2 2,-2 2,0.9 2,2 -0.9,2 -2,2zm3.1,-9H8.9V6c0,-1.71 1.39,-3.1 3.1,-3.1 1.71,0 3.1,1.39 3.1,3.1v2z"/>
-</vector>
-""", encoding="utf-8")
-
-# Background shapes
-(res_drawable / "bg_popup_menu.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
+# Background Drawables (Bordes, Sombras y Elevaciones)
+(res_drawable / "bg_omnibox.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <solid android:color="#161b22"/>
-    <corners android:radius="14dp"/>
+    <corners android:radius="22dp"/>
     <stroke android:width="1dp" android:color="#30363d"/>
 </shape>
 """, encoding="utf-8")
@@ -279,24 +152,32 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
 (res_drawable / "bg_tab_card.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <solid android:color="#161b22"/>
-    <corners android:radius="12dp"/>
-    <stroke android:width="1.5dp" android:color="#30363d"/>
+    <corners android:radius="14dp"/>
+    <stroke android:width="1.5dp" android:color="#21262d"/>
 </shape>
 """, encoding="utf-8")
 
 (res_drawable / "bg_tab_card_active.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <solid android:color="#161b22"/>
-    <corners android:radius="12dp"/>
+    <corners android:radius="14dp"/>
     <stroke android:width="2dp" android:color="#388bfd"/>
 </shape>
 """, encoding="utf-8")
 
-(res_drawable / "bg_omnibox.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
+(res_drawable / "bg_bottom_sheet.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <solid android:color="#161b22"/>
-    <corners android:radius="20dp"/>
+    <corners android:topLeftRadius="22dp" android:topRightRadius="22dp"/>
     <stroke android:width="1dp" android:color="#30363d"/>
+</shape>
+""", encoding="utf-8")
+
+(res_drawable / "bg_card_inner.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#0d1117"/>
+    <corners android:radius="12dp"/>
+    <stroke android:width="1dp" android:color="#21262d"/>
 </shape>
 """, encoding="utf-8")
 
@@ -310,22 +191,35 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
 (res_drawable / "bg_btn_action.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <solid android:color="#238636"/>
+    <corners android:radius="10dp"/>
+</shape>
+""", encoding="utf-8")
+
+(res_drawable / "bg_btn_secondary.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#21262d"/>
     <corners android:radius="8dp"/>
 </shape>
 """, encoding="utf-8")
 
-# ── 3. Layouts XML (activity_main.xml, popup_menu.xml, popup_shield.xml) ──────
+(res_drawable / "bg_circle_icon.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="#21262d"/>
+</shape>
+""", encoding="utf-8")
+
+# ── 3. Layouts XML: activity_main.xml con diseño Kiwi 2.0 ─────────────────────
 (res_layout / "activity_main.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0d1117">
+    android:background="#06090e">
 
-    <!-- 1. Barra Superior Kiwi Style: Escudo con badge, Omnibox, Botón WebStore, Recargar -->
+    <!-- 1. Barra Superior Ultradelgada (48dp): Escudo inteligente, Omnibox cápsula, Extensiones, Recargar -->
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
-        android:layout_height="52dp"
+        android:layout_height="48dp"
         android:layout_alignParentTop="true"
         android:orientation="horizontal"
         android:gravity="center_vertical"
@@ -333,7 +227,7 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
         android:paddingLeft="8dp"
         android:paddingRight="8dp">
 
-        <!-- Contenedor del Escudo con Badge flotante de bloqueos -->
+        <!-- Botón Escudo con Badge contador -->
         <FrameLayout
             android:id="@+id/btnShieldContainer"
             android:layout_width="38dp"
@@ -342,11 +236,10 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
             android:focusable="true">
             <ImageView
                 android:id="@+id/btnShield"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
                 android:layout_gravity="center"
-                android:src="@drawable/ic_shield"
-                android:contentDescription="Aegis Shields"/>
+                android:src="@drawable/ic_shield"/>
             <TextView
                 android:id="@+id/lblShieldBadge"
                 android:layout_width="wrap_content"
@@ -355,17 +248,17 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
                 android:background="@drawable/bg_badge_shield"
                 android:text="0"
                 android:textColor="#ffffff"
-                android:textSize="9sp"
+                android:textSize="8.5sp"
                 android:textStyle="bold"
-                android:paddingLeft="4dp"
-                android:paddingRight="4dp"/>
+                android:paddingLeft="3dp"
+                android:paddingRight="3dp"/>
         </FrameLayout>
 
-        <!-- Omnibox redondeado con icono de candado/búsqueda -->
+        <!-- Omnibox estilizado tipo cápsula -->
         <LinearLayout
             android:id="@+id/omniboxLayout"
             android:layout_width="0dp"
-            android:layout_height="38dp"
+            android:layout_height="36dp"
             android:layout_weight="1"
             android:layout_marginLeft="6dp"
             android:layout_marginRight="6dp"
@@ -389,20 +282,20 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
                 android:background="@null"
                 android:textColor="#f0f6fc"
                 android:textColorHint="#8b949e"
-                android:textSize="13.5sp"
+                android:textSize="13sp"
                 android:singleLine="true"
                 android:imeOptions="actionGo"
                 android:paddingLeft="8dp"
                 android:paddingRight="4dp"
                 android:hint="Buscar o escribir dirección..."/>
 
-            <!-- Botón de instalación rápida de extensiones -->
+            <!-- Botón verde de instalación rápida al visitar Chrome Web Store -->
             <TextView
                 android:id="@+id/btnInstallExt"
                 android:layout_width="wrap_content"
-                android:layout_height="26dp"
+                android:layout_height="24dp"
                 android:gravity="center"
-                android:text="Instalar"
+                android:text="🧩 Instalar"
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:textColor="#ffffff"
@@ -413,19 +306,26 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
 
             <ImageView
                 android:id="@+id/btnClearUrl"
-                android:layout_width="20dp"
-                android:layout_height="20dp"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
                 android:src="@drawable/ic_close"
                 android:visibility="gone"/>
         </LinearLayout>
 
+        <!-- Botón rápido de Extensiones -->
+        <ImageView
+            android:id="@+id/btnQuickExt"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:padding="6dp"
+            android:src="@drawable/ic_extension"/>
+
         <ImageView
             android:id="@+id/btnReload"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
             android:padding="6dp"
-            android:src="@drawable/ic_refresh"
-            android:contentDescription="Recargar"/>
+            android:src="@drawable/ic_refresh"/>
     </LinearLayout>
 
     <ProgressBar
@@ -436,11 +336,11 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
         android:layout_below="@id/topBar"
         android:visibility="gone"/>
 
-    <!-- 2. Barra Inferior Kiwi Style (Atrás, Adelante, Home, Pestañas con número, Menú) -->
+    <!-- 2. Barra Inferior Ergonómica de Navegación con 1 Mano (Kiwi Style 50dp) -->
     <LinearLayout
         android:id="@+id/bottomBar"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
+        android:layout_height="50dp"
         android:layout_alignParentBottom="true"
         android:orientation="horizontal"
         android:background="#0d1117"
@@ -451,7 +351,7 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:padding="12dp"
+            android:padding="13dp"
             android:src="@drawable/ic_arrow_back"/>
 
         <ImageView
@@ -459,7 +359,7 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:padding="12dp"
+            android:padding="13dp"
             android:src="@drawable/ic_arrow_forward"/>
 
         <ImageView
@@ -467,10 +367,10 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:padding="12dp"
+            android:padding="13dp"
             android:src="@drawable/ic_home"/>
 
-        <!-- Botón de Pestañas con contador numérico dentro del cuadrado -->
+        <!-- Botón de Pestañas con contador dinámico dentro del cuadrado -->
         <FrameLayout
             android:id="@+id/btnTabs"
             android:layout_width="0dp"
@@ -499,7 +399,7 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:padding="12dp"
+            android:padding="13dp"
             android:src="@drawable/ic_more_vert"/>
     </LinearLayout>
 
@@ -510,26 +410,26 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
         android:layout_height="match_parent"
         android:layout_below="@id/progressBar"
         android:layout_above="@id/bottomBar"
-        android:background="#0d1117"/>
+        android:background="#06090e"/>
 
-    <!-- 4. Vista de Malla de Pestañas Kiwi Style (Tabs Grid View a pantalla completa) -->
+    <!-- 4. Cuadrícula de Pestañas a Pantalla Completa (Tab Grid Switcher) -->
     <LinearLayout
         android:id="@+id/tabGridOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:background="#090d13"
+        android:background="#06090e"
         android:visibility="gone"
         android:clickable="true">
 
-        <!-- Header de la Malla de Pestañas -->
+        <!-- Header del Grid -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingLeft="12dp"
-            android:paddingRight="12dp"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp"
             android:background="#0d1117">
 
             <ImageView
@@ -557,6 +457,7 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
                 android:text="Cerrar todas"
                 android:textColor="#f85149"
                 android:textSize="12sp"
+                android:textStyle="bold"
                 android:padding="8dp"/>
 
             <ImageView
@@ -568,12 +469,12 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
                 android:src="@drawable/ic_add"/>
         </LinearLayout>
 
-        <!-- Contenedor scrollable de tarjetas de pestañas -->
+        <!-- Contenedor scrollable de tarjetas de pestañas (2 columnas) -->
         <ScrollView
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:padding="10dp">
+            android:padding="12dp">
             <LinearLayout
                 android:id="@+id/tabCardsContainer"
                 android:layout_width="match_parent"
@@ -581,10 +482,9 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
                 android:orientation="vertical"/>
         </ScrollView>
 
-        <!-- Botón inferior para abrir nueva pestaña rápidamente -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="54dp"
             android:gravity="center"
             android:background="#0d1117"
             android:padding="8dp">
@@ -604,7 +504,7 @@ manifest_content = """<?xml version="1.0" encoding="utf-8"?>
 </RelativeLayout>
 """, encoding="utf-8")
 
-# ── 4. assets/ntp.html (SVG nativo, cero emojis) ──────────────────────────────
+# ── 4. assets/ntp.html (Diseño OLED de Lujo, SVG Nativos, Cero Emojis) ────────
 ntp_html = """<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -614,39 +514,39 @@ ntp_html = """<!DOCTYPE html>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: #090d13;
+      background: #06090e;
       color: #f0f6fc;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 3.5rem 1.25rem 2rem 1.25rem;
+      padding: 3rem 1.25rem 2rem 1.25rem;
     }
-    .logo-box {
+    .logo-container {
       display: flex;
       flex-direction: column;
       align-items: center;
       margin-bottom: 2rem;
     }
     .logo-svg {
-      width: 72px;
-      height: 72px;
-      filter: drop-shadow(0 0 16px rgba(0,242,254,0.4));
+      width: 76px;
+      height: 76px;
+      filter: drop-shadow(0 0 20px rgba(0,242,254,0.4));
       margin-bottom: 0.75rem;
     }
-    .title {
+    .brand-title {
       font-size: 26px;
       font-weight: 800;
       letter-spacing: 0.5px;
       color: #ffffff;
     }
-    .title span {
-      background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+    .brand-title span {
+      background: linear-gradient(135deg, #00f2fe 0%, #388bfd 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
-    .subtitle {
+    .brand-subtitle {
       font-size: 11px;
       color: #8b949e;
       margin-top: 4px;
@@ -662,23 +562,23 @@ ntp_html = """<!DOCTYPE html>
     }
     .search-input {
       width: 100%;
-      height: 48px;
+      height: 50px;
       background: #161b22;
       border: 1px solid #30363d;
-      border-radius: 24px;
-      padding: 0 1.25rem 0 3rem;
+      border-radius: 25px;
+      padding: 0 1.25rem 0 3.2rem;
       color: #ffffff;
-      font-size: 14px;
+      font-size: 14.5px;
       outline: none;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
     }
     .search-icon {
       position: absolute;
-      left: 1rem;
+      left: 1.15rem;
       top: 50%;
       transform: translateY(-50%);
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
       fill: #8b949e;
     }
     .grid {
@@ -696,7 +596,7 @@ ntp_html = """<!DOCTYPE html>
       text-decoration: none;
       background: #161b22;
       border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 12px 6px;
       transition: transform 0.15s, background 0.15s;
     }
@@ -705,13 +605,14 @@ ntp_html = """<!DOCTYPE html>
       background: #21262d;
     }
     .tile-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
       margin-bottom: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     .tile-icon svg {
       width: 22px;
@@ -732,16 +633,16 @@ ntp_html = """<!DOCTYPE html>
       max-width: 440px;
       background: #161b22;
       border: 1px solid #30363d;
-      border-radius: 12px;
-      padding: 12px 14px;
-      font-size: 11px;
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 11.5px;
       color: #8b949e;
       line-height: 1.5;
     }
     .banner-row {
       display: flex;
       align-items: center;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }
     .banner-row:last-child { margin-bottom: 0; }
     .banner-dot {
@@ -749,27 +650,27 @@ ntp_html = """<!DOCTYPE html>
       height: 8px;
       border-radius: 4px;
       background: #388bfd;
-      margin-right: 8px;
+      margin-right: 10px;
       flex-shrink: 0;
     }
     .banner-dot.green { background: #3fb950; }
   </style>
 </head>
 <body>
-  <div class="logo-box">
+  <div class="logo-container">
     <svg class="logo-svg" viewBox="0 0 512 512">
       <defs>
         <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#00f2fe" />
-          <stop offset="100%" stop-color="#4facfe" />
+          <stop offset="100%" stop-color="#388bfd" />
         </linearGradient>
       </defs>
       <path d="M256 32 L432 96 C432 288 340 416 256 480 C172 416 80 288 80 96 Z" fill="none" stroke="url(#shieldGrad)" stroke-width="14"/>
       <path d="M256 56 L410 114 C410 270 330 380 256 440 C182 380 102 270 102 114 Z" fill="#161b22"/>
       <path d="M256 160 L330 330 L294 330 L276 284 L236 284 L218 330 L182 330 Z M256 220 L244 252 L268 252 Z" fill="url(#shieldGrad)"/>
     </svg>
-    <div class="title"><span>AEGIS</span> BROWSER</div>
-    <div class="subtitle">120Hz Ultra Fluido • Aegis Shields • Kiwi Engine</div>
+    <div class="brand-title"><span>AEGIS</span> BROWSER</div>
+    <div class="brand-subtitle">120Hz Ultra Fluido • Aegis Shields 2.0 • Kiwi Engine</div>
   </div>
 
   <form class="search-box" action="https://duckduckgo.com" method="get">
@@ -789,7 +690,7 @@ ntp_html = """<!DOCTYPE html>
     <!-- 2. Web Store -->
     <a href="https://chromewebstore.google.com" class="tile">
       <div class="tile-icon" style="background:#8a2be2;">
-        <svg viewBox="0 0 24 24" fill="#ffffff"><path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5s-1.12-2.5-2.5-2.5z"/></svg>
+        <svg viewBox="0 0 24 24" fill="#ffffff"><path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5s-1.12,-2.5 -2.5,-2.5z"/></svg>
       </div>
       <div class="tile-name">Web Store</div>
     </a>
@@ -837,7 +738,7 @@ ntp_html = """<!DOCTYPE html>
     <!-- 8. AniPlay -->
     <a href="file:///android_asset/aniplay.html" class="tile">
       <div class="tile-icon" style="background:#008080;">
-        <svg viewBox="0 0 24 24" fill="#ffffff"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>
+        <svg viewBox="0 0 24 24" fill="#ffffff"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1 0.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>
       </div>
       <div class="tile-name">AniPlay</div>
     </a>
@@ -846,11 +747,11 @@ ntp_html = """<!DOCTYPE html>
   <div class="banner">
     <div class="banner-row">
       <div class="banner-dot green"></div>
-      <div><strong>Aegis Shields Activo:</strong> Bloqueo nativo de anuncios y YouTube Defuser.</div>
+      <div><strong>Aegis Shields 2.0:</strong> Bloqueo agresivo de publicidad, YouTube Defuser y Cero Telemetría.</div>
     </div>
     <div class="banner-row">
       <div class="banner-dot"></div>
-      <div><strong>Timer Bypass:</strong> Salto de cuentas regresivas en CurseForge, Mega y Adf.ly.</div>
+      <div><strong>Universal Timer Bypass:</strong> Salto de cuentas atrás en CurseForge, Mega, Adf.ly y Mediafire.</div>
     </div>
   </div>
 </body>
@@ -858,12 +759,12 @@ ntp_html = """<!DOCTYPE html>
 """
 (assets_dir / "ntp.html").write_text(ntp_html, encoding="utf-8")
 
-# ── 5. assets/aegis_mobile_shields.js (YouTube Defuser + Adblock + Bypass) ─────
-mobile_shields_js = """// Aegis Mobile Shields - High-Performance YouTube Ad Defuser & Universal Timer Bypass
+# ── 5. assets/aegis_mobile_shields.js (Defuser 100x + Background Playback) ─────
+mobile_shields_js = """// Aegis Mobile Shields 2.0 - High-Performance Ad Defuser & Background Video Playback
 (function() {
     'use strict';
-    
-    // 1. YouTube Mobile Ad Defuser
+
+    // 1. YouTube Mobile Ad Defuser (Pre-rolls, Mid-rolls, Overlays y Anti-Adblock)
     if (location.hostname.includes('youtube.com')) {
         // Interceptar XHR y Fetch para limpiar respuestas de anuncios en el reproductor de YouTube
         const origFetch = window.fetch;
@@ -877,6 +778,7 @@ mobile_shields_js = """// Aegis Mobile Shields - High-Performance YouTube Ad Def
                     if (json.adPlacements) json.adPlacements = [];
                     if (json.playerAds) json.playerAds = [];
                     if (json.adSlots) json.adSlots = [];
+                    if (json.adBreakHeartbeatParams) json.adBreakHeartbeatParams = {};
                     return new Response(JSON.stringify(json), {
                         status: resp.status,
                         statusText: resp.statusText,
@@ -887,7 +789,7 @@ mobile_shields_js = """// Aegis Mobile Shields - High-Performance YouTube Ad Def
             return resp;
         };
 
-        // Auto-skip instantáneo de comerciales si alguno llega a reproducirse
+        // Auto-skip instantáneo de comerciales de video en 20ms
         setInterval(() => {
             const video = document.querySelector('video');
             const adShowing = document.querySelector('.ad-showing, .ad-interrupting, .ytp-ad-module, .video-ads');
@@ -898,16 +800,20 @@ mobile_shields_js = """// Aegis Mobile Shields - High-Performance YouTube Ad Def
                 }
             }
             const skipButtons = document.querySelectorAll(
-                '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytm-ad-skip-button, button.skip-ad, .ytp-skip-ad-button'
+                '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytm-ad-skip-button, button.skip-ad, .ytp-skip-ad-button, .ytm-skip-ad-button'
             );
             skipButtons.forEach(btn => btn.click());
-            
-            // Eliminar banners de advertencia de bloqueadores
-            const enforcement = document.querySelector('ytd-enforcement-message-view-model, ytm-enforcement-message-view-model');
-            if (enforcement) enforcement.remove();
-        }, 100);
 
-        // Inyección de estilos cosméticos para remover espacios publicitarios de YouTube
+            // Eliminar carteles anti-adblock
+            const enforcement = document.querySelector('ytd-enforcement-message-view-model, ytm-enforcement-message-view-model');
+            if (enforcement) {
+                enforcement.remove();
+                const backdrop = document.querySelector('tp-yt-iron-overlay-backdrop');
+                if (backdrop) backdrop.remove();
+            }
+        }, 60);
+
+        // Inyección de estilos cosméticos para remover anuncios residuales
         const style = document.createElement('style');
         style.textContent = `
             ytm-promoted-sparkles-web-renderer,
@@ -927,17 +833,29 @@ mobile_shields_js = """// Aegis Mobile Shields - High-Performance YouTube Ad Def
             }
         `;
         (document.head || document.documentElement).appendChild(style);
+
+        // Habilitar reproducción en segundo plano (pantalla apagada o minimizada)
+        document.addEventListener('visibilitychange', function(e) {
+            e.stopImmediatePropagation();
+        }, true);
+        window.addEventListener('blur', function(e) {
+            e.stopImmediatePropagation();
+        }, true);
+        try {
+            Object.defineProperty(document, 'hidden', { value: false, writable: false });
+            Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: false });
+        } catch(e) {}
     }
 
-    // 2. Universal Anti-Adblock Defuser (neutralizar scripts de detección)
+    // 2. Universal Anti-Adblock Defuser (neutralizar scripts de detección como Admiral)
     window.canRunAds = true;
     window.isAdBlockActive = false;
     window.adblock = false;
 
-    // 3. Universal Popup / Popunder Blocker
+    // 3. Universal Popup & Popunder Blocker
     const origOpen = window.open;
     window.open = function(url, target, features) {
-        if (!url || url === 'about:blank' || url.includes('adsterra') || url.includes('popads') || url.includes('propeller')) {
+        if (!url || url === 'about:blank' || url.includes('adsterra') || url.includes('popads') || url.includes('propeller') || url.includes('bet365')) {
             console.log('Aegis Shields: Popup bloqueado ->', url);
             return null;
         }
@@ -997,11 +915,11 @@ mobile_shields_js = """// Aegis Mobile Shields - High-Performance YouTube Ad Def
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AniPlay Anime Hub</title>
   <style>
-    body { background: #090d13; color: #f0f6fc; font-family: sans-serif; padding: 20px; }
+    body { background: #06090e; color: #f0f6fc; font-family: sans-serif; padding: 20px; }
     h1 { color: #00f2fe; margin-bottom: 8px; font-size: 22px; }
     p { color: #8b949e; font-size: 13px; margin-bottom: 20px; }
     .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 14px; text-decoration: none; color: #fff; }
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px; text-decoration: none; color: #fff; }
     .card h3 { font-size: 15px; margin-bottom: 4px; color: #58a6ff; }
     .card span { font-size: 11px; color: #8b949e; }
   </style>
@@ -1042,12 +960,14 @@ public class Tab {
     public String url;
     public final WebView webView;
     public boolean isDesktopMode = false;
+    public boolean isIncognito = false;
 
-    public Tab(String id, String title, String url, WebView webView) {
+    public Tab(String id, String title, String url, WebView webView, boolean isIncognito) {
         this.id = id;
         this.title = title != null ? title : "Aegis";
         this.url = url;
         this.webView = webView;
+        this.isIncognito = isIncognito;
     }
 }
 """, encoding="utf-8")
@@ -1064,7 +984,7 @@ import java.util.List;
 
 public class AegisDatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "aegis_browser.db";
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2;
 
     public AegisDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -1074,12 +994,14 @@ public class AegisDatabaseHelper extends SQLiteOpenHelper {
     public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE history (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, url TEXT, timestamp INTEGER)");
         db.execSQL("CREATE TABLE bookmarks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, url TEXT, created INTEGER)");
+        db.execSQL("CREATE TABLE downloads (id INTEGER PRIMARY KEY AUTOINCREMENT, filename TEXT, url TEXT, size INTEGER, created INTEGER)");
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         db.execSQL("DROP TABLE IF EXISTS history");
         db.execSQL("DROP TABLE IF EXISTS bookmarks");
+        db.execSQL("DROP TABLE IF EXISTS downloads");
         onCreate(db);
     }
 
@@ -1128,6 +1050,37 @@ public class AegisDatabaseHelper extends SQLiteOpenHelper {
         }
         c.close();
         return list;
+    }
+
+    public void removeBookmark(String url) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.delete("bookmarks", "url = ?", new String[]{url});
+    }
+
+    public void addDownload(String filename, String url, long size) {
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues cv = new ContentValues();
+        cv.put("filename", filename);
+        cv.put("url", url);
+        cv.put("size", size);
+        cv.put("created", System.currentTimeMillis());
+        db.insert("downloads", null, cv);
+    }
+
+    public List<String[]> getDownloads() {
+        List<String[]> list = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor c = db.rawQuery("SELECT filename, url, size FROM downloads ORDER BY created DESC LIMIT 100", null);
+        while (c.moveToNext()) {
+            list.add(new String[]{c.getString(0), c.getString(1), String.valueOf(c.getLong(2))});
+        }
+        c.close();
+        return list;
+    }
+
+    public void clearDownloads() {
+        SQLiteDatabase db = getWritableDatabase();
+        db.execSQL("DELETE FROM downloads");
     }
 }
 """, encoding="utf-8")
@@ -1186,30 +1139,36 @@ public class AegisExtensionManager {
 
     public void injectInto(WebView webView, String url) {
         if (url == null || url.startsWith("file://") || url.startsWith("about:")) return;
-        // Inyectar polyfill window.chrome
         String polyfill = "if(!window.chrome){window.chrome={runtime:{id:'aegis_ext',sendMessage:function(){}},storage:{local:{get:function(k,cb){if(cb)cb({});},set:function(){}}}}};";
         webView.evaluateJavascript(polyfill, null);
     }
 }
 """, encoding="utf-8")
 
-# ── 7. MainActivity.java: Kiwi Browser Style Completo ─────────────────────────
+# ── 7. MainActivity.java: Experiencia Kiwi 2.0 Completa (100X) ────────────────
 main_activity_java = """package org.aegis.browser;
 
 import android.app.Activity;
-import android.app.AlertDialog;
+import android.app.Dialog;
+import android.app.DownloadManager;
+import android.app.PictureInPictureParams;
+import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.util.Rational;
 import android.view.Gravity;
 import android.view.KeyEvent;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewGroup.LayoutParams;
+import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.webkit.URLUtil;
@@ -1219,19 +1178,19 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.PopupWindow;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -1249,12 +1208,13 @@ public class MainActivity extends Activity {
     private ImageView btnReload;
     private ImageView btnClearUrl;
     private TextView btnInstallExt;
+    private ImageView btnQuickExt;
     private ImageView btnBack;
     private ImageView btnForward;
     private ImageView btnHome;
     private ImageView btnMenu;
 
-    // Tab Grid Overlay (Kiwi Style)
+    // Tab Grid Overlay
     private LinearLayout tabGridOverlay;
     private LinearLayout tabCardsContainer;
     private TextView lblGridTitle;
@@ -1269,9 +1229,11 @@ public class MainActivity extends Activity {
     private int blockedTrackersCount = 0;
     private boolean shieldsEnabled = true;
     private boolean timerBypassEnabled = true;
+    private boolean backgroundPlaybackEnabled = true;
+    private boolean forceOledDark = false;
 
-    private static final String DESKTOP_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.4.0";
-    private static final String MOBILE_UA = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 Aegis/1.4.0";
+    private static final String DESKTOP_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.5.0";
+    private static final String MOBILE_UA = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 Aegis/1.5.0";
 
     // Filtros exhaustivos de rastreadores y publicidad (Kiwi / uBlock)
     private static final String[] AD_HOSTS = {
@@ -1298,6 +1260,8 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("aegis_prefs", MODE_PRIVATE);
         shieldsEnabled = prefs.getBoolean("shields_enabled", true);
         timerBypassEnabled = prefs.getBoolean("timer_bypass_enabled", true);
+        backgroundPlaybackEnabled = prefs.getBoolean("background_playback", true);
+        forceOledDark = prefs.getBoolean("force_oled_dark", false);
 
         // Aceleración nativa a 120Hz para Xiaomi 12 Pro y Lenovo Xiaoxin Pad 11
         applyHighRefreshRate();
@@ -1314,6 +1278,7 @@ public class MainActivity extends Activity {
         btnReload = findViewById(R.id.btnReload);
         btnClearUrl = findViewById(R.id.btnClearUrl);
         btnInstallExt = findViewById(R.id.btnInstallExt);
+        btnQuickExt = findViewById(R.id.btnQuickExt);
         btnBack = findViewById(R.id.btnBack);
         btnForward = findViewById(R.id.btnForward);
         btnHome = findViewById(R.id.btnHome);
@@ -1326,11 +1291,11 @@ public class MainActivity extends Activity {
         findViewById(R.id.btnGridBack).setOnClickListener(v -> hideTabGrid());
         findViewById(R.id.btnGridNewTab).setOnClickListener(v -> {
             hideTabGrid();
-            createNewTab("file:///android_asset/ntp.html");
+            createNewTab("file:///android_asset/ntp.html", false);
         });
         findViewById(R.id.btnBigNewTab).setOnClickListener(v -> {
             hideTabGrid();
-            createNewTab("file:///android_asset/ntp.html");
+            createNewTab("file:///android_asset/ntp.html", false);
         });
         findViewById(R.id.btnCloseAllTabs).setOnClickListener(v -> closeAllTabs());
 
@@ -1348,10 +1313,11 @@ public class MainActivity extends Activity {
             if (cur != null) cur.webView.loadUrl("file:///android_asset/ntp.html");
         });
         btnTabs.setOnClickListener(v -> showTabGrid());
-        btnMenu.setOnClickListener(v -> showKiwiDropdownMenu(btnMenu));
+        btnMenu.setOnClickListener(v -> showKiwiMenuSheet());
 
         // Eventos barra superior
-        btnShieldContainer.setOnClickListener(v -> showKiwiShieldPopup(btnShieldContainer));
+        btnShieldContainer.setOnClickListener(v -> showShieldsSheet());
+        btnQuickExt.setOnClickListener(v -> showExtensionsSheet());
         btnReload.setOnClickListener(v -> {
             Tab cur = getCurrentTab();
             if (cur != null) cur.webView.reload();
@@ -1373,7 +1339,7 @@ public class MainActivity extends Activity {
         });
 
         // Crear la primera pestaña
-        createNewTab("file:///android_asset/ntp.html");
+        createNewTab("file:///android_asset/ntp.html", false);
     }
 
     private void applyHighRefreshRate() {
@@ -1411,7 +1377,7 @@ public class MainActivity extends Activity {
         if (cur != null) cur.webView.loadUrl(targetUrl);
     }
 
-    private void createNewTab(String url) {
+    private void createNewTab(String url, boolean isIncognito) {
         WebView webView = new WebView(this);
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
@@ -1423,8 +1389,32 @@ public class MainActivity extends Activity {
         s.setSupportMultipleWindows(false);
         s.setBuiltInZoomControls(true);
         s.setDisplayZoomControls(false);
+        s.setMediaPlaybackRequiresUserGesture(false);
 
-        Tab tab = new Tab(UUID.randomUUID().toString(), "Nueva Pestaña", url, webView);
+        Tab tab = new Tab(UUID.randomUUID().toString(), isIncognito ? "Pestaña Privada" : "Nueva Pestaña", url, webView, isIncognito);
+
+        // Gestor de Descargas integrado con Android DownloadManager
+        webView.setDownloadListener((downloadUrl, userAgent, contentDisposition, mimetype, contentLength) -> {
+            String filename = URLUtil.guessFileName(downloadUrl, contentDisposition, mimetype);
+            try {
+                DownloadManager.Request request = new DownloadManager.Request(Uri.parse(downloadUrl));
+                request.setMimeType(mimetype);
+                request.addRequestHeader("User-Agent", userAgent);
+                request.setDescription("Descargando archivo con Aegis Browser...");
+                request.setTitle(filename);
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename);
+
+                DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                if (dm != null) {
+                    dm.enqueue(request);
+                    db.addDownload(filename, downloadUrl, contentLength);
+                    Toast.makeText(this, "⬇️ Descargando: " + filename, Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                Toast.makeText(this, "Error al iniciar descarga: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -1439,7 +1429,6 @@ public class MainActivity extends Activity {
                             return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
                         }
                     }
-                    // Bloqueo de fragmentos publicitarios de YouTube
                     if (host.contains("googlevideo.com") && (path.contains("&ctier=") || path.contains("&adformat=") || path.contains("&ad_type="))) {
                         incrementBlocked();
                         return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
@@ -1469,7 +1458,7 @@ public class MainActivity extends Activity {
                     progressBar.setVisibility(View.GONE);
                     String t = view.getTitle();
                     tab.title = (t != null && !t.isEmpty()) ? t : u;
-                    if (!u.startsWith("file:///")) {
+                    if (!u.startsWith("file:///") && !tab.isIncognito) {
                         db.addHistory(tab.title, u);
                     }
                     checkWebStoreUrl(u);
@@ -1504,6 +1493,9 @@ public class MainActivity extends Activity {
         if (!shieldsEnabled) return;
         if (!mobileShieldsScript.isEmpty()) {
             view.evaluateJavascript(mobileShieldsScript, null);
+        }
+        if (forceOledDark) {
+            view.evaluateJavascript("const d=document.createElement('style');d.textContent='html,body{background:#06090e!important;color:#f0f6fc!important;}';document.head.appendChild(d);", null);
         }
     }
 
@@ -1551,7 +1543,7 @@ public class MainActivity extends Activity {
         Tab toRemove = tabs.remove(index);
         toRemove.webView.destroy();
         if (tabs.isEmpty()) {
-            createNewTab("file:///android_asset/ntp.html");
+            createNewTab("file:///android_asset/ntp.html", false);
         } else {
             if (currentTabIndex >= tabs.size()) currentTabIndex = tabs.size() - 1;
             switchToTab(currentTabIndex);
@@ -1564,7 +1556,7 @@ public class MainActivity extends Activity {
             t.webView.destroy();
         }
         tabs.clear();
-        createNewTab("file:///android_asset/ntp.html");
+        createNewTab("file:///android_asset/ntp.html", false);
         hideTabGrid();
     }
 
@@ -1575,6 +1567,22 @@ public class MainActivity extends Activity {
     private Tab getCurrentTab() {
         if (tabs.isEmpty() || currentTabIndex < 0 || currentTabIndex >= tabs.size()) return null;
         return tabs.get(currentTabIndex);
+    }
+
+    // ── SOPORTE PICTURE-IN-PICTURE (PiP) PARA VIDEOS YOUTUBE ──────────────────
+    @Override
+    protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        Tab cur = getCurrentTab();
+        if (cur != null && cur.webView.getUrl() != null && cur.webView.getUrl().contains("youtube.com")) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    enterPictureInPictureMode(new PictureInPictureParams.Builder()
+                        .setAspectRatio(new Rational(16, 9))
+                        .build());
+                }
+            } catch (Exception ignored) {}
+        }
     }
 
     // ── KIWI STYLE TAB GRID OVERVIEW ──────────────────────────────────────────
@@ -1602,7 +1610,8 @@ public class MainActivity extends Activity {
             cardHeader.setPadding(16, 12, 12, 12);
 
             TextView titleView = new TextView(this);
-            titleView.setText(t.title != null && !t.title.isEmpty() ? t.title : "Aegis Browser");
+            String titleText = (t.isIncognito ? "🕶️ " : "") + (t.title != null && !t.title.isEmpty() ? t.title : "Aegis Browser");
+            titleView.setText(titleText);
             titleView.setTextColor(Color.parseColor("#ffffff"));
             titleView.setTextSize(13.5f);
             titleView.setSingleLine(true);
@@ -1621,7 +1630,7 @@ public class MainActivity extends Activity {
             cardHeader.addView(btnClose);
             card.addView(cardHeader);
 
-            // Preview del URL / Contenido
+            // Preview del URL / Dominio
             TextView urlPreview = new TextView(this);
             String displayUrl = (t.webView.getUrl() != null && !t.webView.getUrl().startsWith("file:///")) ? t.webView.getUrl() : "Página Principal (NTP)";
             urlPreview.setText(displayUrl);
@@ -1646,61 +1655,59 @@ public class MainActivity extends Activity {
         tabGridOverlay.setVisibility(View.GONE);
     }
 
-    // ── KIWI STYLE ANCHORED POPUP MENU (3 PUNTOS) ─────────────────────────────
-    private void showKiwiDropdownMenu(View anchor) {
-        LinearLayout menuView = new LinearLayout(this);
-        menuView.setOrientation(LinearLayout.VERTICAL);
-        menuView.setBackgroundResource(R.drawable.bg_popup_menu);
-        menuView.setPadding(8, 8, 8, 8);
+    // ── DIÁLOGO FLOTANTE INFERIOR MODERNO (BOTTOM SHEET) ─────────────────────
+    private Dialog createBottomSheetDialog(View content) {
+        Dialog d = new Dialog(this);
+        d.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        d.setContentView(content);
+        Window w = d.getWindow();
+        if (w != null) {
+            w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            w.setGravity(Gravity.BOTTOM);
+            w.setWindowAnimations(android.R.style.Animation_InputMethod);
+        }
+        return d;
+    }
 
-        final PopupWindow popup = new PopupWindow(
-            menuView,
-            (int) (260 * getResources().getDisplayMetrics().density),
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            true
-        );
-        popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        popup.setElevation(24f);
+    // ── KIWI MENU SHEET 2.0 (SLIDING BOTTOM SHEET) ───────────────────────────
+    private void showKiwiMenuSheet() {
+        LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setBackgroundResource(R.drawable.bg_bottom_sheet);
+        sheet.setPadding(16, 16, 16, 24);
 
-        addMenuItem(menuView, R.drawable.ic_add, "Nueva Pestaña", v -> {
-            popup.dismiss();
-            createNewTab("file:///android_asset/ntp.html");
-        });
+        Dialog dialog = createBottomSheetDialog(sheet);
 
-        addMenuItem(menuView, R.drawable.ic_extension, "Extensiones Chrome Web Store", v -> {
-            popup.dismiss();
-            showExtensionsList();
-        });
+        // 1. Barra de Accesos Rápidos
+        LinearLayout quickRow = new LinearLayout(this);
+        quickRow.setOrientation(LinearLayout.HORIZONTAL);
+        quickRow.setGravity(Gravity.CENTER);
+        quickRow.setPadding(0, 4, 0, 16);
 
-        addMenuItem(menuView, R.drawable.ic_star, "Añadir a Marcadores", v -> {
-            popup.dismiss();
+        addQuickAction(quickRow, R.drawable.ic_star, "Marcador", v -> {
+            dialog.dismiss();
             Tab cur = getCurrentTab();
             if (cur != null && cur.webView.getUrl() != null && !cur.webView.getUrl().startsWith("file:///")) {
                 db.addBookmark(cur.webView.getTitle(), cur.webView.getUrl());
-                Toast.makeText(this, "Añadido a Marcadores", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "⭐ Marcador guardado", Toast.LENGTH_SHORT).show();
             }
         });
 
-        addMenuItem(menuView, R.drawable.ic_bookmark, "Marcadores Guardados", v -> {
-            popup.dismiss();
-            showBookmarksList();
+        addQuickAction(quickRow, R.drawable.ic_download, "Descargas", v -> {
+            dialog.dismiss();
+            showDownloadsSheet();
         });
 
-        addMenuItem(menuView, R.drawable.ic_history, "Historial de Navegación", v -> {
-            popup.dismiss();
-            showHistoryList();
-        });
-
-        addMenuItem(menuView, R.drawable.ic_movie, "AniPlay Anime Hub", v -> {
-            popup.dismiss();
-            Tab cur = getCurrentTab();
-            if (cur != null) cur.webView.loadUrl("file:///android_asset/aniplay.html");
+        addQuickAction(quickRow, R.drawable.ic_extension, "Extensiones", v -> {
+            dialog.dismiss();
+            showExtensionsSheet();
         });
 
         Tab cur = getCurrentTab();
         boolean isDesktop = (cur != null && cur.isDesktopMode);
-        addMenuItem(menuView, R.drawable.ic_desktop, isDesktop ? "Modo Celular (Mobile)" : "Modo Computadora (Desktop)", v -> {
-            popup.dismiss();
+        addQuickAction(quickRow, R.drawable.ic_desktop, isDesktop ? "Móvil" : "PC", v -> {
+            dialog.dismiss();
             if (cur != null) {
                 cur.isDesktopMode = !cur.isDesktopMode;
                 cur.webView.getSettings().setUserAgentString(cur.isDesktopMode ? DESKTOP_UA : MOBILE_UA);
@@ -1709,32 +1716,100 @@ public class MainActivity extends Activity {
             }
         });
 
-        addMenuItem(menuView, R.drawable.ic_delete, "Borrar Historial y Datos", v -> {
-            popup.dismiss();
+        addQuickAction(quickRow, R.drawable.ic_moon, "OLED", v -> {
+            dialog.dismiss();
+            forceOledDark = !forceOledDark;
+            prefs.edit().putBoolean("force_oled_dark", forceOledDark).apply();
+            if (cur != null) cur.webView.reload();
+            Toast.makeText(this, forceOledDark ? "Modo Oscuro Forzado Activado" : "Modo Oscuro Forzado Desactivado", Toast.LENGTH_SHORT).show();
+        });
+
+        sheet.addView(quickRow);
+
+        // Separador
+        View sep = new View(this);
+        sep.setBackgroundColor(Color.parseColor("#21262d"));
+        sep.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        sheet.addView(sep);
+
+        // Opciones principales
+        addMenuRow(sheet, R.drawable.ic_add, "Nueva Pestaña", v -> {
+            dialog.dismiss();
+            createNewTab("file:///android_asset/ntp.html", false);
+        });
+
+        addMenuRow(sheet, R.drawable.ic_incognito, "Nueva Pestaña Privada (Incógnito)", v -> {
+            dialog.dismiss();
+            createNewTab("file:///android_asset/ntp.html", true);
+        });
+
+        addMenuRow(sheet, R.drawable.ic_bookmark, "Marcadores Guardados", v -> {
+            dialog.dismiss();
+            showBookmarksSheet();
+        });
+
+        addMenuRow(sheet, R.drawable.ic_history, "Historial de Navegación", v -> {
+            dialog.dismiss();
+            showHistorySheet();
+        });
+
+        addMenuRow(sheet, R.drawable.ic_shield, "Panel de Escudos Aegis", v -> {
+            dialog.dismiss();
+            showShieldsSheet();
+        });
+
+        addMenuRow(sheet, R.drawable.ic_movie, "AniPlay Anime Hub", v -> {
+            dialog.dismiss();
+            if (cur != null) cur.webView.loadUrl("file:///android_asset/aniplay.html");
+        });
+
+        addMenuRow(sheet, R.drawable.ic_delete, "Borrar Historial y Caché", v -> {
+            dialog.dismiss();
             db.clearHistory();
             if (cur != null) cur.webView.clearCache(true);
             blockedTrackersCount = 0;
             lblShieldBadge.setText("0");
-            Toast.makeText(this, "Datos e historial eliminados", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Historial y archivos temporales eliminados", Toast.LENGTH_SHORT).show();
         });
 
-        addMenuItem(menuView, R.drawable.ic_settings, "Acerca de Aegis v1.4", v -> {
-            popup.dismiss();
-            Toast.makeText(this, "Aegis Browser v1.4\\nKiwi Style Engine • 120Hz LTPO", Toast.LENGTH_LONG).show();
+        addMenuRow(sheet, R.drawable.ic_settings, "Acerca de Aegis v1.5", v -> {
+            dialog.dismiss();
+            Toast.makeText(this, "Aegis Browser v1.5\\nUltra Fluido 120Hz • Kiwi Engine 100X", Toast.LENGTH_LONG).show();
         });
 
-        // Mostrar anclado sobre el botón de menú inferior
-        int[] location = new int[2];
-        anchor.getLocationOnScreen(location);
-        int yOffset = -(int) (380 * getResources().getDisplayMetrics().density);
-        popup.showAtLocation(anchor, Gravity.NO_GRAVITY, location[0] - (int) (180 * getResources().getDisplayMetrics().density), location[1] + yOffset);
+        dialog.show();
     }
 
-    private void addMenuItem(LinearLayout parent, int iconRes, String text, View.OnClickListener listener) {
+    private void addQuickAction(LinearLayout parent, int iconRes, String labelText, View.OnClickListener listener) {
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setGravity(Gravity.CENTER);
+        col.setPadding(10, 6, 10, 6);
+        col.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        col.setOnClickListener(listener);
+
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setBackgroundResource(R.drawable.bg_circle_icon);
+        icon.setPadding(10, 10, 10, 10);
+        icon.setLayoutParams(new LinearLayout.LayoutParams(44, 44));
+        col.addView(icon);
+
+        TextView label = new TextView(this);
+        label.setText(labelText);
+        label.setTextColor(Color.parseColor("#8b949e"));
+        label.setTextSize(10.5f);
+        label.setPadding(0, 4, 0, 0);
+        col.addView(label);
+
+        parent.addView(col);
+    }
+
+    private void addMenuRow(LinearLayout parent, int iconRes, String text, View.OnClickListener listener) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(14, 12, 14, 12);
+        row.setPadding(16, 14, 16, 14);
         row.setClickable(true);
         row.setFocusable(true);
 
@@ -1745,130 +1820,485 @@ public class MainActivity extends Activity {
 
         TextView label = new TextView(this);
         label.setText(text);
-        label.setTextColor(Color.parseColor("#e6edf3"));
-        label.setTextSize(13.5f);
-        label.setPadding(14, 0, 0, 0);
+        label.setTextColor(Color.parseColor("#f0f6fc"));
+        label.setTextSize(14f);
+        label.setPadding(16, 0, 0, 0);
         row.addView(label);
 
         row.setOnClickListener(listener);
         parent.addView(row);
     }
 
-    // ── KIWI STYLE SHIELD POPUP (ANCLADO AL ESCUDO SUPERIOR) ───────────────────
-    private void showKiwiShieldPopup(View anchor) {
-        LinearLayout shieldView = new LinearLayout(this);
-        shieldView.setOrientation(LinearLayout.VERTICAL);
-        shieldView.setBackgroundResource(R.drawable.bg_popup_menu);
-        shieldView.setPadding(18, 16, 18, 16);
+    // ── SHIELDS COMMAND CENTER (SLIDING SHEET) ────────────────────────────────
+    private void showShieldsSheet() {
+        LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setBackgroundResource(R.drawable.bg_bottom_sheet);
+        sheet.setPadding(20, 20, 20, 28);
 
-        final PopupWindow popup = new PopupWindow(
-            shieldView,
-            (int) (280 * getResources().getDisplayMetrics().density),
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            true
-        );
-        popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        popup.setElevation(24f);
+        Dialog dialog = createBottomSheetDialog(sheet);
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+
+        ImageView shieldIcon = new ImageView(this);
+        shieldIcon.setImageResource(R.drawable.ic_shield);
+        shieldIcon.setLayoutParams(new LinearLayout.LayoutParams(32, 32));
+        header.addView(shieldIcon);
+
+        LinearLayout titleCol = new LinearLayout(this);
+        titleCol.setOrientation(LinearLayout.VERTICAL);
+        titleCol.setPadding(12, 0, 0, 0);
 
         TextView title = new TextView(this);
-        title.setText("Aegis Shields & Bypass");
+        title.setText("Aegis Shields 2.0");
         title.setTextColor(Color.parseColor("#ffffff"));
-        title.setTextSize(15f);
+        title.setTextSize(16f);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
-        shieldView.addView(title);
+        titleCol.addView(title);
 
-        TextView countView = new TextView(this);
-        countView.setText("Elementos bloqueados: " + blockedTrackersCount);
-        countView.setTextColor(Color.parseColor("#58a6ff"));
-        countView.setTextSize(12.5f);
-        countView.setPadding(0, 4, 0, 14);
-        shieldView.addView(countView);
+        TextView sub = new TextView(this);
+        sub.setText("Protección activa • Cero anuncios y rastreo");
+        sub.setTextColor(Color.parseColor("#8b949e"));
+        sub.setTextSize(11f);
+        titleCol.addView(sub);
+        header.addView(titleCol);
 
-        // Switch 1: Shields
-        CheckBox cbShields = new CheckBox(this);
-        cbShields.setText("Bloqueador de Anuncios y YouTube");
-        cbShields.setTextColor(Color.parseColor("#e6edf3"));
-        cbShields.setChecked(shieldsEnabled);
-        cbShields.setOnCheckedChangeListener((btn, isChecked) -> {
+        sheet.addView(header);
+
+        // Tarjeta de Estadísticas
+        LinearLayout statCard = new LinearLayout(this);
+        statCard.setOrientation(LinearLayout.VERTICAL);
+        statCard.setBackgroundResource(R.drawable.bg_card_inner);
+        statCard.setPadding(16, 12, 16, 12);
+        LinearLayout.LayoutParams scLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        scLp.setMargins(0, 16, 0, 16);
+        statCard.setLayoutParams(scLp);
+
+        TextView statsNum = new TextView(this);
+        statsNum.setText(String.valueOf(blockedTrackersCount));
+        statsNum.setTextColor(Color.parseColor("#00f2fe"));
+        statsNum.setTextSize(26f);
+        statsNum.setTypeface(null, android.graphics.Typeface.BOLD);
+        statCard.addView(statsNum);
+
+        TextView statsDesc = new TextView(this);
+        statsDesc.setText("Elementos bloqueados (Anuncios de video, trackers y banners)");
+        statsDesc.setTextColor(Color.parseColor("#8b949e"));
+        statsDesc.setTextSize(11.5f);
+        statCard.addView(statsDesc);
+
+        sheet.addView(statCard);
+
+        // Switches
+        addSwitchRow(sheet, "Bloqueador de Anuncios y YouTube Defuser", shieldsEnabled, (btn, isChecked) -> {
             shieldsEnabled = isChecked;
             prefs.edit().putBoolean("shields_enabled", isChecked).apply();
             Toast.makeText(this, isChecked ? "Shields Activados" : "Shields Pausados", Toast.LENGTH_SHORT).show();
         });
-        shieldView.addView(cbShields);
 
-        // Switch 2: Bypass
-        CheckBox cbBypass = new CheckBox(this);
-        cbBypass.setText("Salto de Esperas (CurseForge, Mega)");
-        cbBypass.setTextColor(Color.parseColor("#e6edf3"));
-        cbBypass.setChecked(timerBypassEnabled);
-        cbBypass.setOnCheckedChangeListener((btn, isChecked) -> {
+        addSwitchRow(sheet, "Salto de Temporizadores (CurseForge, Mega, Adf.ly)", timerBypassEnabled, (btn, isChecked) -> {
             timerBypassEnabled = isChecked;
             prefs.edit().putBoolean("timer_bypass_enabled", isChecked).apply();
             Toast.makeText(this, isChecked ? "Bypass Activado" : "Bypass Pausado", Toast.LENGTH_SHORT).show();
         });
-        shieldView.addView(cbBypass);
 
-        popup.showAsDropDown(anchor, 0, 10);
+        addSwitchRow(sheet, "Reproducción en Segundo Plano (YouTube)", backgroundPlaybackEnabled, (btn, isChecked) -> {
+            backgroundPlaybackEnabled = isChecked;
+            prefs.edit().putBoolean("background_playback", isChecked).apply();
+            Toast.makeText(this, isChecked ? "Audio en segundo plano permitido" : "Audio pausado", Toast.LENGTH_SHORT).show();
+        });
+
+        addSwitchRow(sheet, "Forzar Modo Oscuro OLED en cualquier web", forceOledDark, (btn, isChecked) -> {
+            forceOledDark = isChecked;
+            prefs.edit().putBoolean("force_oled_dark", isChecked).apply();
+            Tab cur = getCurrentTab();
+            if (cur != null) cur.webView.reload();
+        });
+
+        dialog.show();
     }
 
-    private void showExtensionsList() {
-        List<AegisExtension> list = extManager.getInstalledExtensions();
-        String[] items = new String[list.size() + 1];
-        items[0] = "+ Instalar de Chrome Web Store";
-        for (int i = 0; i < list.size(); i++) {
-            AegisExtension ext = list.get(i);
-            items[i + 1] = ext.name + " (" + (ext.isEnabled ? "Activa" : "Pausada") + ")";
+    private void addSwitchRow(LinearLayout parent, String labelText, boolean initialChecked, CheckBox.OnCheckedChangeListener listener) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, 8, 0, 8);
+
+        TextView label = new TextView(this);
+        label.setText(labelText);
+        label.setTextColor(Color.parseColor("#e6edf3"));
+        label.setTextSize(13f);
+        label.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(label);
+
+        Switch sw = new Switch(this);
+        sw.setChecked(initialChecked);
+        sw.setOnCheckedChangeListener(listener);
+        row.addView(sw);
+
+        parent.addView(row);
+    }
+
+    // ── DESCARGAS SHEET (GESTOR DE DESCARGAS INTEGRADO) ───────────────────────
+    private void showDownloadsSheet() {
+        LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setBackgroundResource(R.drawable.bg_bottom_sheet);
+        sheet.setPadding(20, 20, 20, 24);
+
+        Dialog dialog = createBottomSheetDialog(sheet);
+
+        LinearLayout topRow = new LinearLayout(this);
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView title = new TextView(this);
+        title.setText("Descargas");
+        title.setTextColor(Color.parseColor("#ffffff"));
+        title.setTextSize(17f);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        topRow.addView(title);
+
+        TextView btnClear = new TextView(this);
+        btnClear.setText("Limpiar lista");
+        btnClear.setTextColor(Color.parseColor("#f85149"));
+        btnClear.setTextSize(12f);
+        btnClear.setPadding(8, 8, 8, 8);
+        btnClear.setOnClickListener(v -> {
+            db.clearDownloads();
+            dialog.dismiss();
+            Toast.makeText(this, "Lista de descargas vaciada", Toast.LENGTH_SHORT).show();
+        });
+        topRow.addView(btnClear);
+        sheet.addView(topRow);
+
+        List<String[]> dls = db.getDownloads();
+        if (dls.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("No hay descargas recientes.\\nLos archivos descargados se guardan en la carpeta Descargas de tu dispositivo.");
+            empty.setTextColor(Color.parseColor("#8b949e"));
+            empty.setTextSize(12f);
+            empty.setPadding(0, 20, 0, 20);
+            sheet.addView(empty);
+        } else {
+            ScrollView sc = new ScrollView(this);
+            sc.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 400));
+            LinearLayout listLayout = new LinearLayout(this);
+            listLayout.setOrientation(LinearLayout.VERTICAL);
+
+            for (String[] dl : dls) {
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(0, 12, 0, 12);
+
+                ImageView ic = new ImageView(this);
+                ic.setImageResource(R.drawable.ic_file);
+                ic.setLayoutParams(new LinearLayout.LayoutParams(24, 24));
+                row.addView(ic);
+
+                LinearLayout col = new LinearLayout(this);
+                col.setOrientation(LinearLayout.VERTICAL);
+                col.setPadding(12, 0, 0, 0);
+                col.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+                TextView name = new TextView(this);
+                name.setText(dl[0]);
+                name.setTextColor(Color.parseColor("#e6edf3"));
+                name.setTextSize(13f);
+                name.setSingleLine(true);
+                col.addView(name);
+
+                TextView urlTxt = new TextView(this);
+                urlTxt.setText(dl[1]);
+                urlTxt.setTextColor(Color.parseColor("#8b949e"));
+                urlTxt.setTextSize(10f);
+                urlTxt.setSingleLine(true);
+                col.addView(urlTxt);
+                row.addView(col);
+
+                TextView btnOpen = new TextView(this);
+                btnOpen.setText("Abrir");
+                btnOpen.setTextColor(Color.parseColor("#388bfd"));
+                btnOpen.setTextSize(12f);
+                btnOpen.setPadding(12, 6, 12, 6);
+                btnOpen.setBackgroundResource(R.drawable.bg_btn_secondary);
+                btnOpen.setOnClickListener(v -> {
+                    try {
+                        File f = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), dl[0]);
+                        Intent i = new Intent(Intent.ACTION_VIEW);
+                        i.setDataAndType(Uri.fromFile(f), "*/*");
+                        i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(i);
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Abriendo archivo...", Toast.LENGTH_SHORT).show();
+                    }
+                });
+                row.addView(btnOpen);
+
+                listLayout.addView(row);
+            }
+            sc.addView(listLayout);
+            sheet.addView(sc);
         }
-        new AlertDialog.Builder(this)
-            .setTitle("Extensiones de Chrome")
-            .setItems(items, (d, which) -> {
-                if (which == 0) {
-                    Tab cur = getCurrentTab();
-                    if (cur != null) cur.webView.loadUrl("https://chromewebstore.google.com");
-                }
-            })
-            .setPositiveButton("Cerrar", null)
-            .show();
+
+        dialog.show();
     }
 
-    private void showBookmarksList() {
+    // ── MARCADORES SHEET (CON BUSCADOR) ──────────────────────────────────────
+    private void showBookmarksSheet() {
+        LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setBackgroundResource(R.drawable.bg_bottom_sheet);
+        sheet.setPadding(20, 20, 20, 24);
+
+        Dialog dialog = createBottomSheetDialog(sheet);
+
+        TextView title = new TextView(this);
+        title.setText("Marcadores");
+        title.setTextColor(Color.parseColor("#ffffff"));
+        title.setTextSize(17f);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        sheet.addView(title);
+
         List<String[]> bms = db.getBookmarks();
         if (bms.isEmpty()) {
-            Toast.makeText(this, "No tienes marcadores guardados", Toast.LENGTH_SHORT).show();
-            return;
+            TextView empty = new TextView(this);
+            empty.setText("No tienes marcadores guardados todavía.");
+            empty.setTextColor(Color.parseColor("#8b949e"));
+            empty.setTextSize(12f);
+            empty.setPadding(0, 16, 0, 16);
+            sheet.addView(empty);
+        } else {
+            ScrollView sc = new ScrollView(this);
+            sc.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 400));
+            LinearLayout listLayout = new LinearLayout(this);
+            listLayout.setOrientation(LinearLayout.VERTICAL);
+
+            for (String[] bm : bms) {
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(0, 12, 0, 12);
+
+                ImageView ic = new ImageView(this);
+                ic.setImageResource(R.drawable.ic_bookmark);
+                ic.setLayoutParams(new LinearLayout.LayoutParams(22, 22));
+                row.addView(ic);
+
+                LinearLayout col = new LinearLayout(this);
+                col.setOrientation(LinearLayout.VERTICAL);
+                col.setPadding(12, 0, 0, 0);
+                col.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+                TextView name = new TextView(this);
+                name.setText(bm[0]);
+                name.setTextColor(Color.parseColor("#e6edf3"));
+                name.setTextSize(13f);
+                name.setSingleLine(true);
+                col.addView(name);
+
+                TextView urlTxt = new TextView(this);
+                urlTxt.setText(bm[1]);
+                urlTxt.setTextColor(Color.parseColor("#8b949e"));
+                urlTxt.setTextSize(10.5f);
+                urlTxt.setSingleLine(true);
+                col.addView(urlTxt);
+                row.addView(col);
+
+                row.setOnClickListener(v -> {
+                    dialog.dismiss();
+                    Tab cur = getCurrentTab();
+                    if (cur != null) cur.webView.loadUrl(bm[1]);
+                });
+
+                listLayout.addView(row);
+            }
+            sc.addView(listLayout);
+            sheet.addView(sc);
         }
-        String[] items = new String[bms.size()];
-        for (int i = 0; i < bms.size(); i++) {
-            items[i] = bms.get(i)[0];
-        }
-        new AlertDialog.Builder(this)
-            .setTitle("Marcadores")
-            .setItems(items, (d, which) -> {
-                Tab cur = getCurrentTab();
-                if (cur != null) cur.webView.loadUrl(bms.get(which)[1]);
-            })
-            .setPositiveButton("Cerrar", null)
-            .show();
+
+        dialog.show();
     }
 
-    private void showHistoryList() {
+    // ── HISTORIAL SHEET ───────────────────────────────────────────────────────
+    private void showHistorySheet() {
+        LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setBackgroundResource(R.drawable.bg_bottom_sheet);
+        sheet.setPadding(20, 20, 20, 24);
+
+        Dialog dialog = createBottomSheetDialog(sheet);
+
+        LinearLayout topRow = new LinearLayout(this);
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView title = new TextView(this);
+        title.setText("Historial de Navegación");
+        title.setTextColor(Color.parseColor("#ffffff"));
+        title.setTextSize(17f);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        topRow.addView(title);
+
+        TextView btnClear = new TextView(this);
+        btnClear.setText("Borrar todo");
+        btnClear.setTextColor(Color.parseColor("#f85149"));
+        btnClear.setTextSize(12f);
+        btnClear.setPadding(8, 8, 8, 8);
+        btnClear.setOnClickListener(v -> {
+            db.clearHistory();
+            dialog.dismiss();
+            Toast.makeText(this, "Historial borrado", Toast.LENGTH_SHORT).show();
+        });
+        topRow.addView(btnClear);
+        sheet.addView(topRow);
+
         List<String[]> hists = db.getHistory();
         if (hists.isEmpty()) {
-            Toast.makeText(this, "Historial vacío", Toast.LENGTH_SHORT).show();
-            return;
+            TextView empty = new TextView(this);
+            empty.setText("Historial vacío.");
+            empty.setTextColor(Color.parseColor("#8b949e"));
+            empty.setTextSize(12f);
+            empty.setPadding(0, 16, 0, 16);
+            sheet.addView(empty);
+        } else {
+            ScrollView sc = new ScrollView(this);
+            sc.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 420));
+            LinearLayout listLayout = new LinearLayout(this);
+            listLayout.setOrientation(LinearLayout.VERTICAL);
+
+            for (String[] h : hists) {
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(0, 10, 0, 10);
+
+                ImageView ic = new ImageView(this);
+                ic.setImageResource(R.drawable.ic_history);
+                ic.setLayoutParams(new LinearLayout.LayoutParams(20, 20));
+                row.addView(ic);
+
+                LinearLayout col = new LinearLayout(this);
+                col.setOrientation(LinearLayout.VERTICAL);
+                col.setPadding(12, 0, 0, 0);
+                col.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+                TextView name = new TextView(this);
+                name.setText(h[0]);
+                name.setTextColor(Color.parseColor("#e6edf3"));
+                name.setTextSize(12.5f);
+                name.setSingleLine(true);
+                col.addView(name);
+
+                TextView urlTxt = new TextView(this);
+                urlTxt.setText(h[1]);
+                urlTxt.setTextColor(Color.parseColor("#8b949e"));
+                urlTxt.setTextSize(10f);
+                urlTxt.setSingleLine(true);
+                col.addView(urlTxt);
+                row.addView(col);
+
+                row.setOnClickListener(v -> {
+                    dialog.dismiss();
+                    Tab cur = getCurrentTab();
+                    if (cur != null) cur.webView.loadUrl(h[1]);
+                });
+
+                listLayout.addView(row);
+            }
+            sc.addView(listLayout);
+            sheet.addView(sc);
         }
-        String[] items = new String[hists.size()];
-        for (int i = 0; i < hists.size(); i++) {
-            items[i] = hists.get(i)[0];
+
+        dialog.show();
+    }
+
+    // ── EXTENSIONES SHEET ─────────────────────────────────────────────────────
+    private void showExtensionsSheet() {
+        LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setBackgroundResource(R.drawable.bg_bottom_sheet);
+        sheet.setPadding(20, 20, 20, 24);
+
+        Dialog dialog = createBottomSheetDialog(sheet);
+
+        LinearLayout topRow = new LinearLayout(this);
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView title = new TextView(this);
+        title.setText("Extensiones de Chrome");
+        title.setTextColor(Color.parseColor("#ffffff"));
+        title.setTextSize(17f);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        topRow.addView(title);
+
+        TextView btnWebStore = new TextView(this);
+        btnWebStore.setText("+ Chrome Web Store");
+        btnWebStore.setTextColor(Color.parseColor("#bc8cff"));
+        btnWebStore.setTextSize(12f);
+        btnWebStore.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnWebStore.setPadding(8, 8, 8, 8);
+        btnWebStore.setOnClickListener(v -> {
+            dialog.dismiss();
+            Tab cur = getCurrentTab();
+            if (cur != null) cur.webView.loadUrl("https://chromewebstore.google.com");
+        });
+        topRow.addView(btnWebStore);
+        sheet.addView(topRow);
+
+        List<AegisExtension> exts = extManager.getInstalledExtensions();
+        for (AegisExtension ext : exts) {
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.HORIZONTAL);
+            card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setBackgroundResource(R.drawable.bg_card_inner);
+            card.setPadding(14, 12, 14, 12);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, 8, 0, 8);
+            card.setLayoutParams(lp);
+
+            ImageView ic = new ImageView(this);
+            ic.setImageResource(R.drawable.ic_extension);
+            ic.setLayoutParams(new LinearLayout.LayoutParams(24, 24));
+            card.addView(ic);
+
+            LinearLayout col = new LinearLayout(this);
+            col.setOrientation(LinearLayout.VERTICAL);
+            col.setPadding(12, 0, 0, 0);
+            col.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView name = new TextView(this);
+            name.setText(ext.name);
+            name.setTextColor(Color.parseColor("#e6edf3"));
+            name.setTextSize(13.5f);
+            col.addView(name);
+
+            TextView ver = new TextView(this);
+            ver.setText("v" + ext.version + " • Activa");
+            ver.setTextColor(Color.parseColor("#3fb950"));
+            ver.setTextSize(10.5f);
+            col.addView(ver);
+            card.addView(col);
+
+            Switch sw = new Switch(this);
+            sw.setChecked(ext.isEnabled);
+            sw.setOnCheckedChangeListener((btn, isChecked) -> {
+                ext.isEnabled = isChecked;
+                Toast.makeText(this, ext.name + (isChecked ? " activada" : " pausada"), Toast.LENGTH_SHORT).show();
+            });
+            card.addView(sw);
+
+            sheet.addView(card);
         }
-        new AlertDialog.Builder(this)
-            .setTitle("Historial de Navegación")
-            .setItems(items, (d, which) -> {
-                Tab cur = getCurrentTab();
-                if (cur != null) cur.webView.loadUrl(hists.get(which)[1]);
-            })
-            .setPositiveButton("Cerrar", null)
-            .show();
+
+        dialog.show();
     }
 
     @Override
@@ -1998,7 +2428,7 @@ if res.returncode != 0:
     sys.exit(1)
 
 print("\n" + "="*65)
-print("COMPILACIÓN EXITOSA: AEGIS BROWSER ESTILO KIWI (ARM64)")
+print("COMPILACIÓN EXITOSA: AEGIS BROWSER 2.0 (100X MOBILE OVERHAUL)")
 print("="*65)
 size_kb = round(final_apk.stat().st_size / 1024, 2)
 print(f"Archivo generado: {final_apk.resolve()}")
