@@ -2,21 +2,18 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
-                    AEGIS BROWSER - NATIVE RUNTIME (v1.3.2)
-       Chromium WebEngine + Rust FFI Shields + Real Memory & CPU Optimizer
+                    AEGIS BROWSER - NATIVE RUNTIME (v1.3.3)
+      Chromium WebEngine + Rust FFI Shields + Sitios Frecuentes Reales
 ================================================================================
-Optimizaciones Reales (Cero Placebo):
-  1. Purga Profunda de RAM física (EmptyWorkingSet en proceso principal y todos los
-     hijos de Chromium: renderers, GPU, utilidades de red).
-  2. Compacting y Garbage Collection V8 forzado (--expose-gc + window.gc()).
-  3. Hibernación Real de Pestañas Inactivas (Sleeping Tabs): descarga el DOM y JS
-     de pestañas en segundo plano ahorrando entre 100 MB y 800 MB de RAM.
-  4. Límite de procesos renderers (--renderer-process-limit=3) para evitar explosión de RAM.
-  5. Compactador en segundo plano automático cada 90 segundos.
-  6. Reducción de CPU: Caché de bytecode V8, cero rasterización de fondo, bloqueo
-     de reproducción de video automática sin interacción del usuario.
-  7. Panel desplegable estilo Brave con monitor de RAM real y botones de acción.
-  8. Sistema de 2 temas estrictos (Oscuro y Claro) con máximo 4 colores cada uno.
+Características:
+  - Menú de Escudos limpio idéntico a Brave Browser (sin botones placebo de RAM).
+  - Sitios Frecuentes Reales en Nueva Pestaña (se generan automáticamente según
+    las páginas que el usuario visita con frecuencia).
+  - Posibilidad de añadir atajos personalizados (+) y eliminar sitios con (×).
+  - Detección correcta del dominio en el menú de escudos (nunca más "start").
+  - Optimizaciones de memoria y CPU 100% automáticas y silenciosas en segundo plano
+    (sin engaños de placebo ni contadores falsos).
+  - Sistema de 2 temas estrictos (Oscuro y Claro) de máximo 4 colores cada uno.
 ================================================================================
 """
 
@@ -27,9 +24,10 @@ import time
 import gc
 import ctypes
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs, unquote
 from ctypes import wintypes
 
-# ── 1. Hardening Extremo de Chromium (CPU, RAM y Gobernanza de Procesos) ─────
+# ── 1. Hardening Extremo de Chromium (CPU, RAM y Rendimiento de Renderizado) ──
 os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
     "--enable-gpu-rasterization "
     "--enable-zero-copy "
@@ -67,8 +65,128 @@ from PyQt6.QtGui import QPainter, QColor, QBrush, QPen
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_FILE = Path.home() / ".aegis_browser_config.json"
+HISTORY_FILE = Path.home() / ".aegis_browser_history.json"
 
-# ── 2. Optimizador de Memoria y Recursos a Bajo Nivel (Windows NT Kernel) ─────
+# ── 2. Gestor de Sitios Frecuentes e Historial Real ───────────────────────────
+class HistoryManager:
+    def __init__(self):
+        self.data = {"frequent": {}, "custom": []}
+        self.load()
+
+    def load(self):
+        if HISTORY_FILE.exists():
+            try:
+                self.data = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                self.data = {"frequent": {}, "custom": []}
+
+    def save(self):
+        try:
+            HISTORY_FILE.write_text(json.dumps(self.data, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
+
+    def record_visit(self, url_str: str, title: str):
+        if not url_str or not (url_str.startswith("http://") or url_str.startswith("https://")):
+            return
+        try:
+            parsed = urlparse(url_str)
+            domain = parsed.netloc.lower()
+            if domain.startswith("www."):
+                domain = domain[4:]
+            if not domain:
+                return
+
+            # Si es una búsqueda, agrupar en el dominio principal
+            if "duckduckgo.com" in domain and "?q=" in url_str:
+                domain = "duckduckgo.com"
+                url_str = "https://duckduckgo.com"
+            elif "google." in domain and "/search" in url_str:
+                domain = "google.com"
+                url_str = "https://google.com"
+
+            clean_title = title if title and title not in ("Página", "Nueva Pestaña", "start") else domain
+
+            if domain not in self.data.get("frequent", {}):
+                if "frequent" not in self.data:
+                    self.data["frequent"] = {}
+                self.data["frequent"][domain] = {
+                    "domain": domain,
+                    "title": clean_title,
+                    "url": f"{parsed.scheme}://{parsed.netloc}",
+                    "visits": 1,
+                    "last_visited": time.time()
+                }
+            else:
+                self.data["frequent"][domain]["visits"] += 1
+                self.data["frequent"][domain]["last_visited"] = time.time()
+                if clean_title != domain and len(clean_title) < 25:
+                    self.data["frequent"][domain]["title"] = clean_title
+
+            self.save()
+        except Exception:
+            pass
+
+    def add_custom(self, title: str, url: str):
+        if not url:
+            return
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://" + url
+        try:
+            domain = urlparse(url).netloc.lower().replace("www.", "") or title.lower()
+            if "custom" not in self.data:
+                self.data["custom"] = []
+            self.data["custom"].append({
+                "domain": domain,
+                "title": title or domain,
+                "url": url,
+                "visits": 9999,
+                "last_visited": time.time()
+            })
+            self.save()
+        except Exception:
+            pass
+
+    def remove_site(self, domain_or_url: str):
+        if "frequent" in self.data and domain_or_url in self.data["frequent"]:
+            del self.data["frequent"][domain_or_url]
+        if "custom" in self.data:
+            self.data["custom"] = [
+                s for s in self.data["custom"]
+                if s.get("domain") != domain_or_url and s.get("url") != domain_or_url
+            ]
+        self.save()
+
+    def get_frequent_sites(self, limit: int = 8) -> list:
+        custom = self.data.get("custom", [])
+        frequent = sorted(
+            self.data.get("frequent", {}).values(),
+            key=lambda x: (x.get("visits", 0), x.get("last_visited", 0)),
+            reverse=True
+        )
+        seen = set()
+        result = []
+        for s in custom + frequent:
+            dom = s.get("domain")
+            if dom and dom not in seen:
+                seen.add(dom)
+                result.append(s)
+            if len(result) >= limit:
+                break
+
+        # Si aún no tiene historial (recién instalado), proveer accesos iniciales editables
+        if not result:
+            defaults = [
+                {"domain": "youtube.com", "title": "YouTube", "url": "https://youtube.com"},
+                {"domain": "github.com", "title": "GitHub", "url": "https://github.com"},
+                {"domain": "reddit.com", "title": "Reddit", "url": "https://reddit.com"},
+                {"domain": "twitch.tv", "title": "Twitch", "url": "https://twitch.tv"},
+            ]
+            return defaults
+
+        return result
+
+# ── 3. Optimizador Silencioso en Segundo Plano (Sin placebo ni botones falsos) ─
 TH32CS_SNAPPROCESS = 0x00000002
 
 class PROCESSENTRY32(ctypes.Structure):
@@ -112,76 +230,48 @@ if kernel32 and psapi:
     psapi.EmptyWorkingSet.argtypes = [wintypes.HANDLE]
     psapi.EmptyWorkingSet.restype = wintypes.BOOL
 
-def get_child_pids(parent_pid: int):
-    child_pids = []
-    if not kernel32:
-        return child_pids
-    h_snap = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
-    if h_snap != wintypes.HANDLE(-1).value and h_snap != 0:
-        pe = PROCESSENTRY32()
-        pe.dwSize = ctypes.sizeof(pe)
-        if kernel32.Process32First(h_snap, ctypes.byref(pe)):
-            while True:
-                if pe.th32ParentProcessID == parent_pid:
-                    child_pids.append(pe.th32ProcessID)
-                if not kernel32.Process32Next(h_snap, ctypes.byref(pe)):
-                    break
-        kernel32.CloseHandle(h_snap)
-    return child_pids
-
-def get_total_ram_mb() -> float:
-    """Calcula la memoria física (Working Set) real del navegador y sus procesos hijos."""
+def silent_background_memory_purge():
+    """Compactación periódica del sistema operativo ejecutada automáticamente."""
     if not kernel32 or not psapi:
-        return 0.0
-    my_pid = os.getpid()
-    all_pids = [my_pid] + get_child_pids(my_pid)
-    total_bytes = 0
-    for pid in all_pids:
-        if pid == my_pid:
-            h = kernel32.GetCurrentProcess()
-            close_needed = False
-        else:
-            h = kernel32.OpenProcess(0x0400 | 0x0010, False, pid)
-            close_needed = True
-        if h:
-            pmc = PROCESS_MEMORY_COUNTERS_EX()
-            pmc.cb = ctypes.sizeof(pmc)
-            if psapi.GetProcessMemoryInfo(h, ctypes.byref(pmc), pmc.cb):
-                total_bytes += pmc.WorkingSetSize
-            if close_needed:
-                kernel32.CloseHandle(h)
-    return total_bytes / (1024 * 1024)
-
-def deep_purge_memory() -> tuple[float, float]:
-    """Purga a nivel del kernel de Windows la memoria Working Set de todos los procesos."""
-    if not kernel32 or not psapi:
-        return 0.0, 0.0
+        return
     gc.collect()
-    before = get_total_ram_mb()
-    my_pid = os.getpid()
-    all_pids = [my_pid] + get_child_pids(my_pid)
-    for pid in all_pids:
-        if pid == my_pid:
-            h = kernel32.GetCurrentProcess()
-            close_needed = False
-        else:
-            h = kernel32.OpenProcess(0x1F0FFF, False, pid)
-            close_needed = True
-        if h:
-            psapi.EmptyWorkingSet(h)
-            if close_needed:
-                kernel32.CloseHandle(h)
-    after = get_total_ram_mb()
-    freed = max(0.0, before - after)
-    return freed, after
+    try:
+        my_pid = os.getpid()
+        child_pids = []
+        h_snap = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+        if h_snap != wintypes.HANDLE(-1).value and h_snap != 0:
+            pe = PROCESSENTRY32()
+            pe.dwSize = ctypes.sizeof(pe)
+            if kernel32.Process32First(h_snap, ctypes.byref(pe)):
+                while True:
+                    if pe.th32ParentProcessID == my_pid:
+                        child_pids.append(pe.th32ProcessID)
+                    if not kernel32.Process32Next(h_snap, ctypes.byref(pe)):
+                        break
+            kernel32.CloseHandle(h_snap)
 
-# ── 3. Helper para conversión Hex a RGB ────────────────────────────────────────
+        all_pids = [my_pid] + child_pids
+        for pid in all_pids:
+            if pid == my_pid:
+                h = kernel32.GetCurrentProcess()
+                close_needed = False
+            else:
+                h = kernel32.OpenProcess(0x1F0FFF, False, pid)
+                close_needed = True
+            if h:
+                psapi.EmptyWorkingSet(h)
+                if close_needed:
+                    kernel32.CloseHandle(h)
+    except Exception:
+        pass
+
+# ── 4. Helper para conversión Hex a RGB ────────────────────────────────────────
 def hex_to_rgb(h: str) -> str:
     h = h.lstrip("#")
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"{r}, {g}, {b}"
 
-# ── 4. Soporte de Barra de Título Nativa Windows DWM ───────────────────────────
+# ── 5. Soporte de Barra de Título Nativa Windows DWM ───────────────────────────
 def apply_windows_dark_title_bar(hwnd, dark: bool = True):
     if sys.platform != "win32":
         return
@@ -196,7 +286,7 @@ def apply_windows_dark_title_bar(hwnd, dark: bool = True):
     except Exception:
         pass
 
-# ── 5. Motor Aegis Shields (Rust FFI) ──────────────────────────────────────────
+# ── 6. Motor Aegis Shields (Rust FFI) ──────────────────────────────────────────
 class AegisShieldsRustCore:
     def __init__(self):
         self.dll = None
@@ -281,7 +371,7 @@ class AegisShieldsRustCore:
 
 SHIELDS_CORE = AegisShieldsRustCore()
 
-# ── 6. Interceptor de Peticiones de Red ───────────────────────────────────────
+# ── 7. Interceptor de Peticiones de Red ───────────────────────────────────────
 class AegisRequestInterceptor(QWebEngineUrlRequestInterceptor):
     def __init__(self, callback=None):
         super().__init__()
@@ -298,7 +388,7 @@ class AegisRequestInterceptor(QWebEngineUrlRequestInterceptor):
             if self.callback:
                 self.callback()
 
-# ── 7. Sistema de 2 Temas Estrictos (Máximo 4 Colores por Tema) ───────────────
+# ── 8. Sistema de 2 Temas Estrictos (Máximo 4 Colores por Tema) ───────────────
 THEMES = {
     "Oscuro": {
         "bg": "#0d1117",        # Color 1
@@ -316,7 +406,7 @@ THEMES = {
     }
 }
 
-# ── 8. Switch Interactivo Moderno (Estilo Brave) ──────────────────────────────
+# ── 9. Switch Interactivo Moderno (Estilo Brave) ──────────────────────────────
 class ToggleSwitch(QAbstractButton):
     def __init__(self, checked=True, parent=None, accent_color="#388bfd", bg_color="#0d1117"):
         super().__init__(parent)
@@ -355,7 +445,7 @@ class ToggleSwitch(QAbstractButton):
         painter.drawEllipse(thumb_x, 3, thumb_diam, thumb_diam)
         painter.end()
 
-# ── 9. Menú Desplegable de Aegis Shields con Optimizador Real ──────────────────
+# ── 10. Menú Desplegable de Aegis Shields (Estilo Brave 100% Auténtico) ───────
 class AegisShieldsPopup(QFrame):
     def __init__(self, parent=None, interceptor=None):
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
@@ -376,18 +466,18 @@ class AegisShieldsPopup(QFrame):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        # ── 1. Cabecera: Dominio actual + Subtítulo + Switch Principal ─────────
+        # ── 1. Cabecera: Dominio real + Subtítulo + Switch Principal ───────────
         header_layout = QHBoxLayout()
         header_layout.setSpacing(10)
 
         site_info_layout = QVBoxLayout()
         site_info_layout.setSpacing(2)
 
-        self.lbl_site = QLabel("aegis://start")
+        self.lbl_site = QLabel("Nueva Pestaña")
         self.lbl_site.setObjectName("PopupSiteName")
         site_info_layout.addWidget(self.lbl_site)
 
-        self.lbl_status = QLabel("Escudos activados para este sitio")
+        self.lbl_status = QLabel("Protección Aegis activada")
         self.lbl_status.setObjectName("PopupStatusText")
         site_info_layout.addWidget(self.lbl_status)
 
@@ -400,7 +490,7 @@ class AegisShieldsPopup(QFrame):
 
         layout.addLayout(header_layout)
 
-        # ── 2. Tarjeta Estadística (Contador bloqueado estilo Brave) ──────────
+        # ── 2. Tarjeta Estadística (Estilo Brave) ─────────────────────────────
         self.stat_card = QFrame()
         self.stat_card.setObjectName("PopupStatCard")
         stat_layout = QHBoxLayout(self.stat_card)
@@ -418,57 +508,14 @@ class AegisShieldsPopup(QFrame):
 
         layout.addWidget(self.stat_card)
 
-        # ── 3. Tarjeta de Rendimiento y Memoria Real (Cero Placebo) ────────────
-        self.perf_card = QFrame()
-        self.perf_card.setObjectName("PopupPerfCard")
-        perf_layout = QVBoxLayout(self.perf_card)
-        perf_layout.setContentsMargins(12, 10, 12, 10)
-        perf_layout.setSpacing(8)
-
-        perf_header = QHBoxLayout()
-        self.lbl_ram_title = QLabel("⚡ RAM en uso (Total Procesos):")
-        self.lbl_ram_title.setObjectName("PopupRamTitle")
-        perf_header.addWidget(self.lbl_ram_title)
-
-        perf_header.addStretch()
-
-        self.lbl_ram_val = QLabel("0.0 MB")
-        self.lbl_ram_val.setObjectName("PopupRamVal")
-        perf_header.addWidget(self.lbl_ram_val)
-        perf_layout.addLayout(perf_header)
-
-        # Botón 1: Purga Profunda de RAM y V8
-        self.btn_deep_purge = QPushButton("⚡ Purgar RAM Física y V8")
-        self.btn_deep_purge.setObjectName("PopupPurgeBtn")
-        self.btn_deep_purge.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_deep_purge.setToolTip("Purga Working Set del kernel NT y compacta el heap V8")
-        self.btn_deep_purge.clicked.connect(self.on_deep_purge_clicked)
-        perf_layout.addWidget(self.btn_deep_purge)
-
-        # Botón 2: Hibernar pestañas inactivas
-        self.btn_hibernate = QPushButton("💤 Hibernar pestañas en segundo plano")
-        self.btn_hibernate.setObjectName("PopupHibernateBtn")
-        self.btn_hibernate.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_hibernate.setToolTip("Descarga el DOM/JS de pestañas inactivas liberando 100-800 MB de RAM")
-        self.btn_hibernate.clicked.connect(self.on_hibernate_clicked)
-        perf_layout.addWidget(self.btn_hibernate)
-
-        self.lbl_perf_status = QLabel("")
-        self.lbl_perf_status.setObjectName("PopupPerfStatus")
-        self.lbl_perf_status.setWordWrap(True)
-        self.lbl_perf_status.hide()
-        perf_layout.addWidget(self.lbl_perf_status)
-
-        layout.addWidget(self.perf_card)
-
-        # ── 4. Botón Desplegable "Opciones avanzadas" ──────────────────────────
+        # ── 3. Botón Desplegable "Opciones avanzadas" ──────────────────────────
         self.btn_advanced = QPushButton("⚙ Opciones avanzadas ▾")
         self.btn_advanced.setObjectName("PopupAdvancedBtn")
         self.btn_advanced.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_advanced.clicked.connect(self.toggle_advanced)
         layout.addWidget(self.btn_advanced)
 
-        # Contenedor Colapsable (Opciones Granulares)
+        # Contenedor Colapsable (Opciones de Privacidad Granulares)
         self.advanced_container = QWidget()
         adv_layout = QVBoxLayout(self.advanced_container)
         adv_layout.setContentsMargins(4, 2, 4, 6)
@@ -494,7 +541,7 @@ class AegisShieldsPopup(QFrame):
         self.advanced_container.hide()
         layout.addWidget(self.advanced_container)
 
-        # ── 5. Pie de nota minimalista ────────────────────────────────────────
+        # ── 4. Pie de nota minimalista ────────────────────────────────────────
         self.lbl_footer = QLabel("Aegis Shields • adblock-rust FFI • Cero telemetría")
         self.lbl_footer.setObjectName("PopupFooter")
         self.lbl_footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -520,33 +567,19 @@ class AegisShieldsPopup(QFrame):
         if self.interceptor:
             self.interceptor.enabled = checked
 
-    def on_deep_purge_clicked(self):
-        if self.parent_win:
-            freed, curr = self.parent_win.deep_purge_ram_and_cpu()
-            self.lbl_ram_val.setText(f"{curr:.1f} MB")
-            self.lbl_perf_status.setText(f"✓ {freed:.1f} MB purgados físicamente")
-            self.lbl_perf_status.show()
-
-    def on_hibernate_clicked(self):
-        if self.parent_win:
-            count, freed, curr = self.parent_win.hibernate_inactive_tabs()
-            self.lbl_ram_val.setText(f"{curr:.1f} MB")
-            if count > 0:
-                self.lbl_perf_status.setText(f"✓ {count} pestaña(s) hibernada(s) ({freed:.1f} MB liberados)")
-            else:
-                self.lbl_perf_status.setText("No hay pestañas inactivas para hibernar")
-            self.lbl_perf_status.show()
-
-    def update_site(self, host: str, count: int):
-        self.lbl_site.setText(host or "Nueva Pestaña")
+    def update_site(self, raw_host: str, count: int):
+        # Detección inteligente para que nunca muestre "start" ni nombres raros
+        if not raw_host or raw_host in ("start", "Nueva Pestaña", "about:blank", ""):
+            self.lbl_site.setText("Nueva Pestaña")
+            self.lbl_status.setText("Protección Aegis activada")
+        else:
+            clean_host = raw_host.lower().replace("www.", "")
+            self.lbl_site.setText(clean_host)
+            self.lbl_status.setText("Escudos activados para este sitio")
         self.lbl_count.setText(str(count))
-        curr_ram = get_total_ram_mb()
-        self.lbl_ram_val.setText(f"{curr_ram:.1f} MB")
-        self.lbl_perf_status.hide()
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
-        rgb_accent = hex_to_rgb(t["accent"])
         self.main_switch.update_colors(accent_color=t["accent"], bg_color=t["bg"])
 
         qss = f"""
@@ -577,39 +610,6 @@ class AegisShieldsPopup(QFrame):
             QLabel#PopupStatLabel {{
                 color: {t['text']};
                 font-size: 12px;
-            }}
-            QFrame#PopupPerfCard {{
-                background-color: {t['bg']};
-                border: 1px solid rgba({rgb_text}, 0.08);
-                border-radius: 10px;
-            }}
-            QLabel#PopupRamTitle {{
-                color: {t['text']};
-                font-size: 11.5px;
-                font-weight: 600;
-            }}
-            QLabel#PopupRamVal {{
-                color: {t['accent']};
-                font-size: 13px;
-                font-weight: 700;
-            }}
-            QPushButton#PopupPurgeBtn, QPushButton#PopupHibernateBtn {{
-                background-color: {t['surface']};
-                border: 1px solid rgba({rgb_text}, 0.12);
-                border-radius: 6px;
-                color: {t['text']};
-                font-size: 11px;
-                font-weight: 600;
-                padding: 6px 10px;
-            }}
-            QPushButton#PopupPurgeBtn:hover, QPushButton#PopupHibernateBtn:hover {{
-                border-color: {t['accent']};
-                color: {t['accent']};
-            }}
-            QLabel#PopupPerfStatus {{
-                color: {t['accent']};
-                font-size: 11px;
-                font-weight: 600;
             }}
             QPushButton#PopupAdvancedBtn {{
                 background: transparent;
@@ -648,7 +648,7 @@ class AegisShieldsPopup(QFrame):
         self.setStyleSheet(qss)
         self.update()
 
-# ── 10. Ventana Principal de Aegis Browser ────────────────────────────────────
+# ── 11. Ventana Principal de Aegis Browser ────────────────────────────────────
 class AegisBrowserWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -658,10 +658,13 @@ class AegisBrowserWindow(QMainWindow):
         self._last_popup_close_time = 0.0
         self.current_theme_name = self.load_saved_theme()
 
+        # Gestor de historial real
+        self.history_mgr = HistoryManager()
+
         # Configurar Perfil Chromium
         self.profile = QWebEngineProfile.defaultProfile()
         self.profile.setHttpUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.2"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.3"
         )
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
@@ -680,50 +683,14 @@ class AegisBrowserWindow(QMainWindow):
         # Aplicar tema inicial
         self.apply_theme(self.current_theme_name)
 
-        # Temporizador de compactación de memoria en segundo plano cada 90s
+        # Compactación silenciosa de memoria automática cada 90s (cero placebo, 100% transparente)
         self.auto_purge_timer = QTimer(self)
         self.auto_purge_timer.setInterval(90 * 1000)
-        self.auto_purge_timer.timeout.connect(self.auto_background_purge)
+        self.auto_purge_timer.timeout.connect(silent_background_memory_purge)
         self.auto_purge_timer.start()
 
         # Abrir pestaña inicial
         self.add_new_tab()
-
-    def auto_background_purge(self):
-        """Compactación periódica silenciosa para evitar fugas de memoria."""
-        try:
-            deep_purge_memory()
-        except Exception:
-            pass
-
-    def deep_purge_ram_and_cpu(self) -> tuple[float, float]:
-        """Ejecuta V8 GC en pestañas activas y vacía el Working Set de Windows NT."""
-        for v in self.views:
-            if not getattr(v, "_aegis_suspended", False):
-                try:
-                    v.page().runJavaScript("if (window.gc) window.gc();")
-                except Exception:
-                    pass
-        freed, curr = deep_purge_memory()
-        return freed, curr
-
-    def hibernate_inactive_tabs(self) -> tuple[int, float, float]:
-        """Descarga el DOM y JS de pestañas en segundo plano (Sleeping Tabs)."""
-        curr_idx = self.tab_bar.currentIndex()
-        count = 0
-        for i, view in enumerate(self.views):
-            if i != curr_idx and not getattr(view, "_aegis_suspended", False):
-                url_str = view.url().toString() or getattr(view, "_aegis_target_url", "")
-                if url_str not in ("aegis://start", "about:blank", ""):
-                    view._aegis_suspended = True
-                    view._aegis_saved_url = url_str
-                    view._aegis_saved_title = self.tab_bar.tabText(i)
-                    view.setUrl(QUrl("about:blank"))
-                    orig = view._aegis_saved_title.replace("💤 ", "")
-                    self.tab_bar.setTabText(i, f"💤 {orig}")
-                    count += 1
-        freed, curr = self.deep_purge_ram_and_cpu()
-        return count, freed, curr
 
     def load_saved_theme(self) -> str:
         if CONFIG_FILE.exists():
@@ -815,7 +782,7 @@ class AegisBrowserWindow(QMainWindow):
         # Botón Escudo Aegis Shields (Abre desplegable estilo Brave)
         self.shield_pill = QPushButton("🛡️ 0")
         self.shield_pill.setObjectName("ShieldPill")
-        self.shield_pill.setToolTip("Aegis Shields: Click para desplegar panel de control y optimizador")
+        self.shield_pill.setToolTip("Aegis Shields: Click para desplegar panel")
         self.shield_pill.clicked.connect(self.toggle_shields_popup)
         toolbar_layout.addWidget(self.shield_pill)
 
@@ -852,7 +819,6 @@ class AegisBrowserWindow(QMainWindow):
         t = THEMES[theme_name]
         is_dark = (theme_name == "Oscuro")
 
-        # Botón de alternancia
         if is_dark:
             self.btn_theme_toggle.setText("☀️")
             self.btn_theme_toggle.setToolTip("Cambiar a Modo Claro")
@@ -860,16 +826,12 @@ class AegisBrowserWindow(QMainWindow):
             self.btn_theme_toggle.setText("🌙")
             self.btn_theme_toggle.setToolTip("Cambiar a Modo Oscuro")
 
-        # Sincronizar borde DWM de Windows
         apply_windows_dark_title_bar(self.winId(), dark=is_dark)
-
-        # Sincronizar Chromium ForceDarkMode
         self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.ForceDarkMode, is_dark)
 
         rgb_text = hex_to_rgb(t["text"])
         rgb_accent = hex_to_rgb(t["accent"])
 
-        # Hoja de estilos basada estrictamente en los 4 colores
         qss = f"""
             QMainWindow {{
                 background-color: {t['bg']};
@@ -986,11 +948,9 @@ class AegisBrowserWindow(QMainWindow):
         """
         self.setStyleSheet(qss)
 
-        # Actualizar tema del desplegable
         if hasattr(self, "shields_popup"):
             self.shields_popup.apply_theme(t)
 
-        # Actualizar pestañas NTP abiertas
         for view in self.views:
             if view.url().toString() in ("aegis://start", "about:blank"):
                 self.load_ntp(view)
@@ -1006,7 +966,7 @@ class AegisBrowserWindow(QMainWindow):
 
         view = self.current_view()
         url = view.url() if view else QUrl()
-        host = url.host() if url.host() else ("Nueva Pestaña" if url.toString() in ("aegis://start", "") else "Página actual")
+        host = url.host() if url else ""
         self.shields_popup.update_site(host, SHIELDS_CORE.total_blocked)
 
         btn_pos = self.shield_pill.mapToGlobal(QPoint(0, self.shield_pill.height()))
@@ -1040,7 +1000,8 @@ class AegisBrowserWindow(QMainWindow):
 
     def load_ntp(self, view: QWebEngineView):
         t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
-        html = get_clean_ntp_html(t["ntp_class"])
+        frequent_sites = self.history_mgr.get_frequent_sites(limit=8)
+        html = get_clean_ntp_html(t["ntp_class"], frequent_sites)
         view.setHtml(html, QUrl("aegis://start"))
 
     def close_tab(self, index: int):
@@ -1049,8 +1010,7 @@ class AegisBrowserWindow(QMainWindow):
             self.tab_bar.removeTab(index)
             self.stack.removeWidget(view)
             view.deleteLater()
-            # Purgar memoria tras cerrar pestaña
-            QTimer.singleShot(200, lambda: deep_purge_memory())
+            QTimer.singleShot(150, silent_background_memory_purge)
         else:
             current = self.current_view()
             if current:
@@ -1069,14 +1029,6 @@ class AegisBrowserWindow(QMainWindow):
         if 0 <= index < len(self.views):
             self.stack.setCurrentIndex(index)
             view = self.views[index]
-            # Si la pestaña estaba hibernada (dormida), reactivarla de inmediato
-            if getattr(view, "_aegis_suspended", False):
-                view._aegis_suspended = False
-                saved_url = getattr(view, "_aegis_saved_url", "")
-                saved_title = getattr(view, "_aegis_saved_title", "Pestaña")
-                self.tab_bar.setTabText(index, saved_title.replace("💤 ", ""))
-                if saved_url:
-                    view.load(QUrl(saved_url))
             self.on_url_changed(view.url(), view)
 
     def navigate_to_url(self):
@@ -1112,8 +1064,28 @@ class AegisBrowserWindow(QMainWindow):
         if v: self.load_ntp(v)
 
     def on_url_changed(self, qurl: QUrl, view: QWebEngineView):
+        url_str = qurl.toString()
+
+        # Interceptar acciones desde la página de inicio (Añadir o eliminar sitios frecuentes)
+        if url_str.startswith("aegis://action?"):
+            try:
+                parsed = urlparse(url_str)
+                q = parse_qs(parsed.query)
+                if "remove" in q:
+                    domain = q["remove"][0]
+                    self.history_mgr.remove_site(domain)
+                    self.load_ntp(view)
+                    return
+                elif "add" in q:
+                    data = json.loads(unquote(q["add"][0]))
+                    self.history_mgr.add_custom(data.get("title", ""), data.get("url", ""))
+                    self.load_ntp(view)
+                    return
+            except Exception:
+                pass
+            return
+
         if view == self.current_view():
-            url_str = qurl.toString()
             if url_str in ("aegis://start", "about:blank"):
                 self.url_bar.setText("")
                 self.url_bar.setPlaceholderText("Buscar en la web o ingresar dirección...")
@@ -1155,7 +1127,11 @@ class AegisBrowserWindow(QMainWindow):
             display_title = title if len(title) <= 16 else title[:14] + "…"
             self.tab_bar.setTabText(idx, display_title)
 
-        if ok and current_url not in ("aegis://start", "about:blank"):
+        if ok and current_url not in ("aegis://start", "about:blank") and not current_url.startswith("aegis://"):
+            # Registrar visita en historial real para Sitios Frecuentes
+            self.history_mgr.record_visit(current_url, view.title())
+
+            # Inyección de CSS cosmético
             css = SHIELDS_CORE.get_cosmetic_css(current_url)
             if css:
                 inject_css = f"""
@@ -1173,6 +1149,7 @@ class AegisBrowserWindow(QMainWindow):
                 """
                 view.page().runJavaScript(inject_css)
 
+            # Inyección de defusers de video y temporizadores
             js = SHIELDS_CORE.get_injected_scripts(current_url)
             if js:
                 view.page().runJavaScript(js)
@@ -1182,8 +1159,38 @@ class AegisBrowserWindow(QMainWindow):
         if hasattr(self, "shields_popup") and self.shields_popup.isVisible():
             self.shields_popup.lbl_count.setText(str(SHIELDS_CORE.total_blocked))
 
-# ── 11. Plantilla HTML de Nueva Pestaña (Estricta 4 Colores) ──────────────────
-def get_clean_ntp_html(theme_class: str = "theme-dark") -> str:
+# ── 12. Plantilla HTML de Nueva Pestaña (Sitios Frecuentes Reales) ────────────
+def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = None) -> str:
+    if frequent_sites is None:
+        frequent_sites = []
+
+    cards_html = ""
+    for site in frequent_sites:
+        dom = site.get("domain", "")
+        title = site.get("title", dom)
+        url = site.get("url", "#")
+        initial = (dom[0] if dom else "A").upper()
+
+        cards_html += f"""
+        <div class="shortcut-wrapper">
+          <a href="{url}" class="shortcut-card">
+            <span class="shortcut-avatar">{initial}</span>
+            <span class="shortcut-title">{title}</span>
+          </a>
+          <button class="btn-remove-shortcut" onclick="removeShortcut('{dom}')" title="Eliminar de frecuentes">×</button>
+        </div>
+        """
+
+    # Botón Añadir Atajo (+)
+    cards_html += """
+    <div class="shortcut-wrapper">
+      <button class="shortcut-card shortcut-add" onclick="openAddModal()" title="Añadir sitio frecuente">
+        <span class="shortcut-avatar">+</span>
+        <span class="shortcut-title">Añadir</span>
+      </button>
+    </div>
+    """
+
     return f"""<!DOCTYPE html>
 <html lang="es" class="{theme_class}">
 <head>
@@ -1222,7 +1229,7 @@ def get_clean_ntp_html(theme_class: str = "theme-dark") -> str:
 
     .hero {{
       text-align: center;
-      max-width: 640px;
+      max-width: 680px;
       width: 100%;
     }}
 
@@ -1262,13 +1269,28 @@ def get_clean_ntp_html(theme_class: str = "theme-dark") -> str:
       text-transform: capitalize;
     }}
 
+    .shortcuts-section-title {{
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+      opacity: 0.6;
+      margin-bottom: 1rem;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }}
+
     .shortcuts-grid {{
       display: flex;
-      gap: 1rem;
+      gap: 1.25rem;
       justify-content: center;
       flex-wrap: wrap;
       margin-bottom: 2rem;
     }}
+
+    .shortcut-wrapper {{
+      position: relative;
+    }}
+
     .shortcut-card {{
       display: flex;
       flex-direction: column;
@@ -1276,21 +1298,71 @@ def get_clean_ntp_html(theme_class: str = "theme-dark") -> str:
       gap: 8px;
       text-decoration: none;
       color: var(--text);
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       font-weight: 500;
-      padding: 12px 16px;
-      border-radius: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
       background: var(--surface);
       border: 1px solid rgba(128, 128, 128, 0.15);
       transition: all 0.2s ease;
-      min-width: 82px;
+      min-width: 84px;
+      max-width: 90px;
+      cursor: pointer;
     }}
     .shortcut-card:hover {{
       border-color: var(--accent);
       transform: translateY(-2px);
     }}
-    .shortcut-icon {{
-      font-size: 1.5rem;
+
+    .shortcut-avatar {{
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--bg);
+      border: 1px solid rgba(128, 128, 128, 0.2);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      transition: all 0.2s ease;
+    }}
+
+    .shortcut-title {{
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 72px;
+      line-height: 1.2;
+    }}
+
+    .btn-remove-shortcut {{
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--bg);
+      border: 1px solid rgba(128, 128, 128, 0.3);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+    }}
+    .shortcut-wrapper:hover .btn-remove-shortcut {{
+      display: flex;
+    }}
+    .btn-remove-shortcut:hover {{
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
     }}
 
     .footer-badge {{
@@ -1310,6 +1382,67 @@ def get_clean_ntp_html(theme_class: str = "theme-dark") -> str:
       border-radius: 50%;
       box-shadow: 0 0 8px var(--accent);
     }}
+
+    /* Modal Añadir Sitio */
+    .modal-backdrop {{
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }}
+    .modal-card {{
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      border-radius: 14px;
+      padding: 24px;
+      width: 320px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }}
+    .modal-title {{
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: var(--text);
+    }}
+    .modal-input {{
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid rgba(128, 128, 128, 0.25);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 13px;
+      margin-bottom: 12px;
+      outline: none;
+    }}
+    .modal-input:focus {{
+      border-color: var(--accent);
+    }}
+    .modal-actions {{
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 6px;
+    }}
+    .modal-btn {{
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+    }}
+    .modal-btn-cancel {{
+      background: transparent;
+      color: var(--text);
+    }}
+    .modal-btn-save {{
+      background: var(--accent);
+      color: #ffffff;
+    }}
   </style>
 </head>
 <body>
@@ -1326,41 +1459,28 @@ def get_clean_ntp_html(theme_class: str = "theme-dark") -> str:
     <div id="clock" class="clock">12:00</div>
     <div id="date" class="date">Cargando fecha...</div>
 
+    <div class="shortcuts-section-title">Sitios Frecuentes</div>
     <div class="shortcuts-grid">
-      <a href="https://youtube.com" class="shortcut-card">
-        <span class="shortcut-icon">▶</span>
-        <span>YouTube</span>
-      </a>
-      <a href="https://twitch.tv" class="shortcut-card">
-        <span class="shortcut-icon">🟣</span>
-        <span>Twitch</span>
-      </a>
-      <a href="https://animeflv.net" class="shortcut-card">
-        <span class="shortcut-icon">⚡</span>
-        <span>AnimeFLV</span>
-      </a>
-      <a href="https://cuevana.biz" class="shortcut-card">
-        <span class="shortcut-icon">🎬</span>
-        <span>Cuevana</span>
-      </a>
-      <a href="https://curseforge.com" class="shortcut-card">
-        <span class="shortcut-icon">🔨</span>
-        <span>CurseForge</span>
-      </a>
-      <a href="https://reddit.com" class="shortcut-card">
-        <span class="shortcut-icon">🤖</span>
-        <span>Reddit</span>
-      </a>
-      <a href="https://github.com" class="shortcut-card">
-        <span class="shortcut-icon">🐙</span>
-        <span>GitHub</span>
-      </a>
+      {cards_html}
     </div>
   </main>
 
   <div class="footer-badge">
     <div class="shield-dot"></div>
     <span>Aegis Shields Activo · adblock-rust FFI · Cero Telemetría</span>
+  </div>
+
+  <!-- Modal Interactivo Añadir Sitio Frecuente -->
+  <div id="addModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-title">Añadir sitio frecuente</div>
+      <input type="text" id="siteName" class="modal-input" placeholder="Nombre (ej. GitHub)" />
+      <input type="text" id="siteUrl" class="modal-input" placeholder="URL (ej. https://github.com)" />
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-cancel" onclick="closeAddModal()">Cancelar</button>
+        <button class="modal-btn modal-btn-save" onclick="saveShortcut()">Guardar</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -1375,16 +1495,39 @@ def get_clean_ntp_html(theme_class: str = "theme-dark") -> str:
     }}
     updateClock();
     setInterval(updateClock, 1000);
+
+    function removeShortcut(domain) {{
+      window.location.href = 'aegis://action?remove=' + encodeURIComponent(domain);
+    }}
+
+    function openAddModal() {{
+      document.getElementById('addModal').style.display = 'flex';
+      document.getElementById('siteName').focus();
+    }}
+
+    function closeAddModal() {{
+      document.getElementById('addModal').style.display = 'none';
+      document.getElementById('siteName').value = '';
+      document.getElementById('siteUrl').value = '';
+    }}
+
+    function saveShortcut() {{
+      const name = document.getElementById('siteName').value.trim();
+      const url = document.getElementById('siteUrl').value.trim();
+      if (!url) return;
+      const payload = JSON.stringify({{title: name || url, url: url}});
+      window.location.href = 'aegis://action?add=' + encodeURIComponent(payload);
+    }}
   </script>
 </body>
 </html>
 """
 
-# ── 12. Punto de Entrada Principal ────────────────────────────────────────────
+# ── 13. Punto de Entrada Principal ────────────────────────────────────────────
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Aegis")
-    app.setApplicationVersion("1.3.2")
+    app.setApplicationVersion("1.3.3")
 
     window = AegisBrowserWindow()
     window.show()
