@@ -23,6 +23,7 @@ import json
 import time
 import gc
 import ctypes
+import base64
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote
 from ctypes import wintypes
@@ -60,7 +61,7 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
     QWebEngineProfile, QWebEngineSettings, QWebEngineUrlRequestInterceptor
 )
-from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer, QByteArray
+from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer, QByteArray, QBuffer, QIODevice, QSize
 from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QIcon, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 
@@ -116,7 +117,8 @@ class HistoryManager:
                     "title": clean_title,
                     "url": f"{parsed.scheme}://{parsed.netloc}",
                     "visits": 1,
-                    "last_visited": time.time()
+                    "last_visited": time.time(),
+                    "favicon": ""
                 }
             else:
                 self.data["frequent"][domain]["visits"] += 1
@@ -125,6 +127,25 @@ class HistoryManager:
                     self.data["frequent"][domain]["title"] = clean_title
 
             self.save()
+        except Exception:
+            pass
+
+    def update_favicon(self, domain: str, icon_data: str):
+        if not domain or not icon_data:
+            return
+        try:
+            changed = False
+            if "frequent" in self.data and domain in self.data["frequent"]:
+                if self.data["frequent"][domain].get("favicon") != icon_data:
+                    self.data["frequent"][domain]["favicon"] = icon_data
+                    changed = True
+            if "custom" in self.data:
+                for s in self.data["custom"]:
+                    if s.get("domain") == domain and s.get("favicon") != icon_data:
+                        s["favicon"] = icon_data
+                        changed = True
+            if changed:
+                self.save()
         except Exception:
             pass
 
@@ -142,7 +163,8 @@ class HistoryManager:
                 "title": title or domain,
                 "url": url,
                 "visits": 9999,
-                "last_visited": time.time()
+                "last_visited": time.time(),
+                "favicon": ""
             })
             self.save()
         except Exception:
@@ -746,6 +768,7 @@ class AegisBrowserWindow(QMainWindow):
         self.tab_bar = QTabBar()
         self.tab_bar.setTabsClosable(True)
         self.tab_bar.setMovable(True)
+        self.tab_bar.setIconSize(QSize(16, 16))
         self.tab_bar.currentChanged.connect(self.on_tab_changed)
         self.tab_bar.tabCloseRequested.connect(self.close_tab)
         tab_header_layout.addWidget(self.tab_bar)
@@ -1009,6 +1032,7 @@ class AegisBrowserWindow(QMainWindow):
         view.urlChanged.connect(lambda qurl, v=view: self.on_url_changed(qurl, v))
         view.loadProgress.connect(self.on_load_progress)
         view.loadFinished.connect(lambda ok, v=view: self.on_load_finished(ok, v))
+        view.iconChanged.connect(lambda icon, v=view: self.on_icon_changed(icon, v))
 
         if url_str:
             view.load(QUrl(url_str))
@@ -1020,10 +1044,41 @@ class AegisBrowserWindow(QMainWindow):
         return view
 
     def load_ntp(self, view: QWebEngineView):
+        idx = self.views.index(view) if view in self.views else -1
         t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        if idx != -1:
+            self.tab_bar.setTabIcon(idx, create_shield_icon(t["accent"], 14))
+            self.tab_bar.setTabText(idx, "Nueva Pestaña")
         frequent_sites = self.history_mgr.get_frequent_sites(limit=8)
         html = get_clean_ntp_html(t["ntp_class"], frequent_sites)
         view.setHtml(html, QUrl("aegis://start"))
+
+    def on_icon_changed(self, icon: QIcon, view: QWebEngineView):
+        if icon.isNull():
+            return
+        idx = self.views.index(view) if view in self.views else -1
+        if idx != -1:
+            self.tab_bar.setTabIcon(idx, icon)
+
+        url = view.url()
+        if not url.isValid():
+            return
+        domain = url.host().lower().replace("www.", "")
+        if not domain or domain in ("start", "about:blank"):
+            return
+
+        try:
+            pixmap = icon.pixmap(64, 64)
+            if not pixmap.isNull():
+                buf = QByteArray()
+                buffer = QBuffer(buf)
+                buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+                pixmap.save(buffer, "PNG")
+                b64 = base64.b64encode(buf.data()).decode("ascii")
+                data_uri = f"data:image/png;base64,{b64}"
+                self.history_mgr.update_favicon(domain, data_uri)
+        except Exception:
+            pass
 
     def close_tab(self, index: int):
         if self.tab_bar.count() > 1:
@@ -1191,11 +1246,16 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
         title = site.get("title", dom)
         url = site.get("url", "#")
         initial = (dom[0] if dom else "A").upper()
+        # Favicon: 1) Favicon local en caché (base64) 2) CDN oficial de favicons de Google
+        fav_src = site.get("favicon") or f"https://www.google.com/s2/favicons?domain={dom}&sz=64"
 
         cards_html += f"""
         <div class="shortcut-wrapper">
           <a href="{url}" class="shortcut-card">
-            <span class="shortcut-avatar">{initial}</span>
+            <div class="shortcut-icon-box">
+              <img src="{fav_src}" class="shortcut-img" alt="{title}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+              <span class="shortcut-avatar" style="display:none;">{initial}</span>
+            </div>
             <span class="shortcut-title">{title}</span>
           </a>
           <button class="btn-remove-shortcut" onclick="removeShortcut('{dom}')" title="Eliminar de frecuentes">×</button>
@@ -1206,7 +1266,9 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
     cards_html += """
     <div class="shortcut-wrapper">
       <button class="shortcut-card shortcut-add" onclick="openAddModal()" title="Añadir sitio frecuente">
-        <span class="shortcut-avatar">+</span>
+        <div class="shortcut-icon-box">
+          <span class="shortcut-avatar">+</span>
+        </div>
         <span class="shortcut-title">Añadir</span>
       </button>
     </div>
@@ -1316,7 +1378,7 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 8px;
+      gap: 9px;
       text-decoration: none;
       color: var(--text);
       font-size: 0.8rem;
@@ -1324,10 +1386,10 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
       padding: 12px 14px;
       border-radius: 14px;
       background: var(--surface);
-      border: 1px solid rgba(128, 128, 128, 0.15);
-      transition: all 0.2s ease;
-      min-width: 84px;
-      max-width: 90px;
+      border: 1px solid rgba(128, 128, 128, 0.14);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      min-width: 86px;
+      max-width: 92px;
       cursor: pointer;
     }}
     .shortcut-card:hover {{
@@ -1335,20 +1397,56 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
       transform: translateY(-2px);
     }}
 
-    .shortcut-avatar {{
-      width: 44px;
-      height: 44px;
+    .shortcut-icon-box {{
+      width: 46px;
+      height: 46px;
       border-radius: 50%;
       background: var(--bg);
-      border: 1px solid rgba(128, 128, 128, 0.2);
-      color: var(--accent);
+      border: 1px solid rgba(128, 128, 128, 0.16);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }}
+    .shortcut-card:hover .shortcut-icon-box {{
+      border-color: var(--accent);
+    }}
+
+    .shortcut-img {{
+      width: 26px;
+      height: 26px;
+      object-fit: contain;
+      border-radius: 4px;
+    }}
+
+    .shortcut-avatar {{
+      width: 100%;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 1.25rem;
       font-weight: 700;
+      color: var(--accent);
       text-transform: uppercase;
-      transition: all 0.2s ease;
+    }}
+
+    .shortcut-add {{
+      background: transparent;
+      border: 1px dashed rgba(128, 128, 128, 0.25);
+    }}
+    .shortcut-add:hover {{
+      background: var(--surface);
+      border-style: solid;
+      border-color: var(--accent);
+    }}
+    .shortcut-add .shortcut-avatar {{
+      font-size: 1.4rem;
+      color: rgba(128, 128, 128, 0.6);
+    }}
+    .shortcut-add:hover .shortcut-avatar {{
+      color: var(--accent);
     }}
 
     .shortcut-title {{
