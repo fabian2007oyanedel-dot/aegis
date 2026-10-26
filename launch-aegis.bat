@@ -9,6 +9,12 @@ echo            (Navegador Nativo con Chromium Engine y Rust Shields)
 echo ==============================================================================
 echo.
 
+if exist "%~dp0dist\Aegis\Aegis.exe" (
+    echo [OK] Iniciando binario nativo Aegis.exe desde dist\Aegis...
+    start "" /D "%~dp0dist\Aegis" "%~dp0dist\Aegis\Aegis.exe"
+    exit /b 0
+)
+
 set "PYTHON_EXE=C:\Users\PC\AppData\Local\Python\bin\pythonw.exe"
 if exist "%PYTHON_EXE%" (
     echo [OK] Iniciando Aegis Browser via PythonW...
@@ -20,12 +26,6 @@ where python >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     echo [OK] Iniciando Aegis Browser via Python...
     start "" python "%~dp0src\desktop\aegis_app.py"
-    exit /b 0
-)
-
-if exist "%~dp0dist\Aegis\Aegis.exe" (
-    echo [OK] Iniciando Aegis.exe desde dist\Aegis...
-    start "" /D "%~dp0dist\Aegis" "%~dp0dist\Aegis\Aegis.exe"
     exit /b 0
 )
 

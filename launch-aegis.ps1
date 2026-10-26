@@ -3,6 +3,15 @@
 # ==============================================================================
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$CompiledExe = Join-Path $ScriptDir "dist\Aegis\Aegis.exe"
+
+if (Test-Path $CompiledExe) {
+    Write-Host "[>] Iniciando binario nativo Aegis.exe desde dist\Aegis..." -ForegroundColor Cyan
+    Start-Process $CompiledExe -WorkingDirectory (Split-Path -Parent $CompiledExe)
+    Write-Host "[OK] Aegis Browser ejecutandose." -ForegroundColor Green
+    exit 0
+}
+
 $AppScript = Join-Path $ScriptDir "src\desktop\aegis_app.py"
 $PythonExe = "C:\Users\PC\AppData\Local\Python\bin\pythonw.exe"
 

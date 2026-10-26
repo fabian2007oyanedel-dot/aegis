@@ -131,7 +131,7 @@ from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer, QByteArray, QBuffer, QIODevic
 from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QIcon, QPixmap, QShortcut, QKeySequence
 from PyQt6.QtSvg import QSvgRenderer
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent.parent
 CONFIG_FILE = Path.home() / ".aegis_browser_config.json"
 HISTORY_FILE = Path.home() / ".aegis_browser_history.json"
 DOWNLOADS_FILE = Path.home() / ".aegis_browser_downloads.json"
@@ -771,6 +771,45 @@ def create_extension_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
     </svg>"""
     return svg_to_icon(svg, size)
 
+def create_lock_icon(color_hex: str = "#2ea043", size: int = 16) -> QIcon:
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_warning_icon(color_hex: str = "#d29922", size: int = 16) -> QIcon:
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_copy_link_icon(color_hex: str = "#888888", size: int = 14) -> QIcon:
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_book_icon(color_hex: str = "#888888", size: int = 14) -> QIcon:
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_zoom_icon(color_hex: str = "#888888", size: int = 14) -> QIcon:
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      <line x1="11" y1="8" x2="11" y2="14"/>
+      <line x1="8" y1="11" x2="14" y2="11"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+
 def get_search_engine_svg(engine_name: str, size: int = 20) -> str:
     engine = str(engine_name).lower() if engine_name else "google"
     if "google" in engine:
@@ -837,6 +876,8 @@ class AegisShieldsRustCore:
             BASE_DIR / "src" / "shields" / "target" / "release" / "aegis_shields.dll",
             BASE_DIR / "aegis_shields.dll",
             Path.cwd() / "dist" / "Aegis" / "aegis_shields.dll",
+            Path(sys.executable).parent / "aegis_shields.dll",
+            Path(getattr(sys, "_MEIPASS", ".")).resolve() / "aegis_shields.dll",
         ]
         for p in dll_paths:
             if p.exists():
@@ -3257,7 +3298,7 @@ class AegisTabBar(QTabBar):
             p = event.pos()
             if (p.y() < -15 or p.y() > self.height() + 15 or p.x() < -30 or p.x() > self.width() + 30) and self.count() > 1:
                 global_pos = event.globalPosition().toPoint()
-                tab_idx = self.currentIndex() if self.currentIndex() != -1 else self._drag_tab_idx
+                tab_idx = self._drag_tab_idx if self._drag_tab_idx != -1 else self.currentIndex()
                 self._drag_start_pos = None
                 self._drag_tab_idx = -1
                 self.tabDetached.emit(tab_idx, global_pos)
@@ -4218,6 +4259,8 @@ class AegisBrowserWindow(QMainWindow):
             return QUrl(text)
 
         if text.startswith("http://") or text.startswith("https://") or text.startswith("file://"):
+            if text.startswith("http://") and self.config.get("https_only_mode", False):
+                return QUrl("https://" + text[7:])
             return QUrl(text)
         elif "." in text and " " not in text:
             return QUrl("https://" + text)
@@ -4339,14 +4382,27 @@ class AegisBrowserWindow(QMainWindow):
             QApplication.instance()._aegis_windows = []
         QApplication.instance()._aegis_windows.append(win)
 
+    def update_zoom_ui(self):
+        v = self.current_view()
+        if not v:
+            return
+        zf = round(v.zoomFactor(), 2)
+        if hasattr(self, "app_menu") and hasattr(self.app_menu, "lbl_zoom_val"):
+            self.app_menu.lbl_zoom_val.setText(f"{int(zf*100)}%")
+        if hasattr(self, "zoom_action"):
+            if abs(zf - 1.0) > 0.05:
+                self.zoom_action.setVisible(True)
+                self.zoom_action.setToolTip(f"Zoom actual: {int(zf*100)}% (Click para restablecer al 100%)")
+            else:
+                self.zoom_action.setVisible(False)
+
     def zoom_in(self):
         v = self.current_view()
         if v:
             zf = round(v.zoomFactor() + 0.1, 1)
             if zf <= 3.0:
                 v.setZoomFactor(zf)
-                if hasattr(self, "app_menu"):
-                    self.app_menu.lbl_zoom_val.setText(f"{int(zf*100)}%")
+                self.update_zoom_ui()
 
     def zoom_out(self):
         v = self.current_view()
@@ -4354,15 +4410,13 @@ class AegisBrowserWindow(QMainWindow):
             zf = round(v.zoomFactor() - 0.1, 1)
             if zf >= 0.3:
                 v.setZoomFactor(zf)
-                if hasattr(self, "app_menu"):
-                    self.app_menu.lbl_zoom_val.setText(f"{int(zf*100)}%")
+                self.update_zoom_ui()
 
     def zoom_reset(self):
         v = self.current_view()
         if v:
             v.setZoomFactor(1.0)
-            if hasattr(self, "app_menu"):
-                self.app_menu.lbl_zoom_val.setText("100%")
+            self.update_zoom_ui()
 
     def init_ui(self):
         container = QWidget()
@@ -4440,7 +4494,7 @@ class AegisBrowserWindow(QMainWindow):
 
         # Acción de seguridad SSL (🔒 / ⚠️ / 🛡️)
         self.security_action = self.url_bar.addAction(
-            create_shield_icon("#2ea043", 16),
+            create_lock_icon("#2ea043", 16),
             QLineEdit.ActionPosition.LeadingPosition
         )
         self.security_action.setToolTip("Información del sitio y seguridad de conexión")
@@ -4460,21 +4514,21 @@ class AegisBrowserWindow(QMainWindow):
 
         # Acciones laterales derechas del Omnibox
         self.clean_copy_action = self.url_bar.addAction(
-            create_shield_icon("#888888", 14),
+            create_copy_link_icon("#888888", 14),
             QLineEdit.ActionPosition.TrailingPosition
         )
         self.clean_copy_action.setToolTip("Copiar enlace limpio sin parámetros de rastreo")
         self.clean_copy_action.triggered.connect(self.copy_clean_url)
 
         self.reader_action = self.url_bar.addAction(
-            create_shield_icon("#888888", 14),
+            create_book_icon("#888888", 14),
             QLineEdit.ActionPosition.TrailingPosition
         )
         self.reader_action.setToolTip("Modo Lectura / Distraction-free (F9)")
         self.reader_action.triggered.connect(self.toggle_reader_mode)
 
         self.zoom_action = self.url_bar.addAction(
-            create_shield_icon("#888888", 14),
+            create_zoom_icon("#888888", 14),
             QLineEdit.ActionPosition.TrailingPosition
         )
         self.zoom_action.setToolTip("Zoom alterado: Click para restablecer al 100%")
@@ -5335,10 +5389,10 @@ class AegisBrowserWindow(QMainWindow):
             if hasattr(self, "security_action"):
                 t_cur = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
                 if u_scheme == "https":
-                    self.security_action.setIcon(create_shield_icon("#2ea043", 16))
+                    self.security_action.setIcon(create_lock_icon("#2ea043", 16))
                     self.security_action.setToolTip("Conexión segura y cifrada (HTTPS)")
                 elif u_scheme == "http":
-                    self.security_action.setIcon(create_shield_icon("#d29922", 16))
+                    self.security_action.setIcon(create_warning_icon("#d29922", 16))
                     self.security_action.setToolTip("Conexión no cifrada (HTTP)")
                 else:
                     self.security_action.setIcon(create_shield_icon(t_cur["accent"], 16))
@@ -5355,13 +5409,8 @@ class AegisBrowserWindow(QMainWindow):
                     self.btn_bookmark.setStyleSheet("")
 
             # Actualizar indicador de zoom si no es 100%
-            if hasattr(self, "zoom_action"):
-                zf = round(view.zoomFactor(), 2)
-                if abs(zf - 1.0) > 0.05:
-                    self.zoom_action.setVisible(True)
-                    self.zoom_action.setToolTip(f"Zoom actual: {int(zf*100)}% (Click para restablecer al 100%)")
-                else:
-                    self.zoom_action.setVisible(False)
+            if hasattr(self, "update_zoom_ui"):
+                self.update_zoom_ui()
 
             # Sanitizar estrictamente el Omnibox para que jamás muestre acciones ni código JS ni data URLs
             if self.is_internal_or_ntp(url_str):
