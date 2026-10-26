@@ -460,6 +460,45 @@ def create_extension_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
     </svg>"""
     return svg_to_icon(svg, size)
 
+def get_search_engine_svg(engine_name: str, size: int = 20) -> str:
+    engine = str(engine_name).lower() if engine_name else "google"
+    if "google" in engine:
+        return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="{size}" height="{size}">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>"""
+    elif "bing" in engine:
+        return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="{size}" height="{size}">
+          <path fill="#008373" d="M10 6v36l14-7.5 12-7-6-3-6-3 10-5V8L10 6z"/>
+          <path fill="#00A287" d="M24 21.5l10-5V8l-10 6.5v7z"/>
+        </svg>"""
+    elif "brave" in engine:
+        return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="{size}" height="{size}">
+          <path fill="#FF5500" d="M38.5 16.5l-3.2-9.7c-.4-1.2-1.5-2-2.8-2h-17c-1.3 0-2.4.8-2.8 2l-3.2 9.7c-.3.8-.2 1.7.3 2.4l13.5 19.3c.7 1 2.1 1 2.8 0l13.5-19.3c.5-.7.6-1.6.3-2.4z"/>
+          <path fill="#FFFFFF" d="M24 10l5 5h-10l5-5z"/>
+        </svg>"""
+    elif "yahoo" in engine:
+        return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="{size}" height="{size}">
+          <rect width="48" height="48" rx="10" fill="#6001D2"/>
+          <path fill="#FFFFFF" d="M14 12l7 14v10h6V26l7-14h-6.5l-3.5 8.5-3.5-8.5H14z"/>
+        </svg>"""
+    else:  # DuckDuckGo
+        return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="{size}" height="{size}">
+          <circle cx="24" cy="24" r="22" fill="#DE5833"/>
+          <ellipse cx="24" cy="21" rx="12" ry="10" fill="#FFFFFF"/>
+          <ellipse cx="24" cy="22" rx="5" ry="3.5" fill="#F49A11"/>
+          <circle cx="20" cy="18" r="2" fill="#222222"/>
+          <circle cx="28" cy="18" r="2" fill="#222222"/>
+          <path d="M16 27 C18 33, 30 33, 32 27 Z" fill="#209B48"/>
+          <polygon points="24,24 21,27 27,27" fill="#F49A11"/>
+        </svg>"""
+
+def create_search_engine_icon(engine_name: str, size: int = 18) -> QIcon:
+    svg = get_search_engine_svg(engine_name, size)
+    return svg_to_icon(svg, size)
+
 # ── 5. Soporte de Barra de Título Nativa Windows DWM ───────────────────────────
 def apply_windows_dark_title_bar(hwnd, dark: bool = True):
     if sys.platform != "win32":
@@ -1602,6 +1641,24 @@ class AegisTabBar(QTabBar):
             self._drag_tab_idx = -1
         super().mouseReleaseEvent(event)
 
+# ── 10.8 Barra de Direcciones Omnibox Inteligente ─────────────────────────────
+class AegisOmnibox(QLineEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("Omnibox")
+        self._select_all_pending = False
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self._select_all_pending = True
+        QTimer.singleShot(0, self.selectAll)
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        if self._select_all_pending:
+            self.selectAll()
+            self._select_all_pending = False
+
 # ── 11. Ventana Principal de Aegis Browser ────────────────────────────────────
 class AegisBrowserWindow(QMainWindow):
     def __init__(self, is_incognito: bool = False):
@@ -1683,7 +1740,7 @@ class AegisBrowserWindow(QMainWindow):
         default_config = {
             "theme": "Oscuro",
             "tab_position": "horizontal",
-            "search_engine": "DuckDuckGo",
+            "search_engine": "Google",
             "shields_enabled": True,
             "force_dark_mode": True,
             "show_bookmarks_bar": True
@@ -2020,6 +2077,104 @@ class AegisBrowserWindow(QMainWindow):
             app._aegis_windows.remove(self)
         super().closeEvent(event)
 
+    def is_internal_or_ntp(self, url_str: str) -> bool:
+        if not url_str or url_str in ("aegis://start", "about:blank", "about:start"):
+            return True
+        u = str(url_str).lower().strip()
+        if u.startswith("data:text/html") or u.startswith("data:"):
+            return True
+        if u.startswith("aegis://action") or "encodeuricomponent" in u:
+            return True
+        return False
+
+    def build_target_url(self, text: str) -> QUrl:
+        text = text.strip()
+        shortcuts = {
+            "settings": "aegis://settings",
+            "config": "aegis://settings",
+            "configuracion": "aegis://settings",
+            "configuración": "aegis://settings",
+            "downloads": "aegis://downloads",
+            "descargas": "aegis://downloads",
+            "history": "aegis://history",
+            "historial": "aegis://history",
+            "extensions": "aegis://extensions",
+            "extensiones": "aegis://extensions",
+            "start": "aegis://start",
+            "inicio": "aegis://start"
+        }
+        if text.lower() in shortcuts:
+            return QUrl(shortcuts[text.lower()])
+
+        if text.startswith("aegis://"):
+            return QUrl(text)
+
+        if text.startswith("http://") or text.startswith("https://") or text.startswith("file://"):
+            return QUrl(text)
+        elif "." in text and " " not in text:
+            return QUrl("https://" + text)
+        else:
+            engine = self.config.get("search_engine", "Google")
+            is_dark = (self.current_theme_name == "Oscuro")
+            encoded_query = quote(text)
+            eng_low = str(engine).lower()
+            if "google" in eng_low:
+                dark_param = "&cs=1" if is_dark else ""
+                return QUrl(f"https://www.google.com/search?q={encoded_query}{dark_param}")
+            elif "bing" in eng_low:
+                return QUrl(f"https://www.bing.com/search?q={encoded_query}")
+            elif "brave" in eng_low:
+                return QUrl(f"https://search.brave.com/search?q={encoded_query}")
+            elif "yahoo" in eng_low:
+                return QUrl(f"https://search.yahoo.com/search?p={encoded_query}")
+            else:
+                dark_param = "&kae=d&k1=-1" if is_dark else ""
+                return QUrl(f"https://duckduckgo.com/?q={encoded_query}{dark_param}")
+
+    def show_search_engine_menu(self):
+        menu = QMenu(self)
+        if hasattr(self, "current_qss"):
+            menu.setStyleSheet(self.current_qss)
+
+        engines = [
+            ("Google", "Google"),
+            ("DuckDuckGo", "DuckDuckGo (Privado)"),
+            ("Bing", "Microsoft Bing"),
+            ("Brave", "Brave Search"),
+            ("Yahoo", "Yahoo")
+        ]
+
+        cur_engine = self.config.get("search_engine", "Google").lower()
+        for key, label in engines:
+            icon = create_search_engine_icon(key, 16)
+            prefix = "✓ " if key.lower() == cur_engine else "   "
+            act = menu.addAction(icon, f"{prefix}{label}")
+            act.triggered.connect(lambda _, k=key: self.set_search_engine(k))
+
+        pos = self.url_bar.mapToGlobal(QPoint(6, self.url_bar.height() + 4))
+        menu.exec(pos)
+
+    def set_search_engine(self, engine_name: str):
+        self.config["search_engine"] = engine_name
+        self.save_config()
+        self.update_search_engine_ui()
+        v = self.current_view()
+        if v and (self.is_internal_or_ntp(v.url().toString()) or getattr(v, "_aegis_virtual_url", "") == "aegis://start"):
+            self.load_ntp(v)
+
+    def update_search_engine_ui(self):
+        engine = self.config.get("search_engine", "Google")
+        if hasattr(self, "search_engine_action"):
+            self.search_engine_action.setIcon(create_search_engine_icon(engine, 16))
+            self.search_engine_action.setToolTip(f"Motor actual: {engine} (Click para cambiar)")
+        if hasattr(self, "url_bar"):
+            v = self.current_view()
+            cur_url = v.url().toString() if v else ""
+            if self.is_internal_or_ntp(cur_url) or getattr(v, "_aegis_virtual_url", "") == "aegis://start":
+                self.url_bar.setText("")
+                placeholder = f"Navegación Privada · Buscar con {engine}..." if getattr(self, "is_incognito", False) else f"Buscar con {engine} o ingresar dirección..."
+                self.url_bar.setPlaceholderText(placeholder)
+
     def reopen_closed_tab(self):
         if self.closed_tabs:
             url, title = self.closed_tabs.pop()
@@ -2066,7 +2221,7 @@ class AegisBrowserWindow(QMainWindow):
             suggestions.add(s.get("url", ""))
         for h in self.history_mgr.data.get("history_log", [])[:40]:
             suggestions.add(h.get("url", ""))
-        clean_list = [u for u in suggestions if u and not u.startswith("aegis://") and not u.startswith("about:")]
+        clean_list = [u for u in suggestions if u and not u.startswith("aegis://") and not u.startswith("about:") and not u.startswith("data:")]
         self.completer_model.setStringList(sorted(clean_list))
 
     def open_new_window(self):
@@ -2165,10 +2320,18 @@ class AegisBrowserWindow(QMainWindow):
         self.btn_home.clicked.connect(self.navigate_home)
         toolbar_layout.addWidget(self.btn_home)
 
-        # Omnibox Cápsula
-        self.url_bar = QLineEdit()
+        # Omnibox Cápsula Inteligente
+        self.url_bar = AegisOmnibox(self)
         self.url_bar.setObjectName("Omnibox")
-        placeholder = "Navegación Privada (Sin historial ni cookies)..." if self.is_incognito else "Buscar en la web o ingresar dirección..."
+        engine = self.config.get("search_engine", "Google")
+        self.search_engine_action = self.url_bar.addAction(
+            create_search_engine_icon(engine, 16),
+            QLineEdit.ActionPosition.LeadingPosition
+        )
+        self.search_engine_action.setToolTip(f"Motor actual: {engine} (Click para cambiar)")
+        self.search_engine_action.triggered.connect(self.show_search_engine_menu)
+
+        placeholder = f"Navegación Privada · Buscar con {engine}..." if self.is_incognito else f"Buscar con {engine} o ingresar dirección..."
         self.url_bar.setPlaceholderText(placeholder)
         self.url_bar.returnPressed.connect(self.navigate_to_url)
 
@@ -2428,16 +2591,16 @@ class AegisBrowserWindow(QMainWindow):
             }}
             QLineEdit#Omnibox {{
                 background-color: {t['surface']};
-                border: 1px solid rgba({rgb_text}, 0.12);
-                border-radius: 16px;
+                border: 1.5px solid rgba({rgb_text}, 0.15);
+                border-radius: 17px;
                 color: {t['text']};
-                padding: 5px 16px;
-                font-size: 12.5px;
+                padding: 6px 14px;
+                font-size: 13px;
                 font-family: -apple-system, 'Segoe UI', sans-serif;
                 selection-background-color: {t['accent']};
             }}
             QLineEdit#Omnibox:focus {{
-                border: 1px solid {t['accent']};
+                border: 2px solid {t['accent']};
             }}
             QPushButton#ShieldBtn {{
                 background-color: transparent;
@@ -2590,9 +2753,15 @@ class AegisBrowserWindow(QMainWindow):
         if idx != -1:
             self.tab_bar.setTabIcon(idx, create_shield_icon(t["accent"], 14))
             self.tab_bar.setTabText(idx, "Nueva Pestaña")
+        view._aegis_virtual_url = "aegis://start"
+        engine = self.config.get("search_engine", "Google")
         frequent_sites = self.history_mgr.get_frequent_sites(limit=8)
-        html = get_clean_ntp_html(t["ntp_class"], frequent_sites)
+        html = get_clean_ntp_html(t["ntp_class"], frequent_sites, search_engine=engine)
         view.setHtml(html, QUrl("aegis://start"))
+        if view == self.current_view():
+            self.url_bar.setText("")
+            placeholder = f"Navegación Privada · Buscar con {engine}..." if getattr(self, "is_incognito", False) else f"Buscar con {engine} o ingresar dirección..."
+            self.url_bar.setPlaceholderText(placeholder)
 
     def open_internal_page(self, url_str: str, new_tab: bool = False):
         view = self.add_new_tab() if new_tab or not self.current_view() else self.current_view()
@@ -2616,8 +2785,11 @@ class AegisBrowserWindow(QMainWindow):
         if idx != -1:
             self.tab_bar.setTabIcon(idx, create_settings_icon(t["accent"], 14))
             self.tab_bar.setTabText(idx, "Configuración")
+        view._aegis_virtual_url = "aegis://settings"
         html = get_settings_html(t["ntp_class"], self.config)
         view.setHtml(html, QUrl("aegis://settings"))
+        if view == self.current_view():
+            self.url_bar.setText("aegis://settings")
 
     def load_downloads(self, view: QWebEngineView):
         idx = self.views.index(view) if view in self.views else -1
@@ -2625,8 +2797,11 @@ class AegisBrowserWindow(QMainWindow):
         if idx != -1:
             self.tab_bar.setTabIcon(idx, create_download_icon(t["accent"], 14))
             self.tab_bar.setTabText(idx, "Descargas")
+        view._aegis_virtual_url = "aegis://downloads"
         html = get_downloads_html(t["ntp_class"], self.downloads_mgr.downloads)
         view.setHtml(html, QUrl("aegis://downloads"))
+        if view == self.current_view():
+            self.url_bar.setText("aegis://downloads")
 
     def load_history(self, view: QWebEngineView):
         idx = self.views.index(view) if view in self.views else -1
@@ -2634,8 +2809,11 @@ class AegisBrowserWindow(QMainWindow):
         if idx != -1:
             self.tab_bar.setTabIcon(idx, create_history_icon(t["accent"], 14))
             self.tab_bar.setTabText(idx, "Historial")
+        view._aegis_virtual_url = "aegis://history"
         html = get_history_html(t["ntp_class"], self.history_mgr.get_history())
         view.setHtml(html, QUrl("aegis://history"))
+        if view == self.current_view():
+            self.url_bar.setText("aegis://history")
 
     def load_extensions(self, view: QWebEngineView):
         idx = self.views.index(view) if view in self.views else -1
@@ -2643,9 +2821,12 @@ class AegisBrowserWindow(QMainWindow):
         if idx != -1:
             self.tab_bar.setTabIcon(idx, create_extension_icon(t["accent"], 14))
             self.tab_bar.setTabText(idx, "Extensiones")
+        view._aegis_virtual_url = "aegis://extensions"
         scripts = [f.name for f in USERSCRIPTS_DIR.glob("*.js")] if USERSCRIPTS_DIR.exists() else []
         html = get_extensions_html(t["ntp_class"], scripts)
         view.setHtml(html, QUrl("aegis://extensions"))
+        if view == self.current_view():
+            self.url_bar.setText("aegis://extensions")
 
     def update_tab_layout(self):
         is_vert = self.config.get("tab_position") == "vertical"
@@ -2726,48 +2907,14 @@ class AegisBrowserWindow(QMainWindow):
         if not text:
             return
 
-        # Atajos directos desde el Omnibox
-        shortcuts = {
-            "settings": "aegis://settings",
-            "config": "aegis://settings",
-            "configuracion": "aegis://settings",
-            "configuración": "aegis://settings",
-            "downloads": "aegis://downloads",
-            "descargas": "aegis://downloads",
-            "history": "aegis://history",
-            "historial": "aegis://history",
-            "extensions": "aegis://extensions",
-            "extensiones": "aegis://extensions",
-            "start": "aegis://start",
-            "inicio": "aegis://start"
-        }
-        if text.lower() in shortcuts:
-            self.open_internal_page(shortcuts[text.lower()])
+        target_url = self.build_target_url(text)
+        if target_url.toString().startswith("aegis://"):
+            self.open_internal_page(target_url.toString())
             return
-
-        if text.startswith("aegis://"):
-            self.open_internal_page(text)
-            return
-
-        if text.startswith("http://") or text.startswith("https://") or text.startswith("file://"):
-            target_url = QUrl(text)
-        elif "." in text and " " not in text:
-            target_url = QUrl("https://" + text)
-        else:
-            engine = self.config.get("search_engine", "DuckDuckGo")
-            is_dark = (self.current_theme_name == "Oscuro")
-            encoded_query = quote(text)
-            if engine == "Google":
-                dark_param = "&cs=1" if is_dark else ""
-                target_url = QUrl(f"https://google.com/search?q={encoded_query}{dark_param}")
-            elif engine == "Bing":
-                target_url = QUrl(f"https://www.bing.com/search?q={encoded_query}")
-            else:
-                dark_param = "&kae=d&k1=-1" if is_dark else ""
-                target_url = QUrl(f"https://duckduckgo.com/?q={encoded_query}{dark_param}")
 
         view = self.current_view()
         if view:
+            view._aegis_virtual_url = None
             view.load(target_url)
 
     def navigate_back(self):
@@ -2788,6 +2935,19 @@ class AegisBrowserWindow(QMainWindow):
 
     def on_url_changed(self, qurl: QUrl, view: QWebEngineView):
         url_str = qurl.toString()
+
+        # Si la vista tiene una URL virtual interna establecida (ej. aegis://start, aegis://settings), usarla
+        if getattr(view, "_aegis_virtual_url", None):
+            if url_str.startswith("data:text/html") or url_str.startswith("data:") or not url_str:
+                url_str = view._aegis_virtual_url
+
+        # Búsqueda disparada desde el buscador central del NTP
+        if url_str.startswith("aegis://search?q="):
+            query = unquote(url_str.split("q=", 1)[1])
+            view._aegis_virtual_url = None
+            target = self.build_target_url(query)
+            view.load(target)
+            return
 
         # Páginas internas directas
         if url_str == "aegis://settings":
@@ -2832,6 +2992,8 @@ class AegisBrowserWindow(QMainWindow):
                         self.update_tab_layout()
                     elif k == "shields_enabled":
                         self.interceptor.enabled = bool(val)
+                    elif k == "search_engine":
+                        self.update_search_engine_ui()
                     self.load_settings(view)
                     return
                 elif "open_file" in q:
@@ -2868,10 +3030,14 @@ class AegisBrowserWindow(QMainWindow):
             return
 
         if view == self.current_view():
-            # Sanitizar estrictamente el Omnibox para que jamás muestre acciones ni código JS
-            if url_str in ("aegis://start", "about:blank") or url_str.startswith("aegis://action") or "encodeURIComponent" in url_str:
-                self.url_bar.setText("")
-                placeholder = "Navegación Privada (Sin historial ni cookies)..." if getattr(self, "is_incognito", False) else "Buscar en la web o ingresar dirección..."
+            # Sanitizar estrictamente el Omnibox para que jamás muestre acciones ni código JS ni data URLs
+            if self.is_internal_or_ntp(url_str):
+                if url_str.startswith("aegis://") and url_str != "aegis://start":
+                    self.url_bar.setText(url_str)
+                else:
+                    self.url_bar.setText("")
+                engine = self.config.get("search_engine", "Google")
+                placeholder = f"Navegación Privada · Buscar con {engine}..." if getattr(self, "is_incognito", False) else f"Buscar con {engine} o ingresar dirección..."
                 self.url_bar.setPlaceholderText(placeholder)
             else:
                 self.url_bar.setText(url_str)
@@ -2923,7 +3089,7 @@ class AegisBrowserWindow(QMainWindow):
                 display_title += " 🔊"
             self.tab_bar.setTabText(idx, display_title)
 
-        if ok and current_url not in ("aegis://start", "about:blank") and not current_url.startswith("aegis://"):
+        if ok and not self.is_internal_or_ntp(current_url) and not current_url.startswith("aegis://"):
             # Registrar visita en historial real para Sitios Frecuentes (solo navegación normal)
             if not getattr(self, "is_incognito", False):
                 self.history_mgr.record_visit(current_url, view.title())
@@ -2958,9 +3124,11 @@ class AegisBrowserWindow(QMainWindow):
             self.shields_popup.lbl_count.setText(str(SHIELDS_CORE.total_blocked))
 
 # ── 12. Plantilla HTML de Nueva Pestaña (Sitios Frecuentes Reales) ────────────
-def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = None) -> str:
+def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = None, search_engine: str = "Google") -> str:
     if frequent_sites is None:
         frequent_sites = []
+
+    engine_svg = get_search_engine_svg(search_engine, size=22)
 
     cards_html = ""
     for site in frequent_sites:
@@ -3069,9 +3237,55 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
       color: var(--text);
       opacity: 0.65;
       font-weight: 400;
-      margin-bottom: 2.25rem;
+      margin-bottom: 1.8rem;
       letter-spacing: 0.2px;
       text-transform: capitalize;
+    }}
+
+    .ntp-search-form {{
+      width: 100%;
+      max-width: 580px;
+      margin: 0 auto 2.2rem auto;
+    }}
+    .ntp-search-box {{
+      display: flex;
+      align-items: center;
+      background: var(--surface);
+      border: 1.5px solid rgba(128, 128, 128, 0.22);
+      border-radius: 24px;
+      padding: 0 16px;
+      height: 46px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }}
+    .ntp-search-box:hover,
+    .ntp-search-box:focus-within {{
+      border: 2px solid var(--accent);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+      transform: translateY(-1px);
+    }}
+    .ntp-search-engine-icon {{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      margin-right: 12px;
+      flex-shrink: 0;
+    }}
+    .ntp-search-input {{
+      flex: 1;
+      height: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 14.5px;
+      font-family: inherit;
+    }}
+    .ntp-search-input::placeholder {{
+      color: var(--text);
+      opacity: 0.55;
     }}
 
     .shortcuts-section-title {{
@@ -3300,6 +3514,23 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
     <div id="clock" class="clock">12:00</div>
     <div id="date" class="date">Cargando fecha...</div>
 
+    <!-- Barra de Búsqueda Idéntica a la Imagen -->
+    <form class="ntp-search-form" onsubmit="handleNtpSearch(event)">
+      <div class="ntp-search-box">
+        <div class="ntp-search-engine-icon" title="Motor actual: {search_engine}">
+          {engine_svg}
+        </div>
+        <input 
+          type="text" 
+          id="ntpSearchInput" 
+          class="ntp-search-input" 
+          placeholder="Buscar con {search_engine} o ingresar dirección..." 
+          autocomplete="off" 
+          autofocus 
+        />
+      </div>
+    </form>
+
     <div class="shortcuts-section-title">Sitios Frecuentes</div>
     <div class="shortcuts-grid">
       {cards_html}
@@ -3336,6 +3567,21 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
     }}
     updateClock();
     setInterval(updateClock, 1000);
+
+    function handleNtpSearch(event) {{
+      event.preventDefault();
+      const input = document.getElementById('ntpSearchInput');
+      const val = input ? input.value.trim() : '';
+      if (!val) return;
+      window.location.href = 'aegis://search?q=' + encodeURIComponent(val);
+    }}
+
+    window.addEventListener('DOMContentLoaded', () => {{
+      const input = document.getElementById('ntpSearchInput');
+      if (input) {{
+        input.focus();
+      }}
+    }});
 
     function removeShortcut(domain) {{
       window.location.href = 'aegis://action?remove=' + encodeURIComponent(domain);
@@ -3375,9 +3621,12 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
     tab_v = "selected" if config.get("tab_position") == "vertical" else ""
     th_dark = "selected" if config.get("theme", "Oscuro") == "Oscuro" else ""
     th_light = "selected" if config.get("theme") == "Claro" else ""
-    eng_ddg = "selected" if config.get("search_engine", "DuckDuckGo") == "DuckDuckGo" else ""
-    eng_google = "selected" if config.get("search_engine") == "Google" else ""
-    eng_bing = "selected" if config.get("search_engine") == "Bing" else ""
+    cur_eng = config.get("search_engine", "Google")
+    eng_google = "selected" if cur_eng.lower() == "google" else ""
+    eng_ddg = "selected" if cur_eng.lower() == "duckduckgo" else ""
+    eng_bing = "selected" if cur_eng.lower() == "bing" else ""
+    eng_brave = "selected" if cur_eng.lower() == "brave" else ""
+    eng_yahoo = "selected" if cur_eng.lower() == "yahoo" else ""
     sh_on = "selected" if config.get("shields_enabled", True) else ""
     sh_off = "" if config.get("shields_enabled", True) else "selected"
 
@@ -3531,9 +3780,11 @@ def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> s
           <span class="setting-desc">Utilizado al escribir directamente en el Omnibox</span>
         </div>
         <select onchange="updateSetting('search_engine', this.value)">
-          <option value="DuckDuckGo" {eng_ddg}>DuckDuckGo (Privado, sin rastreo)</option>
           <option value="Google" {eng_google}>Google</option>
-          <option value="Bing" {eng_bing}>Bing</option>
+          <option value="DuckDuckGo" {eng_ddg}>DuckDuckGo (Privado)</option>
+          <option value="Bing" {eng_bing}>Microsoft Bing</option>
+          <option value="Brave" {eng_brave}>Brave Search</option>
+          <option value="Yahoo" {eng_yahoo}>Yahoo</option>
         </select>
       </div>
     </div>
