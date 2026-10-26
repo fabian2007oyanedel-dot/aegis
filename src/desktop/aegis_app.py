@@ -66,7 +66,7 @@ from PyQt6.QtWebEngineCore import (
     QWebEngineProfile, QWebEngineSettings, QWebEngineUrlRequestInterceptor,
     QWebEngineDownloadRequest, QWebEngineScript, QWebEnginePage
 )
-from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer, QByteArray, QBuffer, QIODevice, QSize, QStringListModel
+from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer, QByteArray, QBuffer, QIODevice, QSize, QStringListModel, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QIcon, QPixmap, QShortcut, QKeySequence
 from PyQt6.QtSvg import QSvgRenderer
 
@@ -1534,6 +1534,74 @@ class AegisWebView(QWebEngineView):
                 menu.setStyleSheet(self.browser_win.current_qss)
             menu.exec(event.globalPos())
 
+# ── 10.7 Barra de Pestañas con Desprendimiento (Tear-Off) y Botón X Integrado ──
+class AegisTabBar(QTabBar):
+    tabDetached = pyqtSignal(int, QPoint)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setTabsClosable(True)
+        self.setMovable(True)
+        self.setDrawBase(False)
+        self.setElideMode(Qt.TextElideMode.ElideRight)
+        self.setIconSize(QSize(16, 16))
+        self._drag_start_pos = None
+        self._drag_tab_idx = -1
+
+    def tabInserted(self, index: int):
+        super().tabInserted(index)
+        wrapper = QWidget()
+        wrapper.setFixedSize(22, 20)
+        wl = QHBoxLayout(wrapper)
+        wl.setContentsMargins(0, 0, 4, 0)
+        wl.setSpacing(0)
+        btn = QPushButton("✕")
+        btn.setProperty("class", "tab-close-btn")
+        btn.setFixedSize(16, 16)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setToolTip("Cerrar pestaña")
+        btn.clicked.connect(lambda _, b=btn: self.on_close_clicked(b))
+        wl.addWidget(btn)
+        self.setTabButton(index, QTabBar.ButtonPosition.RightSide, wrapper)
+
+    def on_close_clicked(self, btn: QPushButton):
+        for i in range(self.count()):
+            w = self.tabButton(i, QTabBar.ButtonPosition.RightSide)
+            if w and (w == btn or w.findChild(QPushButton) == btn):
+                self.tabCloseRequested.emit(i)
+                break
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_start_pos = event.pos()
+            self._drag_tab_idx = self.tabAt(event.pos())
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (event.buttons() & Qt.MouseButton.LeftButton) and self._drag_start_pos is not None and self._drag_tab_idx != -1:
+            p = event.pos()
+            if (p.y() < -15 or p.y() > self.height() + 15 or p.x() < -30 or p.x() > self.width() + 30):
+                if self.count() > 1:
+                    self.setCursor(Qt.CursorShape.DragMoveCursor)
+            else:
+                self.setCursor(Qt.CursorShape.ArrowCursor)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        if self._drag_start_pos is not None and self._drag_tab_idx != -1:
+            p = event.pos()
+            if (p.y() < -15 or p.y() > self.height() + 15 or p.x() < -30 or p.x() > self.width() + 30) and self.count() > 1:
+                global_pos = event.globalPosition().toPoint()
+                tab_idx = self.currentIndex() if self.currentIndex() != -1 else self._drag_tab_idx
+                self._drag_start_pos = None
+                self._drag_tab_idx = -1
+                self.tabDetached.emit(tab_idx, global_pos)
+                return
+            self._drag_start_pos = None
+            self._drag_tab_idx = -1
+        super().mouseReleaseEvent(event)
+
 # ── 11. Ventana Principal de Aegis Browser ────────────────────────────────────
 class AegisBrowserWindow(QMainWindow):
     def __init__(self, is_incognito: bool = False):
@@ -1842,12 +1910,14 @@ class AegisBrowserWindow(QMainWindow):
             menu.setStyleSheet(self.current_qss)
 
         act_new = menu.addAction("➕ Nueva pestaña")
-        act_reload = act_mute = act_close = act_close_others = None
+        act_reload = act_mute = act_detach = act_close = act_close_others = None
         if idx != -1:
             view = self.views[idx]
             act_reload = menu.addAction("↻ Recargar pestaña")
             is_muted = view.page().isAudioMuted()
             act_mute = menu.addAction("🔇 Reactivar sonido" if is_muted else "🔊 Silenciar pestaña")
+            if self.tab_bar.count() > 1:
+                act_detach = menu.addAction("🗗 Desprender pestaña (Nueva ventana)")
             menu.addSeparator()
             act_close = menu.addAction("✕ Cerrar pestaña")
             act_close_others = menu.addAction("✕ Cerrar otras pestañas")
@@ -1865,6 +1935,8 @@ class AegisBrowserWindow(QMainWindow):
         elif action == act_mute and idx != -1:
             self.views[idx].page().setAudioMuted(not self.views[idx].page().isAudioMuted())
             self.on_tab_audio_state_changed(self.views[idx])
+        elif action == act_detach and idx != -1:
+            self.detach_tab_to_new_window(idx, self.tab_bar.mapToGlobal(point))
         elif action == act_close and idx != -1:
             self.close_tab(idx)
         elif action == act_close_others and idx != -1:
@@ -1873,6 +1945,80 @@ class AegisBrowserWindow(QMainWindow):
                     self.close_tab(i)
         elif action == act_reopen:
             self.reopen_closed_tab()
+
+    def on_tab_moved(self, from_idx: int, to_idx: int):
+        if 0 <= from_idx < len(self.views) and 0 <= to_idx < len(self.views):
+            v = self.views.pop(from_idx)
+            self.views.insert(to_idx, v)
+
+    def detach_tab_to_new_window(self, index: int, global_pos: QPoint = None):
+        if self.tab_bar.count() <= 1 or not (0 <= index < len(self.views)):
+            return
+
+        view = self.views.pop(index)
+        tab_text = self.tab_bar.tabText(index)
+        tab_icon = self.tab_bar.tabIcon(index)
+
+        try:
+            view.urlChanged.disconnect()
+            view.loadProgress.disconnect()
+            view.loadFinished.disconnect()
+            view.iconChanged.disconnect()
+            view.page().recentlyAudibleChanged.disconnect()
+            view.page().audioMutedChanged.disconnect()
+        except Exception:
+            pass
+
+        self.tab_bar.removeTab(index)
+        self.stack.removeWidget(view)
+
+        new_win = AegisBrowserWindow(is_incognito=self.is_incognito)
+        if len(new_win.views) > 0:
+            def_v = new_win.views.pop(0)
+            new_win.tab_bar.removeTab(0)
+            new_win.stack.removeWidget(def_v)
+            def_v.deleteLater()
+
+        view.setParent(new_win.stack)
+        view.browser_win = new_win
+        new_win.views.append(view)
+        new_win.stack.addWidget(view)
+        new_idx = new_win.tab_bar.addTab(tab_icon, tab_text)
+        new_win.tab_bar.setCurrentIndex(new_idx)
+        new_win.stack.setCurrentWidget(view)
+
+        view.urlChanged.connect(lambda qurl, v=view: new_win.on_url_changed(qurl, v))
+        view.loadProgress.connect(new_win.on_load_progress)
+        view.loadFinished.connect(lambda ok, v=view: new_win.on_load_finished(ok, v))
+        view.iconChanged.connect(lambda ic, v=view: new_win.on_icon_changed(ic, v))
+        view.page().recentlyAudibleChanged.connect(lambda a, v=view: new_win.on_tab_audio_state_changed(v))
+        view.page().audioMutedChanged.connect(lambda m, v=view: new_win.on_tab_audio_state_changed(v))
+
+        new_win.on_tab_changed(new_idx)
+        cur_url = view.url().toString()
+        if cur_url in ("aegis://start", "about:blank"):
+            new_win.url_bar.setText("")
+        else:
+            new_win.url_bar.setText(cur_url)
+
+        if global_pos:
+            new_win.move(max(0, global_pos.x() - 120), max(0, global_pos.y() - 30))
+
+        new_win.show()
+        new_win.raise_()
+        new_win.activateWindow()
+
+        app = QApplication.instance()
+        if not hasattr(app, "_aegis_windows"):
+            app._aegis_windows = []
+        if new_win not in app._aegis_windows:
+            app._aegis_windows.append(new_win)
+
+    def closeEvent(self, event):
+        app = QApplication.instance()
+        if hasattr(app, "_aegis_windows") and self in app._aegis_windows:
+            app._aegis_windows.remove(self)
+        super().closeEvent(event)
 
     def reopen_closed_tab(self):
         if self.closed_tabs:
@@ -1965,18 +2111,18 @@ class AegisBrowserWindow(QMainWindow):
         # ── 1. Tira de Pestañas Limpia ────────────────────────────────────────
         self.tab_header = QWidget()
         self.tab_header.setObjectName("TabHeader")
+        self.tab_header.setFixedHeight(38)
         tab_header_layout = QHBoxLayout(self.tab_header)
-        tab_header_layout.setContentsMargins(8, 6, 8, 0)
+        tab_header_layout.setContentsMargins(10, 4, 10, 0)
         tab_header_layout.setSpacing(6)
 
-        self.tab_bar = QTabBar()
-        self.tab_bar.setTabsClosable(True)
-        self.tab_bar.setMovable(True)
-        self.tab_bar.setIconSize(QSize(16, 16))
+        self.tab_bar = AegisTabBar(self)
         self.tab_bar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tab_bar.customContextMenuRequested.connect(self.on_tab_bar_context_menu)
         self.tab_bar.currentChanged.connect(self.on_tab_changed)
         self.tab_bar.tabCloseRequested.connect(self.close_tab)
+        self.tab_bar.tabMoved.connect(self.on_tab_moved)
+        self.tab_bar.tabDetached.connect(self.detach_tab_to_new_window)
         tab_header_layout.addWidget(self.tab_bar)
 
         self.btn_new_tab = QPushButton("+")
@@ -2148,13 +2294,14 @@ class AegisBrowserWindow(QMainWindow):
                 color: rgba({rgb_text}, 0.65);
                 border: 1px solid rgba({rgb_text}, 0.08);
                 border-bottom: none;
-                padding: 6px 14px;
+                padding: 4px 6px 4px 10px;
                 border-top-left-radius: 8px;
                 border-top-right-radius: 8px;
-                margin-right: 3px;
+                margin-right: 4px;
                 font-size: 12px;
+                height: 26px;
                 font-family: -apple-system, 'Segoe UI', sans-serif;
-                min-width: 90px;
+                min-width: 85px;
                 max-width: 220px;
             }}
             QTabBar::tab:hover {{
@@ -2168,6 +2315,25 @@ class AegisBrowserWindow(QMainWindow):
                 border-bottom: none;
                 border-top: 2px solid {t['accent']};
                 font-weight: 600;
+            }}
+            QTabBar::close-button {{
+                image: none;
+                width: 0px;
+                height: 0px;
+            }}
+            QPushButton.tab-close-btn {{
+                background: transparent;
+                border: none;
+                border-radius: 4px;
+                color: rgba({rgb_text}, 0.50);
+                font-size: 10px;
+                font-weight: bold;
+                margin: 0px;
+                padding: 0px;
+            }}
+            QPushButton.tab-close-btn:hover {{
+                background-color: rgba({rgb_text}, 0.15);
+                color: {t['text']};
             }}
             QPushButton#NewTabBtn {{
                 background: transparent;
