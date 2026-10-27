@@ -356,6 +356,127 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 })();
 """, encoding="utf-8")
 
+        yt_defuser_script = scripts_dir / "youtube_defuser.js"
+        if not yt_defuser_script.exists():
+            yt_defuser_script.write_text(r"""// ==UserScript==
+// @name         Aegis YouTube Ad Defuser & Anti-Adblock Suppressor
+// @description  Eliminación instantánea de anuncios de video (16x speedup), auto-skip y supresión de avisos anti-bloqueador
+// @match        *://*.youtube.com/*
+// @run-at       document-start
+// ==/UserScript==
+(function() {
+    'use strict';
+    function defuse() {
+        const enforcement = document.querySelectorAll('ytd-enforcement-message-view-model, tp-yt-paper-dialog[role="dialog"]');
+        enforcement.forEach(el => {
+            if (el.innerText && (el.innerText.includes('bloqueadores') || el.innerText.includes('Ad blockers') || el.innerText.includes('ad blocker'))) {
+                el.remove();
+                const v = document.querySelector('video');
+                if (v && v.paused) v.play().catch(() => {});
+            }
+        });
+        const ad = document.querySelector('.ad-showing, .ad-interrupting, [class*="ad-showing"]');
+        if (ad) {
+            const v = document.querySelector('video');
+            if (v) {
+                v.playbackRate = 16.0;
+                v.muted = true;
+                if (isFinite(v.duration)) {
+                    v.currentTime = v.duration - 0.05;
+                }
+            }
+        }
+        const skip = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-skip-button-slot button');
+        if (skip) skip.click();
+        const overlays = document.querySelectorAll('.ytp-ad-overlay-container, #player-ads, ytd-ad-slot-renderer, ytd-banner-promo-renderer');
+        overlays.forEach(el => el.style.setProperty('display', 'none', 'important'));
+    }
+    setInterval(defuse, 250);
+    window.addEventListener('DOMContentLoaded', defuse);
+})();
+""", encoding="utf-8")
+
+        privacy_script = scripts_dir / "aegis_privacy_guard.js"
+        if not privacy_script.exists():
+            privacy_script.write_text(r"""// ==UserScript==
+// @name         Aegis Privacy & Anti-Fingerprinting Guard
+// @description  Protección contra Canvas/AudioContext fingerprinting, mitigación de fugas WebRTC y señal GPC
+// @match        *://*/*
+// @run-at       document-start
+// ==/UserScript==
+(function() {
+    'use strict';
+    if (window._aegisPrivacyLoaded) return;
+    window._aegisPrivacyLoaded = true;
+    try {
+        Object.defineProperty(navigator, 'globalPrivacyControl', { get: () => true, configurable: false });
+    } catch(e) {}
+    try {
+        Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+        Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+    } catch(e) {}
+    try {
+        const origGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+        CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h) {
+            const data = origGetImageData.apply(this, arguments);
+            for (let i = 0; i < data.data.length; i += 400) {
+                data.data[i] = (data.data[i] ^ 1) % 256;
+            }
+            return data;
+        };
+    } catch(e) {}
+})();
+""", encoding="utf-8")
+
+        autoscroll_script = scripts_dir / "aegis_autoscroll.js"
+        if not autoscroll_script.exists():
+            autoscroll_script.write_text(r"""// ==UserScript==
+// @name         Aegis Native Autoscroll
+// @description  Habilita desplazamiento suave con clic central en cualquier página web
+// @match        *://*/*
+// @run-at       document-end
+// ==/UserScript==
+(function() {
+    'use strict';
+    let isScrolling = false;
+    let startY = 0;
+    let scrollSpeed = 0;
+    let animId = null;
+    let icon = null;
+    window.addEventListener('mousedown', (e) => {
+        if (e.button === 1) {
+            if (e.target.closest('a, input, textarea, button, select')) return;
+            if (isScrolling) { stop(); return; }
+            e.preventDefault();
+            isScrolling = true;
+            startY = e.clientY;
+            icon = document.createElement('div');
+            icon.style.cssText = 'position:fixed; left:' + (e.clientX - 12) + 'px; top:' + (e.clientY - 12) + 'px; width:24px; height:24px; border-radius:50%; background:rgba(13,17,23,0.85); border:2px solid #388bfd; z-index:2147483647; pointer-events:none; box-shadow:0 0 12px rgba(0,242,254,0.4); display:flex; align-items:center; justify-content:center; color:#00f2fe; font-size:12px;';
+            icon.innerHTML = '⇅';
+            document.body.appendChild(icon);
+            function loop() {
+                if (isScrolling) {
+                    window.scrollBy(0, scrollSpeed);
+                    animId = requestAnimationFrame(loop);
+                }
+            }
+            loop();
+        } else if (isScrolling) { stop(); }
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (!isScrolling) return;
+        const diff = e.clientY - startY;
+        scrollSpeed = Math.abs(diff) > 10 ? (diff / 8) : 0;
+    });
+    window.addEventListener('wheel', () => { if (isScrolling) stop(); });
+    function stop() {
+        isScrolling = false;
+        if (animId) cancelAnimationFrame(animId);
+        if (icon) { icon.remove(); icon = null; }
+    }
+})();
+""", encoding="utf-8")
+
         timer_bypass_script = scripts_dir / "aegis_timer_bypass.js"
         if not timer_bypass_script.exists():
             timer_bypass_script.write_text(r"""// ==UserScript==
@@ -1366,6 +1487,31 @@ def silent_background_memory_purge(force: bool = False):
             kernel32.CloseHandle(h_snap)
     except Exception:
         pass
+
+def evaluate_math_expression(text: str) -> str | None:
+    """Calculadora en tiempo real para el Omnibox: evalúa operaciones matemáticas simples de forma segura."""
+    text = text.strip()
+    if not (2 <= len(text) <= 40):
+        return None
+    allowed = set("0123456789+-*/()., %")
+    if not all(c in allowed for c in text):
+        return None
+    if not any(c.isdigit() for c in text) or not any(c in "+-*/%" for c in text):
+        return None
+    try:
+        import ast
+        expr = text.replace(",", ".").replace("%", " * 0.01 ")
+        node = ast.parse(expr, mode='eval')
+        for sub in ast.walk(node):
+            if not isinstance(sub, (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant, ast.Num, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow, ast.USub, ast.UAdd)):
+                return None
+        res = eval(compile(node, '<string>', 'eval'), {"__builtins__": {}})
+        if isinstance(res, (int, float)):
+            res_str = f"{res:.4f}".rstrip('0').rstrip('.') if isinstance(res, float) else str(res)
+            return f"= {res_str}"
+    except Exception:
+        pass
+    return None
 
 # ── 4. Helper para conversión Hex a RGB y Creación de Iconos Vectoriales ──────
 def hex_to_rgb(h: str) -> str:
@@ -4378,10 +4524,38 @@ class AegisWebView(QWebEngineView):
     def contextMenuEvent(self, event):
         menu = self.createStandardContextMenu()
         if menu:
-            # Opción de Imagen en imagen (Picture-in-Picture)
+            menu.addSeparator()
             act_pip = menu.addAction("🖼️ Imagen en imagen (PiP)  [Alt+P]")
             if self.browser_win and hasattr(self.browser_win, "toggle_picture_in_picture"):
                 act_pip.triggered.connect(self.browser_win.toggle_picture_in_picture)
+
+            act_reader = menu.addAction("📖 Modo Lectura  [F9]")
+            if self.browser_win and hasattr(self.browser_win, "toggle_reader_mode"):
+                act_reader.triggered.connect(self.browser_win.toggle_reader_mode)
+
+            act_tts = menu.addAction("🔊 Leer contenido en voz alta  [Alt+R]")
+            if self.browser_win and hasattr(self.browser_win, "speak_selection_or_article"):
+                act_tts.triggered.connect(self.browser_win.speak_selection_or_article)
+
+            act_qr = menu.addAction("📱 Generar código QR para móvil  [Alt+Q]")
+            if self.browser_win and hasattr(self.browser_win, "show_qr_code_for_current_page"):
+                act_qr.triggered.connect(self.browser_win.show_qr_code_for_current_page)
+
+            act_dark = menu.addAction("🌙 Forzar modo oscuro en página  [Alt+Shift+D]")
+            if self.browser_win and hasattr(self.browser_win, "toggle_web_force_dark"):
+                act_dark.triggered.connect(self.browser_win.toggle_web_force_dark)
+
+            act_eyedrop = menu.addAction("🎨 Cuentagotas / Selector de color  [Alt+C]")
+            if self.browser_win and hasattr(self.browser_win, "pick_color_on_page"):
+                act_eyedrop.triggered.connect(self.browser_win.pick_color_on_page)
+
+            act_shot = menu.addAction("📸 Capturar pantalla  [Ctrl+Shift+S]")
+            if self.browser_win and hasattr(self.browser_win, "capture_page_screenshot"):
+                act_shot.triggered.connect(self.browser_win.capture_page_screenshot)
+
+            act_clean = menu.addAction("🧹 Copiar enlace limpio sin rastreadores")
+            if self.browser_win and hasattr(self.browser_win, "copy_clean_url"):
+                act_clean.triggered.connect(self.browser_win.copy_clean_url)
 
             if self.browser_win and hasattr(self.browser_win, "current_qss"):
                 menu.setStyleSheet(self.browser_win.current_qss)
@@ -4478,6 +4652,29 @@ class AegisTabBar(QTabBar):
             return
         super().mouseDoubleClickEvent(event)
 
+    def wheelEvent(self, event):
+        delta = event.angleDelta().y()
+        if delta != 0:
+            count = self.count()
+            if count > 1:
+                cur = self.currentIndex()
+                if delta > 0:
+                    self.setCurrentIndex((cur - 1) % count)
+                else:
+                    self.setCurrentIndex((cur + 1) % count)
+                event.accept()
+                return
+        super().wheelEvent(event)
+
+class AegisNavButton(QPushButton):
+    middleClicked = pyqtSignal()
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self.middleClicked.emit()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
 # ── 10.8 Barra de Direcciones Omnibox Inteligente ─────────────────────────────
 class AegisOmnibox(QLineEdit):
     def __init__(self, parent=None):
@@ -4502,6 +4699,34 @@ class AegisOmnibox(QLineEdit):
             self.insert(cleaned)
         else:
             super().insertFromMimeData(source)
+
+    def contextMenuEvent(self, event):
+        menu = self.createStandardContextMenu()
+        cb = QApplication.clipboard().text().strip()
+        if cb:
+            menu.addSeparator()
+            act_paste_go = menu.addAction("📋 Pegar e ir")
+            def do_paste_go():
+                self.setText(cb)
+                p = self.parent()
+                while p and not hasattr(p, "navigate_to_url"):
+                    p = p.parent()
+                if p and hasattr(p, "navigate_to_url"):
+                    p.navigate_to_url()
+            act_paste_go.triggered.connect(do_paste_go)
+
+            act_clean = menu.addAction("🧹 Pegar enlace limpio sin rastreadores")
+            def do_paste_clean():
+                clean = clean_url_tracking(cb)
+                self.setText(clean)
+            act_clean.triggered.connect(do_paste_clean)
+
+        p = self.parent()
+        while p and not hasattr(p, "current_qss"):
+            p = p.parent()
+        if p and hasattr(p, "current_qss"):
+            menu.setStyleSheet(p.current_qss)
+        menu.exec(event.globalPos())
 
 # ── 11. Ventana Principal de Aegis Browser ────────────────────────────────────
 class AegisBrowserWindow(QMainWindow):
@@ -4692,6 +4917,13 @@ class AegisBrowserWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+P"), self, self.print_to_pdf)
         QShortcut(QKeySequence("Alt+Left"), self, self.navigate_back)
         QShortcut(QKeySequence("Alt+Right"), self, self.navigate_forward)
+        QShortcut(QKeySequence("Ctrl+Shift+D"), self, self.bookmark_all_open_tabs)
+        QShortcut(QKeySequence("Alt+R"), self, self.speak_selection_or_article)
+        QShortcut(QKeySequence("Alt+Shift+D"), self, self.toggle_web_force_dark)
+        QShortcut(QKeySequence("Alt+Q"), self, self.show_qr_code_for_current_page)
+        QShortcut(QKeySequence("Alt+C"), self, self.pick_color_on_page)
+        QShortcut(QKeySequence("Ctrl+Shift+C"), self, self.copy_clean_url)
+        QShortcut(QKeySequence("Ctrl+Shift+R"), self, lambda: (v := self.current_view()) and v.triggerPageAction(QWebEnginePage.WebAction.ReloadAndBypassCache))
         QShortcut(QKeySequence("Ctrl+Tab"), self, self.next_tab)
         QShortcut(QKeySequence("Ctrl+Shift+Tab"), self, self.prev_tab)
         for i in range(1, 9):
@@ -4780,9 +5012,28 @@ class AegisBrowserWindow(QMainWindow):
         download.isFinishedChanged.connect(lambda: self.on_download_finished(download, download_id))
 
     def on_download_progress(self, download: QWebEngineDownloadRequest, download_id: str):
+        now = time.time()
+        prev_t = getattr(download, "_last_prog_time", now)
+        prev_b = getattr(download, "_last_prog_bytes", 0)
+        dt = now - prev_t
+        rec = download.receivedBytes()
+        tot = download.totalBytes()
+        if dt >= 0.4:
+            speed = max(0.0, (rec - prev_b) / dt)
+            download._last_prog_time = now
+            download._last_prog_bytes = rec
+            download._current_speed = speed
+        cur_spd = getattr(download, "_current_speed", 0.0)
+        spd_str = f"{format_bytes(cur_spd)}/s" if cur_spd > 0 else ""
+        eta_str = ""
+        if cur_spd > 1024 and tot > rec:
+            secs = int((tot - rec) / cur_spd)
+            eta_str = f"{secs}s restantes" if secs < 60 else f"{secs // 60}m {secs % 60}s"
         self.downloads_mgr.update(download_id, {
-            "received_bytes": download.receivedBytes(),
-            "total_bytes": download.totalBytes()
+            "received_bytes": rec,
+            "total_bytes": tot,
+            "speed_str": spd_str,
+            "eta_str": eta_str
         })
         if hasattr(self, "downloads_popup") and self.downloads_popup.isVisible():
             self.downloads_popup.refresh_list()
@@ -4965,7 +5216,10 @@ class AegisBrowserWindow(QMainWindow):
             menu.addSeparator()
             act_close = menu.addAction("✕ Cerrar pestaña")
             act_close_others = menu.addAction("✕ Cerrar otras pestañas")
+            if idx > 0:
+                act_close_left = menu.addAction("✕ Cerrar pestañas a la izquierda")
             act_close_right = menu.addAction("✕ Cerrar pestañas a la derecha")
+            act_sleep_now = menu.addAction("🍃 Poner en reposo ahora (Liberar RAM)")
             menu.addSeparator()
             act_clean_link = menu.addAction("🧹 Copiar enlace sin rastreadores")
 
@@ -5001,6 +5255,12 @@ class AegisBrowserWindow(QMainWindow):
         elif action == act_close_right and idx != -1:
             for i in reversed(range(idx + 1, len(self.views))):
                 self.close_tab(i)
+        elif 'act_close_left' in locals() and action == act_close_left and idx != -1:
+            for i in reversed(range(0, idx)):
+                self.close_tab(i)
+        elif 'act_sleep_now' in locals() and action == act_sleep_now and idx != -1:
+            self.hibernate_tab(self.views[idx])
+            self.show_toast("🍃 Pestaña suspendida para liberar memoria.")
         elif action == act_clean_link and idx != -1:
             QApplication.clipboard().setText(clean_url_tracking(self.views[idx].url().toString()))
             self.show_toast("Enlace copiado sin rastreadores.")
@@ -5684,11 +5944,170 @@ class AegisBrowserWindow(QMainWindow):
                 v.setZoomFactor(zf)
                 self.update_zoom_ui()
 
-    def zoom_reset(self):
+    def set_zoom(self, zf: float):
         v = self.current_view()
         if v:
-            v.setZoomFactor(1.0)
+            zf = round(max(0.25, min(3.0, zf)), 2)
+            v.setZoomFactor(zf)
             self.update_zoom_ui()
+            host = v.url().host().lower()
+            if host and not self.is_internal_or_ntp(v.url().toString()):
+                if "domain_zooms" not in self.config:
+                    self.config["domain_zooms"] = {}
+                self.config["domain_zooms"][host] = zf
+                self.save_config()
+
+    def apply_domain_zoom(self, view: QWebEngineView):
+        if not view: return
+        u = view.url()
+        host = u.host().lower()
+        if host and not self.is_internal_or_ntp(u.toString()):
+            domain_zooms = self.config.get("domain_zooms", {})
+            if host in domain_zooms:
+                zf = domain_zooms[host]
+                view.setZoomFactor(zf)
+                if view == self.current_view():
+                    self.update_zoom_ui()
+
+    def zoom_in(self):
+        v = self.current_view()
+        if v:
+            zf = round(v.zoomFactor() + 0.1, 2)
+            self.set_zoom(zf)
+
+    def zoom_out(self):
+        v = self.current_view()
+        if v:
+            zf = round(v.zoomFactor() - 0.1, 2)
+            self.set_zoom(zf)
+
+    def zoom_reset(self):
+        self.set_zoom(1.0)
+
+    def navigate_back_in_new_tab(self):
+        v = self.current_view()
+        if v and v.history().canGoBack():
+            item = v.history().backItem()
+            self.add_new_tab(item.url().toString())
+
+    def navigate_forward_in_new_tab(self):
+        v = self.current_view()
+        if v and v.history().canGoForward():
+            item = v.history().forwardItem()
+            self.add_new_tab(item.url().toString())
+
+    def duplicate_current_tab(self):
+        v = self.current_view()
+        if v:
+            self.add_new_tab(v.url().toString())
+
+    def bookmark_all_open_tabs(self):
+        count = 0
+        for v in self.views:
+            u = v.url().toString()
+            if u and not self.is_internal_or_ntp(u) and not self.bookmarks_mgr.is_bookmarked(u):
+                self.bookmarks_mgr.add(v.title() or u, u)
+                count += 1
+        self.bookmarks_bar.refresh_bookmarks()
+        self.update_omnibox_suggestions()
+        self.show_toast(f"🔖 {count} pestañas guardadas en marcadores." if count > 0 else "Todas las pestañas ya estaban guardadas.")
+
+    def speak_selection_or_article(self):
+        cur = self.current_view()
+        if not cur: return
+        tts_script = """
+        (() => {
+            if (window.speechSynthesis && window.speechSynthesis.speaking) {
+                window.speechSynthesis.cancel();
+                return 'stopped';
+            }
+            let text = window.getSelection().toString().trim();
+            if (!text) {
+                const article = document.querySelector('article') || document.querySelector('main') || document.body;
+                text = (article.innerText || '').slice(0, 4000);
+            }
+            if (!text) return 'empty';
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = document.documentElement.lang || 'es-ES';
+            u.rate = 1.0;
+            window.speechSynthesis.speak(u);
+            return 'speaking';
+        })();
+        """
+        def on_tts(res):
+            if res == 'speaking':
+                self.show_toast("🔊 Leyendo en voz alta (Alt+R para detener)...")
+            elif res == 'stopped':
+                self.show_toast("⏹️ Lectura en voz alta detenida.")
+            elif res == 'empty':
+                self.show_toast("No hay texto para leer.")
+        cur.page().runJavaScript(tts_script, on_tts)
+
+    def toggle_web_force_dark(self):
+        is_dark = not self.config.get("web_force_dark", False)
+        self.config["web_force_dark"] = is_dark
+        self.save_config()
+        self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.ForceDarkMode, is_dark)
+        for v in self.views:
+            v.reload()
+        self.show_toast(f"🌙 Modo oscuro forzado {'activado' if is_dark else 'desactivado'}.")
+
+    def show_qr_code_for_current_page(self):
+        v = self.current_view()
+        if not v: return
+        url = v.url().toString()
+        if not url or self.is_internal_or_ntp(url):
+            self.show_toast("No se puede generar código QR para páginas internas.")
+            return
+        encoded_url = quote(url)
+        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={encoded_url}&margin=10"
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Escanear enlace en el móvil - Aegis")
+        dlg.setFixedSize(300, 360)
+        dlg.setStyleSheet(f"background-color: {t['surface']}; color: {t['text']}; border-radius: 12px;")
+        l = QVBoxLayout(dlg)
+        l.setContentsMargins(20, 20, 20, 20)
+        l.setSpacing(12)
+        lbl_t = QLabel("📱 Escanear con tu móvil")
+        lbl_t.setStyleSheet("font-weight: 700; font-size: 14px;")
+        lbl_t.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        l.addWidget(lbl_t)
+        
+        qr_view = QWebEngineView(dlg)
+        qr_view.setFixedSize(240, 240)
+        qr_html = f'''<html><body style="margin:0; background:white; display:flex; align-items:center; justify-content:center; border-radius:8px;"><img src="{qr_url}" style="width:230px; height:230px;" /></body></html>'''
+        qr_view.setHtml(qr_html)
+        l.addWidget(qr_view, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        lbl_u = QLabel(v.title() or url)
+        lbl_u.setStyleSheet("font-size: 11px; opacity: 0.7;")
+        lbl_u.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        l.addWidget(lbl_u)
+        dlg.exec()
+
+    def pick_color_on_page(self):
+        cur = self.current_view()
+        if not cur: return
+        script = """
+        (async () => {
+            try {
+                if (window.EyeDropper) {
+                    const eyeDropper = new EyeDropper();
+                    const result = await eyeDropper.open();
+                    return result.sRGBHex;
+                }
+            } catch(e) {}
+            return null;
+        })();
+        """
+        def on_color(hex_val):
+            if hex_val:
+                QApplication.clipboard().setText(hex_val)
+                self.show_toast(f"🎨 Color {hex_val} copiado al portapapeles.")
+            else:
+                self.show_toast("Selector de color EyeDropper no disponible.")
+        cur.page().runJavaScript(script, on_color)
 
     def init_ui(self):
         container = QWidget()
@@ -5736,28 +6155,32 @@ class AegisBrowserWindow(QMainWindow):
         toolbar_layout.setContentsMargins(10, 6, 10, 6)
         toolbar_layout.setSpacing(6)
 
-        self.btn_back = QPushButton("←")
+        self.btn_back = AegisNavButton("←")
         self.btn_back.setProperty("class", "nav-btn")
-        self.btn_back.setToolTip("Atrás")
+        self.btn_back.setToolTip("Atrás (Clic central para abrir en nueva pestaña)")
         self.btn_back.clicked.connect(self.navigate_back)
+        self.btn_back.middleClicked.connect(self.navigate_back_in_new_tab)
         toolbar_layout.addWidget(self.btn_back)
 
-        self.btn_forward = QPushButton("→")
+        self.btn_forward = AegisNavButton("→")
         self.btn_forward.setProperty("class", "nav-btn")
-        self.btn_forward.setToolTip("Adelante")
+        self.btn_forward.setToolTip("Adelante (Clic central para abrir en nueva pestaña)")
         self.btn_forward.clicked.connect(self.navigate_forward)
+        self.btn_forward.middleClicked.connect(self.navigate_forward_in_new_tab)
         toolbar_layout.addWidget(self.btn_forward)
 
-        self.btn_reload = QPushButton("↻")
+        self.btn_reload = AegisNavButton("↻")
         self.btn_reload.setProperty("class", "nav-btn")
-        self.btn_reload.setToolTip("Recargar (F5)")
+        self.btn_reload.setToolTip("Recargar (F5) · Clic central para duplicar en nueva pestaña")
         self.btn_reload.clicked.connect(self.reload_page)
+        self.btn_reload.middleClicked.connect(self.duplicate_current_tab)
         toolbar_layout.addWidget(self.btn_reload)
 
-        self.btn_home = QPushButton("⌂")
+        self.btn_home = AegisNavButton("⌂")
         self.btn_home.setProperty("class", "nav-btn")
-        self.btn_home.setToolTip("Inicio")
+        self.btn_home.setToolTip("Inicio (Clic central para abrir en nueva pestaña)")
         self.btn_home.clicked.connect(self.navigate_home)
+        self.btn_home.middleClicked.connect(lambda: self.add_new_tab())
         toolbar_layout.addWidget(self.btn_home)
 
         # Omnibox Cápsula Inteligente
@@ -7012,6 +7435,7 @@ class AegisBrowserWindow(QMainWindow):
             if hasattr(self, "btn_forward"):
                 self.btn_forward.setEnabled(view.history().canGoForward())
         current_url = view.url().toString()
+        self.apply_domain_zoom(view)
         title = view.title() or "Página"
 
         if current_url in ("aegis://start", "about:blank"):
