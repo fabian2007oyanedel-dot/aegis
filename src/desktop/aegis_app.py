@@ -146,9 +146,15 @@ os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
     "--disable-wake-on-wifi "
     "--disable-component-update "
     "--disable-client-side-phishing-detection "
+    "--disable-background-networking "
+    "--disable-default-apps "
+    "--no-default-browser-check "
+    "--no-first-run "
+    "--renderer-process-limit=2 "
+    "--disable-gpu-shader-disk-cache "
     "--webrtc-ip-handling-policy=disable_non_proxied_udp "
     "--force-webrtc-ip-handling-policy "
-    "--js-flags=--expose-gc "
+    "--js-flags=--expose-gc,--optimize-for-size "
 )
 
 from PyQt6.QtWidgets import (
@@ -1333,9 +1339,28 @@ def silent_background_memory_purge(force: bool = False):
 
     gc.collect()
     try:
+        # 1. Purga del proceso principal Aegis
         h = kernel32.GetCurrentProcess()
         if h:
             psapi.EmptyWorkingSet(h)
+            
+        # 2. Purga ultra-agresiva de procesos hijos (QtWebEngineProcess.exe)
+        my_pid = os.getpid()
+        h_snap = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
+        if h_snap != -1:
+            entry = PROCESSENTRY32()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
+            if kernel32.Process32First(h_snap, ctypes.byref(entry)):
+                while True:
+                    name = entry.szExeFile.decode('utf-8', errors='ignore').lower()
+                    if entry.th32ParentProcessID == my_pid or 'qtwebengine' in name:
+                        ch_h = kernel32.OpenProcess(0x0400 | 0x0100, False, entry.th32ProcessID)
+                        if ch_h:
+                            psapi.EmptyWorkingSet(ch_h)
+                            kernel32.CloseHandle(ch_h)
+                    if not kernel32.Process32Next(h_snap, ctypes.byref(entry)):
+                        break
+            kernel32.CloseHandle(h_snap)
     except Exception:
         pass
 
@@ -4529,6 +4554,10 @@ class AegisBrowserWindow(QMainWindow):
         self.auto_purge_timer.setInterval(90 * 1000)
         self.auto_purge_timer.timeout.connect(silent_background_memory_purge)
         self.auto_purge_timer.start()
+
+        # Purgas automáticas de calentamiento tras arranque inicial para aplastar el consumo de RAM
+        QTimer.singleShot(1200, lambda: silent_background_memory_purge(force=True))
+        QTimer.singleShot(3200, lambda: silent_background_memory_purge(force=True))
 
         # Motor de Ahorro de Memoria Extremo e Hibernación Inteligente de Pestañas
         self.tab_sleep_timer = QTimer(self)
