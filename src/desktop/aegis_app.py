@@ -4573,6 +4573,7 @@ class AegisTabBar(QTabBar):
         self.setDrawBase(False)
         self.setElideMode(Qt.TextElideMode.ElideRight)
         self.setIconSize(QSize(16, 16))
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self._drag_start_pos = None
         self._drag_tab_idx = -1
 
@@ -4615,28 +4616,16 @@ class AegisTabBar(QTabBar):
                 event.accept()
                 return
         elif event.button() == Qt.MouseButton.LeftButton:
-            idx = self.tabAt(event.pos())
-            if idx == -1:
-                win = self.window()
-                if win:
-                    wh = win.windowHandle()
-                    if not wh:
-                        _ = win.winId()
-                        wh = win.windowHandle()
-                    if wh:
-                        wh.startSystemMove()
-                        event.accept()
-                        return
             self._drag_start_pos = event.pos()
-            self._drag_tab_idx = idx
+            self._drag_tab_idx = self.tabAt(event.pos())
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
+        # Desacople fluido solo si se arrastra hacia abajo mas de 70px fuera de la barra
         if (event.buttons() & Qt.MouseButton.LeftButton) and self._drag_start_pos is not None and self._drag_tab_idx != -1:
             p = event.pos()
-            if (p.y() < -15 or p.y() > self.height() + 15 or p.x() < -30 or p.x() > self.width() + 30):
-                if self.count() > 1:
-                    self.setCursor(Qt.CursorShape.DragMoveCursor)
+            if p.y() > 70 and self.count() > 1:
+                self.setCursor(Qt.CursorShape.DragMoveCursor)
             else:
                 self.setCursor(Qt.CursorShape.ArrowCursor)
         super().mouseMoveEvent(event)
@@ -4645,9 +4634,9 @@ class AegisTabBar(QTabBar):
         self.setCursor(Qt.CursorShape.ArrowCursor)
         if self._drag_start_pos is not None and self._drag_tab_idx != -1:
             p = event.pos()
-            if (p.y() < -15 or p.y() > self.height() + 15 or p.x() < -30 or p.x() > self.width() + 30) and self.count() > 1:
+            if p.y() > 70 and self.count() > 1:
                 global_pos = event.globalPosition().toPoint()
-                tab_idx = self._drag_tab_idx if self._drag_tab_idx != -1 else self.currentIndex()
+                tab_idx = self._drag_tab_idx
                 self._drag_start_pos = None
                 self._drag_tab_idx = -1
                 self.tabDetached.emit(tab_idx, global_pos)
@@ -4657,13 +4646,6 @@ class AegisTabBar(QTabBar):
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event):
-        idx = self.tabAt(event.pos())
-        if idx == -1 and event.button() == Qt.MouseButton.LeftButton:
-            win = self.window()
-            if win and hasattr(win, "toggle_maximize"):
-                win.toggle_maximize()
-                event.accept()
-                return
         super().mouseDoubleClickEvent(event)
 
     def wheelEvent(self, event):
@@ -6267,13 +6249,17 @@ class AegisBrowserWindow(QMainWindow):
         self.btn_new_tab.clicked.connect(lambda: self.add_new_tab())
         tab_header_layout.addWidget(self.btn_new_tab)
 
-        self.btn_tab_search = QPushButton("▼")
+        # Espacio vacío central arrastrable (idéntico a Brave y Chrome)
+        tab_header_layout.addStretch(1)
+
+        # Botón de buscar pestañas a la derecha junto a los controles de ventana (como en Brave)
+        self.btn_tab_search = QPushButton("˅")
         self.btn_tab_search.setObjectName("TabSearchBtn")
-        self.btn_tab_search.setToolTip("Buscar pestañas abiertas o recientes (Ctrl+Shift+A)")
+        self.btn_tab_search.setProperty("class", "caption-btn")
+        self.btn_tab_search.setToolTip("Buscar pestañas (Ctrl+Shift+A)")
+        self.btn_tab_search.setFixedSize(36, 38)
         self.btn_tab_search.clicked.connect(self.toggle_tab_search_popup)
         tab_header_layout.addWidget(self.btn_tab_search)
-
-        tab_header_layout.addStretch()
 
         # Botones nativos de control de ventana de Windows integrados en la barra superior
         self.caption_min = QPushButton("―")
@@ -6582,22 +6568,22 @@ class AegisBrowserWindow(QMainWindow):
                 border: none;
             }}
             QTabBar::tab {{
-                background-color: {t['bg']};
+                background-color: transparent;
                 color: rgba({rgb_text}, 0.65);
                 border: 1px solid rgba({rgb_text}, 0.08);
                 border-bottom: none;
-                padding: 4px 6px 4px 10px;
+                padding: 4px 8px 4px 12px;
                 border-top-left-radius: 8px;
                 border-top-right-radius: 8px;
-                margin-right: 4px;
+                margin-right: 2px;
                 font-size: 12px;
-                height: 26px;
+                height: 28px;
                 font-family: -apple-system, 'Segoe UI', sans-serif;
-                min-width: 85px;
-                max-width: 220px;
+                min-width: 140px;
+                max-width: 240px;
             }}
             QTabBar::tab:hover {{
-                background-color: {t['surface']};
+                background-color: rgba({rgb_text}, 0.08);
                 color: {t['text']};
             }}
             QTabBar::tab:selected {{
@@ -6605,8 +6591,7 @@ class AegisBrowserWindow(QMainWindow):
                 color: {t['text']};
                 border: 1px solid rgba({rgb_text}, 0.12);
                 border-bottom: none;
-                border-top: 2px solid {t['accent']};
-                font-weight: 600;
+                font-weight: 500;
             }}
             QTabBar::close-button {{
                 image: none;
