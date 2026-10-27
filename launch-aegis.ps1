@@ -3,25 +3,30 @@
 # ==============================================================================
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$CompiledExe = Join-Path $ScriptDir "dist\Aegis\Aegis.exe"
+$AppScript = Join-Path $ScriptDir "aegis.py"
 
-if (Test-Path $CompiledExe) {
-    Write-Host "[>] Iniciando binario nativo compilado Aegis.exe..." -ForegroundColor Cyan
-    Start-Process $CompiledExe -WorkingDirectory (Split-Path -Parent $CompiledExe)
+Write-Host "[>] Iniciando Aegis Browser (Codigo fuente en vivo)..." -ForegroundColor Cyan
+
+if (Get-Command py.exe -ErrorAction SilentlyContinue) {
+    Start-Process py.exe -ArgumentList "-3 `"$AppScript`"" -WorkingDirectory $ScriptDir
     Write-Host "[OK] Aegis Browser ejecutandose." -ForegroundColor Green
     exit 0
 }
 
-$AppScript = Join-Path $ScriptDir "src\desktop\aegis_app.py"
-$PythonExe = "C:\Users\PC\AppData\Local\Python\bin\pythonw.exe"
-
-if (-not (Test-Path $PythonExe)) {
-    $PythonExe = (Get-Command pythonw.exe -ErrorAction SilentlyContinue)?.Source
-    if (-not $PythonExe) {
-        $PythonExe = "C:\Users\PC\AppData\Local\Python\bin\python.exe"
-    }
+if (Get-Command pythonw.exe -ErrorAction SilentlyContinue) {
+    Start-Process pythonw.exe -ArgumentList "`"$AppScript`"" -WorkingDirectory $ScriptDir
+    Write-Host "[OK] Aegis Browser ejecutandose." -ForegroundColor Green
+    exit 0
 }
 
-Write-Host "[>] Iniciando Aegis Browser Nativo (Chromium + Rust Shields)..." -ForegroundColor Cyan
-Start-Process $PythonExe -ArgumentList "`"$AppScript`"" -WorkingDirectory $ScriptDir
-Write-Host "[OK] Aegis Browser ejecutandose." -ForegroundColor Green
+if (Get-Command python.exe -ErrorAction SilentlyContinue) {
+    Start-Process python.exe -ArgumentList "`"$AppScript`"" -WorkingDirectory $ScriptDir
+    Write-Host "[OK] Aegis Browser ejecutandose." -ForegroundColor Green
+    exit 0
+}
+
+$CompiledExe = Join-Path $ScriptDir "dist\Aegis\Aegis.exe"
+if (Test-Path $CompiledExe) {
+    Start-Process $CompiledExe -WorkingDirectory (Split-Path -Parent $CompiledExe)
+    exit 0
+}
