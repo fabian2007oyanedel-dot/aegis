@@ -622,7 +622,16 @@ class HistoryManager:
                 domain = "google.com"
                 url_str = "https://google.com"
 
-            clean_title = title if title and title not in ("Página", "Nueva Pestaña", "start") else domain
+            CLEAN_SERVICE_MAP = {
+                "youtube.com": "YouTube", "music.youtube.com": "YouTube Music",
+                "google.com": "Google", "github.com": "GitHub", "twitch.tv": "Twitch",
+                "reddit.com": "Reddit", "wikipedia.org": "Wikipedia", "drive.google.com": "Google Drive",
+                "gemini.google.com": "Google Gemini", "darkanddarker.com": "Dark and Darker",
+                "eldorado.gg": "Eldorado", "e.finis.cl": "Universidad Finis Terrae",
+                "web.whatsapp.com": "WhatsApp", "pirateswap.com": "PirateSwap",
+                "gamebanana.com": "GameBanana", "facepunch.com": "Facepunch"
+            }
+            clean_title = CLEAN_SERVICE_MAP.get(domain, title if title and title not in ("Página", "Nueva Pestaña", "start") else domain)
 
             if domain not in self.data.get("frequent", {}):
                 if "frequent" not in self.data:
@@ -950,13 +959,25 @@ class BraveImporter:
                     if domain.startswith("www."):
                         domain = domain[4:]
                     clean_title = title.strip() if title and title.strip() else domain
+                    
+                    # Limpiar títulos de marcas conocidas para no saturar Nueva Pestaña con búsquedas o nombres de canciones
+                    CLEAN_SERVICE_MAP = {
+                        "youtube.com": "YouTube", "music.youtube.com": "YouTube Music",
+                        "google.com": "Google", "github.com": "GitHub", "twitch.tv": "Twitch",
+                        "reddit.com": "Reddit", "wikipedia.org": "Wikipedia", "drive.google.com": "Google Drive",
+                        "gemini.google.com": "Google Gemini", "darkanddarker.com": "Dark and Darker",
+                        "eldorado.gg": "Eldorado", "e.finis.cl": "Universidad Finis Terrae",
+                        "web.whatsapp.com": "WhatsApp", "pirateswap.com": "PirateSwap",
+                        "gamebanana.com": "GameBanana", "facepunch.com": "Facepunch"
+                    }
+                    freq_title = CLEAN_SERVICE_MAP.get(domain, domain.split(".")[0].capitalize() if len(clean_title) > 25 else clean_title)
 
                     if "frequent" not in history_mgr.data:
                         history_mgr.data["frequent"] = {}
                     if domain and domain not in history_mgr.data["frequent"]:
                         history_mgr.data["frequent"][domain] = {
                             "domain": domain,
-                            "title": clean_title,
+                            "title": freq_title,
                             "url": f"{parsed.scheme}://{parsed.netloc}",
                             "visits": int(visit_count) if visit_count else 1,
                             "last_visited": unix_time,
@@ -1017,35 +1038,7 @@ class BraveImporter:
                 except Exception as e:
                     print(f"Error importando marcadores de Brave: {e}")
 
-            # Si no había archivo Bookmarks o estaba vacío, importar los 15 sitios más visitados de Brave como marcadores
-            if imported_bm == 0 and hist_file.exists():
-                tmp_path = None
-                try:
-                    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-                        tmp_path = tmp.name
-                    shutil.copy2(hist_file, tmp_path)
-                    conn = sqlite3.connect(tmp_path)
-                    cur = conn.cursor()
-                    cur.execute("SELECT url, title FROM urls WHERE hidden = 0 AND length(title) > 0 AND (url LIKE 'https://%' OR url LIKE 'http://%') ORDER BY visit_count DESC LIMIT 15")
-                    for top_url, top_title in cur.fetchall():
-                        if top_url not in existing_bm_urls:
-                            existing_bm_urls.add(top_url)
-                            bookmark_mgr.bookmarks.append({
-                                "title": top_title.strip(),
-                                "url": top_url,
-                                "created": time.time()
-                            })
-                            imported_bm += 1
-                    conn.close()
-                    bookmark_mgr.save()
-                except Exception:
-                    pass
-                finally:
-                    if tmp_path and os.path.exists(tmp_path):
-                        try:
-                            os.remove(tmp_path)
-                        except Exception:
-                            pass
+            # No convertir historial en marcadores si no hay marcadores reales.
 
         return imported_hist, imported_bm
 
