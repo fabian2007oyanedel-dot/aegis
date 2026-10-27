@@ -4616,12 +4616,15 @@ class AegisTabBar(QTabBar):
                 event.accept()
                 return
         elif event.button() == Qt.MouseButton.LeftButton:
+            idx = self.tabAt(event.pos())
             self._drag_start_pos = event.pos()
-            self._drag_tab_idx = self.tabAt(event.pos())
+            self._drag_tab_idx = idx
+            super().mousePressEvent(event)
+            event.accept()
+            return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        # Desacople fluido solo si se arrastra hacia abajo mas de 70px fuera de la barra
         if (event.buttons() & Qt.MouseButton.LeftButton) and self._drag_start_pos is not None and self._drag_tab_idx != -1:
             p = event.pos()
             if p.y() > 70 and self.count() > 1:
@@ -4629,6 +4632,7 @@ class AegisTabBar(QTabBar):
             else:
                 self.setCursor(Qt.CursorShape.ArrowCursor)
         super().mouseMoveEvent(event)
+        event.accept()
 
     def mouseReleaseEvent(self, event):
         self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -4640,10 +4644,12 @@ class AegisTabBar(QTabBar):
                 self._drag_start_pos = None
                 self._drag_tab_idx = -1
                 self.tabDetached.emit(tab_idx, global_pos)
+                event.accept()
                 return
             self._drag_start_pos = None
             self._drag_tab_idx = -1
         super().mouseReleaseEvent(event)
+        event.accept()
 
     def mouseDoubleClickEvent(self, event):
         super().mouseDoubleClickEvent(event)
@@ -4750,20 +4756,35 @@ class AegisTabHeader(QWidget):
     def __init__(self, parent_win):
         super().__init__(parent_win)
         self.parent_win = parent_win
+        self._drag_start_pos = None
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            win = self.window()
-            if win:
-                wh = win.windowHandle()
-                if not wh:
-                    _ = win.winId()
-                    wh = win.windowHandle()
-                if wh:
-                    wh.startSystemMove()
-                    event.accept()
-                    return
+            self._drag_start_pos = event.globalPosition().toPoint()
+            event.accept()
+            return
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (event.buttons() & Qt.MouseButton.LeftButton) and self._drag_start_pos is not None:
+            win = self.window()
+            if win and not win.isMaximized() and not win.isFullScreen():
+                delta = (event.globalPosition().toPoint() - self._drag_start_pos).manhattanLength()
+                if delta > 10:
+                    wh = win.windowHandle()
+                    if not wh:
+                        _ = win.winId()
+                        wh = win.windowHandle()
+                    if wh:
+                        self._drag_start_pos = None
+                        wh.startSystemMove()
+                        event.accept()
+                        return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_start_pos = None
+        super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
