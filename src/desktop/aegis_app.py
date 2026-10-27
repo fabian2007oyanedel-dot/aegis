@@ -170,7 +170,7 @@ from PyQt6.QtWebEngineCore import (
     QWebEngineProfile, QWebEngineSettings, QWebEngineUrlRequestInterceptor,
     QWebEngineDownloadRequest, QWebEngineScript, QWebEnginePage
 )
-from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer, QByteArray, QBuffer, QIODevice, QSize, QStringListModel, pyqtSignal
+from PyQt6.QtCore import QUrl, Qt, QPoint, QTimer, QByteArray, QBuffer, QIODevice, QSize, QStringListModel, pyqtSignal, QEvent
 from PyQt6.QtGui import QPainter, QColor, QBrush, QPen, QIcon, QPixmap, QShortcut, QKeySequence, QPalette
 from PyQt6.QtSvg import QSvgRenderer
 
@@ -4615,8 +4615,20 @@ class AegisTabBar(QTabBar):
                 event.accept()
                 return
         elif event.button() == Qt.MouseButton.LeftButton:
+            idx = self.tabAt(event.pos())
+            if idx == -1:
+                win = self.window()
+                if win:
+                    wh = win.windowHandle()
+                    if not wh:
+                        _ = win.winId()
+                        wh = win.windowHandle()
+                    if wh:
+                        wh.startSystemMove()
+                        event.accept()
+                        return
             self._drag_start_pos = event.pos()
-            self._drag_tab_idx = self.tabAt(event.pos())
+            self._drag_tab_idx = idx
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
@@ -4646,10 +4658,12 @@ class AegisTabBar(QTabBar):
 
     def mouseDoubleClickEvent(self, event):
         idx = self.tabAt(event.pos())
-        if idx == -1 and self.parent_win and hasattr(self.parent_win, "add_new_tab"):
-            self.parent_win.add_new_tab()
-            event.accept()
-            return
+        if idx == -1 and event.button() == Qt.MouseButton.LeftButton:
+            win = self.window()
+            if win and hasattr(win, "toggle_maximize"):
+                win.toggle_maximize()
+                event.accept()
+                return
         super().mouseDoubleClickEvent(event)
 
     def wheelEvent(self, event):
@@ -4728,6 +4742,56 @@ class AegisOmnibox(QLineEdit):
             menu.setStyleSheet(p.current_qss)
         menu.exec(event.globalPos())
 
+# ── 10.9 Grips de Redimensionamiento y Cabecera de Ventana Sin Marco ──────────
+class AegisEdgeGrip(QWidget):
+    def __init__(self, parent, edge, cursor):
+        super().__init__(parent)
+        self.edge = edge
+        self.setCursor(cursor)
+        self.setStyleSheet("background: transparent;")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            win = self.window()
+            if win and not win.isMaximized():
+                wh = win.windowHandle()
+                if not wh:
+                    _ = win.winId()
+                    wh = win.windowHandle()
+                if wh:
+                    wh.startSystemResize(self.edge)
+                    event.accept()
+                    return
+        super().mousePressEvent(event)
+
+class AegisTabHeader(QWidget):
+    def __init__(self, parent_win):
+        super().__init__(parent_win)
+        self.parent_win = parent_win
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            win = self.window()
+            if win:
+                wh = win.windowHandle()
+                if not wh:
+                    _ = win.winId()
+                    wh = win.windowHandle()
+                if wh:
+                    wh.startSystemMove()
+                    event.accept()
+                    return
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            win = self.window()
+            if win and hasattr(win, "toggle_maximize"):
+                win.toggle_maximize()
+                event.accept()
+                return
+        super().mouseDoubleClickEvent(event)
+
 # ── 11. Ventana Principal de Aegis Browser ────────────────────────────────────
 class AegisBrowserWindow(QMainWindow):
     def __init__(self, is_incognito: bool = False):
@@ -4736,6 +4800,7 @@ class AegisBrowserWindow(QMainWindow):
         title = "Aegis Browser [Ventana Privada / Incógnito]" if is_incognito else "Aegis"
         self.setWindowTitle(title)
         self.resize(1340, 860)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
 
         # Icono oficial del navegador Aegis
         ico_path = BASE_DIR / "src" / "ui" / "assets" / "aegis.ico"
@@ -4847,6 +4912,68 @@ class AegisBrowserWindow(QMainWindow):
             x = (self.width() - self.toast.width()) // 2
             y = self.height() - self.toast.height() - 32
             self.toast.move(x, y)
+        if hasattr(self, "reposition_grips"):
+            self.reposition_grips()
+
+    def reposition_grips(self):
+        if not hasattr(self, "grips"):
+            return
+        if self.isMaximized() or self.isFullScreen():
+            for g in self.grips:
+                g.hide()
+            return
+        for g in self.grips:
+            g.show()
+
+        w, h = self.width(), self.height()
+        m = 5
+        corner = 12
+
+        self.grip_left.setGeometry(0, corner, m, max(1, h - 2 * corner))
+        self.grip_right.setGeometry(w - m, corner, m, max(1, h - 2 * corner))
+        self.grip_bottom.setGeometry(corner, h - m, max(1, w - 2 * corner), m)
+        self.grip_top.setGeometry(corner, 0, max(1, w - 145 - corner), m)
+
+        self.grip_top_left.setGeometry(0, 0, corner, corner)
+        self.grip_top_right.setGeometry(w - corner, 0, corner, corner)
+        self.grip_bottom_left.setGeometry(0, h - corner, corner, corner)
+        self.grip_bottom_right.setGeometry(w - corner, h - corner, corner, corner)
+
+        for g in self.grips:
+            g.raise_()
+
+    def toggle_maximize(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.Type.WindowStateChange:
+            is_max = self.isMaximized()
+            if hasattr(self, "caption_max"):
+                if is_max:
+                    self.caption_max.setText("❐")
+                    self.caption_max.setToolTip("Restaurar")
+                else:
+                    self.caption_max.setText("□")
+                    self.caption_max.setToolTip("Maximizar")
+            if hasattr(self, "update_window_border"):
+                self.update_window_border(is_max)
+            if hasattr(self, "reposition_grips"):
+                self.reposition_grips()
+        super().changeEvent(event)
+
+    def update_window_border(self, is_max: bool):
+        if not hasattr(self, "root_container"):
+            return
+        t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+        c = t.get("text", "#ffffff")
+        rgb = "255, 255, 255" if c.startswith("#fff") or c.startswith("#eee") else "0, 0, 0"
+        if is_max:
+            self.root_container.setStyleSheet(f"QWidget#AegisRootContainer {{ background-color: {t['bg']}; border: none; }}")
+        else:
+            self.root_container.setStyleSheet(f"QWidget#AegisRootContainer {{ background-color: {t['bg']}; border: 1px solid rgba({rgb}, 0.18); }}")
 
     def load_config(self) -> dict:
         default_config = {
@@ -6110,19 +6237,20 @@ class AegisBrowserWindow(QMainWindow):
         cur.page().runJavaScript(script, on_color)
 
     def init_ui(self):
-        container = QWidget()
-        self.setCentralWidget(container)
-        main_layout = QVBoxLayout(container)
+        self.root_container = QWidget()
+        self.root_container.setObjectName("AegisRootContainer")
+        self.setCentralWidget(self.root_container)
+        main_layout = QVBoxLayout(self.root_container)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # ── 1. Tira de Pestañas Limpia ────────────────────────────────────────
-        self.tab_header = QWidget()
+        # ── 1. Tira de Pestañas y Cabecera Fusionada (Estilo Moderno Chrome/Brave) ──
+        self.tab_header = AegisTabHeader(self)
         self.tab_header.setObjectName("TabHeader")
         self.tab_header.setFixedHeight(38)
         tab_header_layout = QHBoxLayout(self.tab_header)
-        tab_header_layout.setContentsMargins(10, 4, 10, 0)
-        tab_header_layout.setSpacing(6)
+        tab_header_layout.setContentsMargins(8, 0, 0, 0)
+        tab_header_layout.setSpacing(4)
 
         self.tab_bar = AegisTabBar(self)
         self.tab_bar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -6146,6 +6274,32 @@ class AegisBrowserWindow(QMainWindow):
         tab_header_layout.addWidget(self.btn_tab_search)
 
         tab_header_layout.addStretch()
+
+        # Botones nativos de control de ventana de Windows integrados en la barra superior
+        self.caption_min = QPushButton("―")
+        self.caption_min.setObjectName("CaptionMin")
+        self.caption_min.setProperty("class", "caption-btn")
+        self.caption_min.setToolTip("Minimizar")
+        self.caption_min.setFixedSize(46, 38)
+        self.caption_min.clicked.connect(self.showMinimized)
+        tab_header_layout.addWidget(self.caption_min)
+
+        self.caption_max = QPushButton("□")
+        self.caption_max.setObjectName("CaptionMax")
+        self.caption_max.setProperty("class", "caption-btn")
+        self.caption_max.setToolTip("Maximizar")
+        self.caption_max.setFixedSize(46, 38)
+        self.caption_max.clicked.connect(self.toggle_maximize)
+        tab_header_layout.addWidget(self.caption_max)
+
+        self.caption_close = QPushButton("✕")
+        self.caption_close.setObjectName("CaptionClose")
+        self.caption_close.setProperty("class", "caption-btn")
+        self.caption_close.setToolTip("Cerrar")
+        self.caption_close.setFixedSize(46, 38)
+        self.caption_close.clicked.connect(self.close)
+        tab_header_layout.addWidget(self.caption_close)
+
         main_layout.addWidget(self.tab_header)
 
         # ── 2. Barra de Navegación, Omnibox y Botones de Acción ───────────────
@@ -6336,6 +6490,22 @@ class AegisBrowserWindow(QMainWindow):
 
         main_layout.addWidget(self.web_content_splitter, 1)
 
+        # Grips de redimensionado de bordes para ventana sin marco (Frameless)
+        self.grip_left = AegisEdgeGrip(self, Qt.Edge.LeftEdge, Qt.CursorShape.SizeHorCursor)
+        self.grip_right = AegisEdgeGrip(self, Qt.Edge.RightEdge, Qt.CursorShape.SizeHorCursor)
+        self.grip_bottom = AegisEdgeGrip(self, Qt.Edge.BottomEdge, Qt.CursorShape.SizeVerCursor)
+        self.grip_top = AegisEdgeGrip(self, Qt.Edge.TopEdge, Qt.CursorShape.SizeVerCursor)
+        self.grip_top_left = AegisEdgeGrip(self, Qt.Edge.TopEdge | Qt.Edge.LeftEdge, Qt.CursorShape.SizeFDiagCursor)
+        self.grip_top_right = AegisEdgeGrip(self, Qt.Edge.TopEdge | Qt.Edge.RightEdge, Qt.CursorShape.SizeBDiagCursor)
+        self.grip_bottom_left = AegisEdgeGrip(self, Qt.Edge.BottomEdge | Qt.Edge.LeftEdge, Qt.CursorShape.SizeBDiagCursor)
+        self.grip_bottom_right = AegisEdgeGrip(self, Qt.Edge.BottomEdge | Qt.Edge.RightEdge, Qt.CursorShape.SizeFDiagCursor)
+
+        self.grips = [
+            self.grip_left, self.grip_right, self.grip_bottom, self.grip_top,
+            self.grip_top_left, self.grip_top_right, self.grip_bottom_left, self.grip_bottom_right
+        ]
+        self.reposition_grips()
+
     def save_theme(self, theme_name: str):
         self.config["theme"] = theme_name
         self.save_config()
@@ -6482,6 +6652,28 @@ class AegisBrowserWindow(QMainWindow):
             QPushButton#TabSearchBtn:hover {{
                 background-color: {t['surface']};
                 color: {t['text']};
+            }}
+            QPushButton.caption-btn {{
+                background: transparent;
+                border: none;
+                color: rgba({rgb_text}, 0.70);
+                font-size: 13px;
+                font-family: 'Segoe UI', -apple-system, sans-serif;
+                padding: 0px;
+                margin: 0px;
+                border-radius: 0px;
+            }}
+            QPushButton.caption-btn:hover {{
+                background-color: rgba({rgb_text}, 0.10);
+                color: {t['text']};
+            }}
+            QPushButton#CaptionClose:hover {{
+                background-color: #e81123;
+                color: #ffffff;
+            }}
+            QPushButton#CaptionClose:pressed {{
+                background-color: #bf0f1d;
+                color: #ffffff;
             }}
             QPushButton#SidebarBtn {{
                 background: transparent;
@@ -6739,6 +6931,9 @@ class AegisBrowserWindow(QMainWindow):
         for view in self.views:
             if view.url().toString() in ("aegis://start", "about:blank"):
                 self.load_ntp(view)
+
+        if hasattr(self, "update_window_border"):
+            self.update_window_border(self.isMaximized())
 
     def toggle_shields_popup(self):
         now = time.time()
