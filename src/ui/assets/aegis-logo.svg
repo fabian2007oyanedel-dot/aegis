@@ -1,80 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <!-- Gradiente Primario: Cian Neón (#00f5ff) a Azul Cobalto Eléctrico (#0066ff) -->
-    <linearGradient id="leftStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+    <!-- Gradiente Espectral Continuo (Cian Eléctrico a Violeta Real) -->
+    <linearGradient id="aegis_a_grad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#00f5ff" />
-      <stop offset="45%" stop-color="#0ea5e9" />
-      <stop offset="100%" stop-color="#2563eb" />
-    </linearGradient>
-
-    <!-- Gradiente Secundario: Azul Eléctrico (#38bdf8) a Violeta Neón (#7c3aed) -->
-    <linearGradient id="rightStroke" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8" />
-      <stop offset="50%" stop-color="#4f46e5" />
-      <stop offset="100%" stop-color="#7c3aed" />
-    </linearGradient>
-
-    <!-- Gradiente del Puente Conector de la 'A' -->
-    <linearGradient id="bridgeStroke" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#00f5ff" />
+      <stop offset="38%" stop-color="#0ea5e9" />
+      <stop offset="72%" stop-color="#3b82f6" />
       <stop offset="100%" stop-color="#6366f1" />
     </linearGradient>
 
-    <!-- Sombra de profundidad de superposición tridimensional -->
-    <filter id="ribbonShadow" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#0284c7" flood-opacity="0.35" />
-    </filter>
-
-    <filter id="foldShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="-6" dy="12" stdDeviation="10" flood-color="#0f172a" flood-opacity="0.38" />
+    <!-- Resplandor sutil para flotabilidad tridimensional -->
+    <filter id="aegis_glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#0284c7" flood-opacity="0.38" />
     </filter>
   </defs>
 
-  <!-- Glifo Escultural 'A' + Escudo Flotante (Zero bordes negros, 100% transparente) -->
-  <g filter="url(#ribbonShadow)">
-    
-    <!-- 1. Ala Derecha Suavizada (Borde redondeado continuo) -->
-    <path d="M 256, 68
-             C 272, 68 286, 78 296, 94
-             L 396, 268
-             C 424, 316 414, 376 376, 412
-             C 346, 440 304, 442 272, 420
-             L 242, 398
-             C 230, 390 230, 372 242, 364
-             C 254, 356 272, 356 284, 364
-             L 310, 382
-             C 330, 396 356, 390 372, 372
-             C 394, 348 398, 308 380, 276
-             L 292, 122
-             C 284, 108 270, 100 256, 100 Z"
-          fill="url(#rightStroke)" />
+  <g filter="url(#aegis_glow)">
+    <!-- Letra 'A' Maestra: Silueta en forma de Escudo Flotante con Esquinas y Bordes 100% Suavizados -->
+    <path d="M 234, 52
+             C 244, 40 268, 40 278, 52
+             L 404, 386
+             C 416, 418 390, 452 356, 452
+             C 334, 452 316, 436 308, 416
+             L 284, 344
+             L 228, 344
+             L 204, 416
+             C 196, 436 178, 452 156, 452
+             C 122, 452 96, 418 108, 386
+             Z
+             M 256, 148
+             C 252, 148 248, 154 246, 160
+             L 214, 276
+             C 212, 284 218, 292 226, 292
+             L 286, 292
+             C 294, 292 300, 284 298, 276
+             L 266, 160
+             C 264, 154 260, 148 256, 148 Z"
+          fill="url(#aegis_a_grad)"
+          fill-rule="evenodd" />
 
-    <!-- 2. Ala Izquierda Escultural (Superposición fluida formando la 'A' y el Escudo) -->
-    <path d="M 136, 412
-             C 98, 376 88, 316 116, 268
-             L 216, 94
-             C 226, 78 240, 68 256, 68
-             C 272, 68 286, 78 296, 94
-             L 316, 130
-             C 324, 144 320, 162 306, 170
-             C 292, 178 274, 174 266, 160
-             L 256, 142
-             L 168, 296
-             C 152, 324 156, 360 178, 382
-             C 192, 396 214, 402 232, 394
-             C 246, 388 258, 394 264, 408
-             C 270, 422 262, 436 248, 442
-             C 214, 456 168, 444 136, 412 Z"
-          fill="url(#leftStroke)"
-          filter="url(#foldShadow)" />
-
-    <!-- 3. Puente Transversal Curvado Suavizado (Cierra la 'A' con bordes redondeados) -->
-    <rect x="172" y="274" width="168" height="32" rx="16" ry="16"
-          fill="url(#bridgeStroke)"
-          filter="url(#foldShadow)" />
-
-    <!-- 4. Núcleo de Enfoque Lumínico Flotante -->
-    <circle cx="256" cy="192" r="14" fill="#00f5ff" opacity="0.9" />
-    <circle cx="256" cy="192" r="7" fill="#ffffff" />
+    <!-- Acento: Lente de luz en el travesaño central de la 'A' -->
+    <rect x="206" y="278" width="100" height="14" rx="7" ry="7" fill="#ffffff" opacity="0.4" />
+    <circle cx="256" cy="62" r="8" fill="#ffffff" opacity="0.9" />
   </g>
 </svg>
