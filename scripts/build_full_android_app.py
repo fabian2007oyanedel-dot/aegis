@@ -91,15 +91,18 @@ def write_svg_vector(filename, color, path_data, alpha="1.0"):
 </vector>"""
     (res_drawable / filename).write_text(content, encoding="utf-8")
 
-# App Icon
+# App Icon (Neo-Sculptural Continuous Ribbon A-Shield)
 (res_drawable / "ic_launcher.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
-    android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#090d13" android:pathData="M0,0h108v108h-108z"/>
-    <path android:fillColor="#00f2fe" android:pathData="M54,18 L86,32 C86,72 68,90 54,98 C40,90 22,72 22,32 Z"/>
-    <path android:fillColor="#161b22" android:pathData="M54,23 L82,35 C82,69 66,85 54,93 C42,85 26,69 26,35 Z"/>
-    <path android:fillColor="#00f2fe" android:pathData="M54,42 L68,74 L60,74 L56,64 L48,64 L44,74 L36,74 Z M54,52 L50,60 L58,60 Z"/>
+    android:viewportWidth="512" android:viewportHeight="512">
+    <path android:fillColor="#06090e" android:pathData="M0,0h512v512h-512z"/>
+    <!-- Ala Derecha -->
+    <path android:fillColor="#38bdf8" android:pathData="M 256,60 C 272,60 286,72 296,92 L 396,360 C 412,402 386,444 346,444 C 324,444 304,428 296,406 L 264,318 L 230,222 L 256,126 Z"/>
+    <!-- Ala Izquierda -->
+    <path android:fillColor="#00f5ff" android:pathData="M 120,412 C 102,368 116,320 144,252 L 216,92 C 226,72 240,60 256,60 C 272,60 284,70 292,88 L 266,154 L 204,308 L 166,406 C 158,428 138,444 116,444 C 102,444 94,436 94,426 C 94,420 98,414 104,410 Z"/>
+    <!-- Travesaño Escultural -->
+    <path android:fillColor="#818cf8" android:pathData="M 154,290 C 154,274 168,262 184,262 L 328,262 C 344,262 358,274 358,290 C 358,306 344,318 328,318 L 184,318 C 168,318 154,306 154,290 Z"/>
 </vector>
 """, encoding="utf-8")
 
@@ -658,16 +661,34 @@ ntp_html = """<!DOCTYPE html>
 </head>
 <body>
   <div class="logo-container">
-    <svg class="logo-svg" viewBox="0 0 512 512">
+    <svg class="logo-svg" viewBox="0 0 512 512" fill="none">
       <defs>
-        <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#00f2fe" />
-          <stop offset="100%" stop-color="#388bfd" />
+        <linearGradient id="aegis_ntp_left" x1="0%" y1="100%" x2="60%" y2="0%">
+          <stop offset="0%" stop-color="#00f5ff" />
+          <stop offset="40%" stop-color="#0ea5e9" />
+          <stop offset="85%" stop-color="#2563eb" />
+          <stop offset="100%" stop-color="#1e3a8a" />
         </linearGradient>
+        <linearGradient id="aegis_ntp_right" x1="40%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#38bdf8" />
+          <stop offset="45%" stop-color="#3b82f6" />
+          <stop offset="80%" stop-color="#6366f1" />
+          <stop offset="100%" stop-color="#8b5cf6" />
+        </linearGradient>
+        <linearGradient id="aegis_ntp_cross" x1="0%" y1="50%" x2="100%" y2="50%">
+          <stop offset="0%" stop-color="#00f5ff" />
+          <stop offset="50%" stop-color="#38bdf8" />
+          <stop offset="100%" stop-color="#818cf8" />
+        </linearGradient>
+        <filter id="ntpAmbient" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0284c7" flood-opacity="0.4" />
+        </filter>
       </defs>
-      <path d="M256 32 L432 96 C432 288 340 416 256 480 C172 416 80 288 80 96 Z" fill="none" stroke="url(#shieldGrad)" stroke-width="14"/>
-      <path d="M256 56 L410 114 C410 270 330 380 256 440 C182 380 102 270 102 114 Z" fill="#161b22"/>
-      <path d="M256 160 L330 330 L294 330 L276 284 L236 284 L218 330 L182 330 Z M256 220 L244 252 L268 252 Z" fill="url(#shieldGrad)"/>
+      <g filter="url(#ntpAmbient)">
+        <path d="M 256, 60 C 272, 60 286, 72 296, 92 L 396, 360 C 412, 402 386, 444 346, 444 C 324, 444 304, 428 296, 406 L 264, 318 L 230, 222 L 256, 126 Z" fill="url(#aegis_ntp_right)" />
+        <path d="M 120, 412 C 102, 368 116, 320 144, 252 L 216, 92 C 226, 72 240, 60 256, 60 C 272, 60 284, 70 292, 88 L 266, 154 L 204, 308 L 166, 406 C 158, 428 138, 444 116, 444 C 102,444 94, 436 94, 426 C 94, 420 98, 414 104, 410 Z" fill="url(#aegis_ntp_left)" />
+        <path d="M 154, 290 C 154, 274 168, 262 184, 262 L 328, 262 C 344, 262 358, 274 358, 290 C 358, 306 344, 318 328, 318 L 184, 318 C 168, 318 154, 306 154, 290 Z" fill="url(#aegis_ntp_cross)" />
+      </g>
     </svg>
     <div class="brand-title"><span>AEGIS</span> BROWSER</div>
     <div class="brand-subtitle">120Hz Ultra Fluido • Aegis Shields 2.0 • Kiwi Engine</div>

@@ -852,7 +852,10 @@ class BookmarksManager:
         self.save()
 
     def is_bookmarked(self, url: str) -> bool:
-        return any(b.get("url") == url for b in self.bookmarks)
+        if not url:
+            return False
+        clean = url.rstrip('/')
+        return any(b.get("url", "").rstrip('/') == clean for b in self.bookmarks)
 
 # ── 2.3.5 Importador de Datos desde Brave Browser ─────────────────────────────
 class BraveImporter:
@@ -1383,10 +1386,11 @@ def svg_to_icon(svg_str: str, size: int = 16) -> QIcon:
         return QIcon()
 
 def create_shield_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
-    """Genera un icono de escudo vectorial nítido sin emojis medievales de Windows."""
-    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      <path d="m9 12 2 2 4-4"/>
+    """Genera el icono oficial del Escudo Aegis con silueta de A escultural."""
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2L4 5v6.5C4 17 7.5 21 12 22c4.5-1 8-5 8-10.5V5L12 2z"/>
+      <path d="M8.5 15L12 7l3.5 8"/>
+      <path d="M9.8 12.5h4.4"/>
     </svg>"""
     return svg_to_icon(svg, size)
 
@@ -2336,7 +2340,8 @@ class AegisDownloadsPopup(QFrame):
         layout.addLayout(footer)
 
     def open_downloads_folder(self):
-        folder = Path.home() / "Downloads"
+        folder_str = self.parent_win.config.get("download_directory", str(Path.home() / "Downloads")) if self.parent_win else str(Path.home() / "Downloads")
+        folder = Path(folder_str)
         folder.mkdir(parents=True, exist_ok=True)
         subprocess.Popen(f'explorer.exe "{str(folder)}"')
         self.hide()
@@ -3003,14 +3008,24 @@ class AegisSiteInfoPopup(QFrame):
             self.btn_clear_site_cookies.setEnabled(True)
 
     def clear_site_cookies(self):
-        if self.parent_win and self.parent_win.profile:
+        if self.parent_win:
             cur = self.parent_win.current_view()
             if cur:
                 host = cur.url().host()
-                store = self.parent_win.profile.cookieStore()
-                store.deleteAllCookies()
+                cur.page().runJavaScript("""
+                    (() => {
+                        const cookies = document.cookie.split(";");
+                        for (let i = 0; i < cookies.length; i++) {
+                            const cookie = cookies[i];
+                            const eqPos = cookie.indexOf("=");
+                            const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+                            document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+                        }
+                        try { localStorage.clear(); sessionStorage.clear(); } catch(e) {}
+                    })();
+                """)
                 if hasattr(self.parent_win, "show_toast"):
-                    self.parent_win.show_toast(f"Cookies de {host} eliminadas.")
+                    self.parent_win.show_toast(f"Cookies y datos locales de {host} eliminados.")
                 self.hide()
 
     def apply_theme(self, t: dict):
@@ -4247,6 +4262,13 @@ class FindInPageWidget(QFrame):
         if event.key() == Qt.Key.Key_Escape:
             self.close_find()
             return
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                self.find_prev()
+                return
+            else:
+                self.find_next()
+                return
         super().keyPressEvent(event)
 
     def on_text_changed(self, text):
@@ -4448,6 +4470,14 @@ class AegisTabBar(QTabBar):
             self._drag_tab_idx = -1
         super().mouseReleaseEvent(event)
 
+    def mouseDoubleClickEvent(self, event):
+        idx = self.tabAt(event.pos())
+        if idx == -1 and self.parent_win and hasattr(self.parent_win, "add_new_tab"):
+            self.parent_win.add_new_tab()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
 # ── 10.8 Barra de Direcciones Omnibox Inteligente ─────────────────────────────
 class AegisOmnibox(QLineEdit):
     def __init__(self, parent=None):
@@ -4466,6 +4496,13 @@ class AegisOmnibox(QLineEdit):
             self.selectAll()
             self._select_all_pending = False
 
+    def insertFromMimeData(self, source):
+        if source and source.hasText():
+            cleaned = source.text().replace("\r\n", " ").replace("\n", " ").replace("\r", " ").strip()
+            self.insert(cleaned)
+        else:
+            super().insertFromMimeData(source)
+
 # ── 11. Ventana Principal de Aegis Browser ────────────────────────────────────
 class AegisBrowserWindow(QMainWindow):
     def __init__(self, is_incognito: bool = False):
@@ -4474,6 +4511,13 @@ class AegisBrowserWindow(QMainWindow):
         title = "Aegis Browser [Ventana Privada / Incógnito]" if is_incognito else "Aegis"
         self.setWindowTitle(title)
         self.resize(1340, 860)
+
+        # Icono oficial del navegador Aegis
+        ico_path = BASE_DIR / "src" / "ui" / "assets" / "aegis.ico"
+        if not ico_path.exists():
+            ico_path = BASE_DIR / "assets" / "aegis.ico"
+        if ico_path.exists():
+            self.setWindowIcon(QIcon(str(ico_path)))
 
         self._last_popup_close_time = 0.0
         self._last_app_menu_close_time = 0.0
@@ -4646,6 +4690,29 @@ class AegisBrowserWindow(QMainWindow):
         QShortcut(QKeySequence("F9"), self, self.toggle_reader_mode)
         QShortcut(QKeySequence("Ctrl+Shift+S"), self, self.capture_page_screenshot)
         QShortcut(QKeySequence("Ctrl+P"), self, self.print_to_pdf)
+        QShortcut(QKeySequence("Alt+Left"), self, self.navigate_back)
+        QShortcut(QKeySequence("Alt+Right"), self, self.navigate_forward)
+        QShortcut(QKeySequence("Ctrl+Tab"), self, self.next_tab)
+        QShortcut(QKeySequence("Ctrl+Shift+Tab"), self, self.prev_tab)
+        for i in range(1, 9):
+            QShortcut(QKeySequence(f"Ctrl+{i}"), self, lambda idx=i-1: self.activate_tab(idx))
+        QShortcut(QKeySequence("Ctrl+9"), self, lambda: self.activate_tab(-1))
+
+    def activate_tab(self, idx: int):
+        if idx == -1:
+            idx = self.tab_bar.count() - 1
+        if 0 <= idx < self.tab_bar.count():
+            self.tab_bar.setCurrentIndex(idx)
+
+    def next_tab(self):
+        c = self.tab_bar.count()
+        if c > 1:
+            self.tab_bar.setCurrentIndex((self.tab_bar.currentIndex() + 1) % c)
+
+    def prev_tab(self):
+        c = self.tab_bar.count()
+        if c > 1:
+            self.tab_bar.setCurrentIndex((self.tab_bar.currentIndex() - 1) % c)
 
     def load_userscripts(self):
         try:
@@ -4727,9 +4794,16 @@ class AegisBrowserWindow(QMainWindow):
             "received_bytes": download.receivedBytes(),
             "total_bytes": download.totalBytes()
         })
+        active_cnt = sum(1 for d in self.downloads_mgr.downloads if d.get("state") == "downloading")
         t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
-        self.btn_downloads.setIcon(create_download_icon(t["text"], 16))
-        self.btn_downloads.setText("")
+        if active_cnt > 0:
+            self.btn_downloads.setIcon(create_download_icon(t["accent"], 16))
+            self.btn_downloads.setText(f" {active_cnt}")
+        else:
+            self.btn_downloads.setIcon(create_download_icon(t["text"], 16))
+            self.btn_downloads.setText("")
+        if state_str == "completed":
+            self.show_toast(f"✓ Descarga completada: {download.suggestedFileName() or 'archivo'}")
         if hasattr(self, "downloads_popup") and self.downloads_popup.isVisible():
             self.downloads_popup.refresh_list()
 
@@ -5391,9 +5465,11 @@ class AegisBrowserWindow(QMainWindow):
         if not url_str or url_str in ("aegis://start", "about:blank", "about:start"):
             return True
         u = str(url_str).lower().strip()
+        if u.startswith("aegis://"):
+            return True
         if u.startswith("data:text/html") or u.startswith("data:"):
             return True
-        if u.startswith("aegis://action") or "encodeuricomponent" in u:
+        if "encodeuricomponent" in u:
             return True
         return False
 
@@ -5423,6 +5499,22 @@ class AegisBrowserWindow(QMainWindow):
 
         if text.startswith("aegis://"):
             return QUrl(text)
+
+        # Bangs directos en Omnibox
+        if text.startswith(":g "):
+            return QUrl(f"https://www.google.com/search?q={quote(text[3:].strip())}")
+        elif text.startswith(":d "):
+            return QUrl(f"https://duckduckgo.com/?q={quote(text[3:].strip())}")
+        elif text.startswith(":b "):
+            return QUrl(f"https://search.brave.com/search?q={quote(text[3:].strip())}")
+        elif text.startswith(":w "):
+            return QUrl(f"https://es.wikipedia.org/wiki/Special:Search?search={quote(text[3:].strip())}")
+        elif text.startswith(":y "):
+            return QUrl(f"https://www.youtube.com/results?search_query={quote(text[3:].strip())}")
+
+        # Localhost y direcciones locales IP
+        if text.startswith("localhost") or text.startswith("127.0.0.1"):
+            return QUrl("http://" + text)
 
         if text.startswith("http://") or text.startswith("https://") or text.startswith("file://"):
             if text.startswith("http://") and self.config.get("https_only_mode", False):
@@ -5536,7 +5628,7 @@ class AegisBrowserWindow(QMainWindow):
             suggestions.add(s.get("url", ""))
         for s in self.history_mgr.data.get("custom", []):
             suggestions.add(s.get("url", ""))
-        for h in self.history_mgr.data.get("history_log", [])[:40]:
+        for h in self.history_mgr.data.get("history", [])[:60]:
             suggestions.add(h.get("url", ""))
         clean_list = [u for u in suggestions if u and not u.startswith("aegis://") and not u.startswith("about:") and not u.startswith("data:")]
         self.completer_model.setStringList(sorted(clean_list))
@@ -6269,6 +6361,7 @@ class AegisBrowserWindow(QMainWindow):
 
         view.urlChanged.connect(lambda qurl, v=view: self.on_url_changed(qurl, v))
         view.loadProgress.connect(self.on_load_progress)
+        view.loadStarted.connect(lambda v=view: self.on_load_started(v))
         view.loadFinished.connect(lambda ok, v=view: self.on_load_finished(ok, v))
         view.iconChanged.connect(lambda icon, v=view: self.on_icon_changed(icon, v))
 
@@ -6573,6 +6666,23 @@ class AegisBrowserWindow(QMainWindow):
             if getattr(view, "_is_hibernated", False):
                 self.wake_tab(view)
             self.on_url_changed(view.url(), view)
+            if hasattr(self, "btn_back"):
+                self.btn_back.setEnabled(view.history().canGoBack())
+            if hasattr(self, "btn_forward"):
+                self.btn_forward.setEnabled(view.history().canGoForward())
+            if hasattr(self, "btn_reload"):
+                if getattr(view, "_is_loading", False):
+                    self.btn_reload.setText("✕")
+                    self.btn_reload.setToolTip("Detener (Esc)")
+                    try: self.btn_reload.clicked.disconnect()
+                    except Exception: pass
+                    self.btn_reload.clicked.connect(view.stop)
+                else:
+                    self.btn_reload.setText("↻")
+                    self.btn_reload.setToolTip("Recargar (F5)")
+                    try: self.btn_reload.clicked.disconnect()
+                    except Exception: pass
+                    self.btn_reload.clicked.connect(self.reload_page)
 
     def navigate_to_url(self):
         text = self.url_bar.text().strip()
@@ -6874,8 +6984,33 @@ class AegisBrowserWindow(QMainWindow):
         else:
             self.progress_bar.hide()
 
+    def on_load_started(self, view: QWebEngineView):
+        view._is_loading = True
+        if view == self.current_view():
+            if hasattr(self, "btn_reload"):
+                self.btn_reload.setText("✕")
+                self.btn_reload.setToolTip("Detener (Esc)")
+                try: self.btn_reload.clicked.disconnect()
+                except Exception: pass
+                self.btn_reload.clicked.connect(view.stop)
+            if hasattr(self, "progress_bar"):
+                self.progress_bar.show()
+                self.progress_bar.setValue(10)
+
     def on_load_finished(self, ok: bool, view: QWebEngineView):
+        view._is_loading = False
         self.progress_bar.hide()
+        if view == self.current_view():
+            if hasattr(self, "btn_reload"):
+                self.btn_reload.setText("↻")
+                self.btn_reload.setToolTip("Recargar (F5)")
+                try: self.btn_reload.clicked.disconnect()
+                except Exception: pass
+                self.btn_reload.clicked.connect(self.reload_page)
+            if hasattr(self, "btn_back"):
+                self.btn_back.setEnabled(view.history().canGoBack())
+            if hasattr(self, "btn_forward"):
+                self.btn_forward.setEnabled(view.history().canGoForward())
         current_url = view.url().toString()
         title = view.title() or "Página"
 
@@ -7441,10 +7576,34 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
 <body>
   <main class="hero">
     <div class="brand-header">
-      <svg class="brand-logo" viewBox="0 0 100 100" fill="none">
-        <path d="M50 5 L88 22 V50 C88 74 50 95 50 95 C50 95 12 74 12 50 V22 Z" fill="var(--accent)"/>
-        <path d="M50 14 L80 27 V50 C80 69 50 86 50 86 C50 86 20 69 20 50 V27 Z" fill="var(--bg)"/>
-        <path d="M42 50 L48 56 L62 42" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <svg class="brand-logo" viewBox="0 0 512 512" fill="none">
+        <defs>
+          <linearGradient id="aegis_ntp_left" x1="0%" y1="100%" x2="60%" y2="0%">
+            <stop offset="0%" stop-color="#00f5ff" />
+            <stop offset="40%" stop-color="#0ea5e9" />
+            <stop offset="85%" stop-color="#2563eb" />
+            <stop offset="100%" stop-color="#1e3a8a" />
+          </linearGradient>
+          <linearGradient id="aegis_ntp_right" x1="40%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#38bdf8" />
+            <stop offset="45%" stop-color="#3b82f6" />
+            <stop offset="80%" stop-color="#6366f1" />
+            <stop offset="100%" stop-color="#8b5cf6" />
+          </linearGradient>
+          <linearGradient id="aegis_ntp_cross" x1="0%" y1="50%" x2="100%" y2="50%">
+            <stop offset="0%" stop-color="#00f5ff" />
+            <stop offset="50%" stop-color="#38bdf8" />
+            <stop offset="100%" stop-color="#818cf8" />
+          </linearGradient>
+          <filter id="ntpAmbient" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0284c7" flood-opacity="0.4" />
+          </filter>
+        </defs>
+        <g filter="url(#ntpAmbient)">
+          <path d="M 256, 60 C 272, 60 286, 72 296, 92 L 396, 360 C 412, 402 386, 444 346, 444 C 324, 444 304, 428 296, 406 L 264, 318 L 230, 222 L 256, 126 Z" fill="url(#aegis_ntp_right)" />
+          <path d="M 120, 412 C 102, 368 116, 320 144, 252 L 216, 92 C 226, 72 240, 60 256, 60 C 272, 60 284, 70 292, 88 L 266, 154 L 204, 308 L 166, 406 C 158, 428 138, 444 116, 444 C 102, 444 94, 436 94, 426 C 94, 420 98, 414 104, 410 Z" fill="url(#aegis_ntp_left)" />
+          <path d="M 154, 290 C 154, 274 168, 262 184, 262 L 328, 262 C 344, 262 358, 274 358, 290 C 358, 306 344, 318 328, 318 L 184, 318 C 168, 318 154, 306 154, 290 Z" fill="url(#aegis_ntp_cross)" />
+        </g>
       </svg>
       <div class="brand-name">Aegis</div>
     </div>
@@ -8027,6 +8186,13 @@ def get_aniplay_html(theme_class: str = "theme-dark") -> str:
       vid.src = '';
       document.getElementById('playerModal').style.display = 'none';
     }}
+
+    window.addEventListener('keydown', (e) => {{
+      if (e.key === 'Escape') closePlayer();
+    }});
+    document.getElementById('playerModal').addEventListener('click', (e) => {{
+      if (e.target.id === 'playerModal') closePlayer();
+    }});
 
     renderGrid(animeCatalog);
   </script>
@@ -9232,6 +9398,19 @@ def main():
         app = QApplication(sys.argv)
         app.setApplicationName("Aegis")
         app.setApplicationVersion("1.3.5")
+
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("aegis.browser.desktop.1.3.5")
+            except Exception:
+                pass
+
+        ico_path = BASE_DIR / "src" / "ui" / "assets" / "aegis.ico"
+        if not ico_path.exists():
+            ico_path = BASE_DIR / "assets" / "aegis.ico"
+        if ico_path.exists():
+            app.setWindowIcon(QIcon(str(ico_path)))
 
         window = AegisBrowserWindow()
         window.show()
