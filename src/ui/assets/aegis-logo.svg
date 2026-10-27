@@ -1,117 +1,80 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <!-- Gradiente de fondo del escudo -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0c1220" />
-      <stop offset="50%" stop-color="#070a12" />
-      <stop offset="100%" stop-color="#030508" />
-    </linearGradient>
-
-    <!-- Borde exterior sutil -->
-    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="rgba(56, 189, 248, 0.45)" />
-      <stop offset="50%" stop-color="rgba(99, 102, 241, 0.25)" />
-      <stop offset="100%" stop-color="rgba(14, 165, 233, 0.05)" />
-    </linearGradient>
-
-    <!-- Ala izquierda de la 'A' / Escudo (Cian Eléctrico a Azul Neón) -->
-    <linearGradient id="leftWingGrad" x1="20%" y1="0%" x2="80%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8" />
-      <stop offset="50%" stop-color="#0ea5e9" />
-      <stop offset="100%" stop-color="#0284c7" />
-    </linearGradient>
-
-    <!-- Ala derecha de la 'A' / Escudo (Cobalto a Índigo Profundo) -->
-    <linearGradient id="rightWingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#60a5fa" />
-      <stop offset="50%" stop-color="#3b82f6" />
+    <!-- Gradiente Primario: Cian Neón (#00f5ff) a Azul Cobalto Eléctrico (#0066ff) -->
+    <linearGradient id="leftStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f5ff" />
+      <stop offset="45%" stop-color="#0ea5e9" />
       <stop offset="100%" stop-color="#2563eb" />
     </linearGradient>
 
-    <!-- Núcleo central / Barra horizontal flotante -->
-    <linearGradient id="corePillGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#00f2fe" />
-      <stop offset="100%" stop-color="#38ef7d" />
+    <!-- Gradiente Secundario: Azul Eléctrico (#38bdf8) a Violeta Neón (#7c3aed) -->
+    <linearGradient id="rightStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#7c3aed" />
     </linearGradient>
 
-    <!-- Sombra suave difusa minimalista -->
-    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#0ea5e9" flood-opacity="0.28" />
+    <!-- Gradiente del Puente Conector de la 'A' -->
+    <linearGradient id="bridgeStroke" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f5ff" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+
+    <!-- Sombra de profundidad de superposición tridimensional -->
+    <filter id="ribbonShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#0284c7" flood-opacity="0.35" />
     </filter>
 
-    <filter id="innerGlow" x="-10%" y="-10%" width="120%" height="120%">
-      <feGaussianBlur stdDeviation="8" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    <filter id="foldShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="-6" dy="12" stdDeviation="10" flood-color="#0f172a" flood-opacity="0.38" />
     </filter>
   </defs>
 
-  <!-- 1. Silueta Exterior del Escudo Suavizado (Squircle Shield Base) -->
-  <path d="M 256, 44
-           C 310, 44 416, 60 436, 128
-           C 448, 168 448, 252 428, 320
-           C 398, 412 308, 458 266, 474
-           C 260, 476 252, 476 246, 474
-           C 204, 458 114, 412 84, 320
-           C 64, 252 64, 168 76, 128
-           C 96, 60 202, 44 256, 44 Z"
-        fill="url(#bgGrad)"
-        stroke="url(#borderGrad)"
-        stroke-width="4"
-        stroke-linejoin="round"
-        stroke-linecap="round"
-        filter="url(#softShadow)" />
+  <!-- Glifo Escultural 'A' + Escudo Flotante (Zero bordes negros, 100% transparente) -->
+  <g filter="url(#ribbonShadow)">
+    
+    <!-- 1. Ala Derecha Suavizada (Borde redondeado continuo) -->
+    <path d="M 256, 68
+             C 272, 68 286, 78 296, 94
+             L 396, 268
+             C 424, 316 414, 376 376, 412
+             C 346, 440 304, 442 272, 420
+             L 242, 398
+             C 230, 390 230, 372 242, 364
+             C 254, 356 272, 356 284, 364
+             L 310, 382
+             C 330, 396 356, 390 372, 372
+             C 394, 348 398, 308 380, 276
+             L 292, 122
+             C 284, 108 270, 100 256, 100 Z"
+          fill="url(#rightStroke)" />
 
-  <!-- 2. Reflejo interior sutil con curvas continuas -->
-  <path d="M 256, 56
-           C 304, 56 398, 70 416, 132
-           C 426, 168 426, 242 408, 304
-           C 382, 386 304, 428 264, 446
-           C 259, 448 253, 448 248, 446
-           C 208, 428 130, 386 104, 304
-           C 86, 242 86, 168 96, 132
-           C 114, 70 208, 56 256, 56 Z"
-        fill="none"
-        stroke="rgba(255, 255, 255, 0.04)"
-        stroke-width="1.5" />
+    <!-- 2. Ala Izquierda Escultural (Superposición fluida formando la 'A' y el Escudo) -->
+    <path d="M 136, 412
+             C 98, 376 88, 316 116, 268
+             L 216, 94
+             C 226, 78 240, 68 256, 68
+             C 272, 68 286, 78 296, 94
+             L 316, 130
+             C 324, 144 320, 162 306, 170
+             C 292, 178 274, 174 266, 160
+             L 256, 142
+             L 168, 296
+             C 152, 324 156, 360 178, 382
+             C 192, 396 214, 402 232, 394
+             C 246, 388 258, 394 264, 408
+             C 270, 422 262, 436 248, 442
+             C 214, 456 168, 444 136, 412 Z"
+          fill="url(#leftStroke)"
+          filter="url(#foldShadow)" />
 
-  <!-- 3. Emblema Central: 'A' Minimalista Aerodinámica con Bordes Curvados -->
-  <!-- Ala Izquierda Suavizada -->
-  <path d="M 238, 142
-           C 246, 130 266, 130 274, 142
-           L 364, 296
-           C 376, 316 360, 342 336, 342
-           C 322, 342 310, 332 304, 320
-           L 256, 230
-           L 208, 320
-           C 202, 332 190, 342 176, 342
-           C 152, 342 136, 316 148, 296
-           Z"
-        fill="url(#leftWingGrad)"
-        filter="url(#innerGlow)" />
+    <!-- 3. Puente Transversal Curvado Suavizado (Cierra la 'A' con bordes redondeados) -->
+    <rect x="172" y="274" width="168" height="32" rx="16" ry="16"
+          fill="url(#bridgeStroke)"
+          filter="url(#foldShadow)" />
 
-  <!-- Ala Derecha Dinámica con Fusión de Profundidad -->
-  <path d="M 256, 134
-           C 264, 134 272, 140 276, 148
-           L 366, 302
-           C 374, 316 366, 336 350, 340
-           C 342, 342 334, 340 328, 334
-           L 256, 224
-           L 242, 250
-           L 290, 334
-           C 294, 340 292, 348 284, 350
-           C 280, 352 274, 350 270, 346
-           L 218, 260
-           L 248, 144
-           C 250, 138 253, 134 256, 134 Z"
-        fill="url(#rightWingGrad)"
-        opacity="0.95" />
-
-  <!-- 4. Cápsula / Barra Central Flotante Suavizada (Borde Redondeado Completo) -->
-  <rect x="188" y="278" width="136" height="24" rx="12" ry="12"
-        fill="url(#corePillGrad)"
-        opacity="0.95"
-        filter="url(#innerGlow)" />
-
-  <!-- 5. Detalle de luz superior suavizado -->
-  <circle cx="256" cy="144" r="7" fill="#ffffff" opacity="0.9" />
+    <!-- 4. Núcleo de Enfoque Lumínico Flotante -->
+    <circle cx="256" cy="192" r="14" fill="#00f5ff" opacity="0.9" />
+    <circle cx="256" cy="192" r="7" fill="#ffffff" />
+  </g>
 </svg>
