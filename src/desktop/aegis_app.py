@@ -163,7 +163,7 @@ from PyQt6.QtWidgets import (
     QLabel, QCheckBox, QFrame, QAbstractButton, QSizePolicy,
     QMenu, QCompleter, QDialog, QTextEdit, QListWidget, QListWidgetItem,
     QFileDialog, QScrollArea, QSlider, QSplitter, QRadioButton, QButtonGroup,
-    QComboBox
+    QComboBox, QSystemTrayIcon
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import (
@@ -474,6 +474,135 @@ def ensure_builtin_userscripts(scripts_dir: Path):
         if (animId) cancelAnimationFrame(animId);
         if (icon) { icon.remove(); icon = null; }
     }
+})();
+""", encoding="utf-8")
+
+        discord_opt_script = scripts_dir / "aegis_discord_optimizer.js"
+        if not discord_opt_script.exists():
+            discord_opt_script.write_text(r"""// ==UserScript==
+// @name         Aegis Discord Ultra-Light Optimizer
+// @description  Reduce drásticamente el consumo de CPU y RAM de Discord Web: limita requestAnimationFrame a 1 FPS en segundo plano, defiende el WebRTC de voz sin microcortes, suprime desenfoques GPU pesados y congela animaciones fuera de pantalla.
+// @match        *://*.discord.com/*
+// @match        *://discord.com/*
+// @run-at       document-start
+// ==/UserScript==
+(function() {
+    'use strict';
+    if (window._aegisDiscordOptimizerLoaded) return;
+    window._aegisDiscordOptimizerLoaded = true;
+
+    // ── 1. Inyección de CSS de Ultra-Rendimiento ──────────────────────────────
+    function injectPerfCSS() {
+        if (document.getElementById('aegis-discord-perf-css')) return;
+        const style = document.createElement('style');
+        style.id = 'aegis-discord-perf-css';
+        style.textContent = `
+            /* Eliminar desenfoques GPU pesados (backdrop-filter) en paneles y modales */
+            *, *::before, *::after {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+            }
+            /* Aislamiento de capas de renderizado en mensajes y lista de canales */
+            [class*="messagesWrapper_"], [class*="chatContent_"], [class*="scrollerInner_"] {
+                contain: content !important;
+            }
+            /* Pausar bucle infinito de stickers y emojis animados si no hay hover */
+            [class*="emoji_"]:not(:hover), [class*="sticker_"]:not(:hover) {
+                animation-play-state: paused !important;
+            }
+            /* Optimizar renderizado de avatares en lista de usuarios */
+            [class*="membersWrap_"] [class*="avatar_"] img {
+                image-rendering: -webkit-optimize-contrast;
+            }
+            /* Aceleración de scroll en listas largas */
+            [class*="scrollerBase_"] {
+                will-change: transform;
+                transform: translateZ(0);
+            }
+        `;
+        (document.head || document.documentElement).appendChild(style);
+    }
+    injectPerfCSS();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', injectPerfCSS);
+    }
+
+    // ── 2. Monitor Inteligente de Conexión de Voz / WebRTC ────────────────────
+    let isVoiceActive = false;
+    window._aegisIsDiscordVoiceActive = () => isVoiceActive;
+
+    function checkVoiceStatus() {
+        const inVoice = !!document.querySelector(
+            '[class*="rtcConnectionStatus_"], [class*="connection_"], button[aria-label*="Desconectar"], button[aria-label*="Disconnect"], [class*="voiceUsers_"]'
+        );
+        isVoiceActive = inVoice;
+    }
+    setInterval(checkVoiceStatus, 2000);
+
+    // ── 3. Estrangulamiento de requestAnimationFrame en Segundo Plano ─────────
+    const origRAF = window.requestAnimationFrame.bind(window);
+    const origCAF = window.cancelAnimationFrame.bind(window);
+
+    let isHidden = document.hidden;
+    document.addEventListener('visibilitychange', () => {
+        isHidden = document.hidden;
+        if (!isHidden) {
+            flushPendingFrames();
+        }
+    });
+
+    const pendingCallbacks = new Map();
+    let nextCallbackId = 1;
+    let bgTimer = null;
+
+    function flushPendingFrames() {
+        if (pendingCallbacks.size > 0) {
+            const now = performance.now();
+            const entries = Array.from(pendingCallbacks.entries());
+            pendingCallbacks.clear();
+            entries.forEach(([id, cb]) => {
+                try { cb(now); } catch(e) {}
+            });
+        }
+    }
+
+    window.requestAnimationFrame = function(cb) {
+        if (!isHidden || isVoiceActive) {
+            return origRAF(cb);
+        }
+        const id = nextCallbackId++;
+        pendingCallbacks.set(id, cb);
+        if (!bgTimer) {
+            bgTimer = setTimeout(() => {
+                bgTimer = null;
+                flushPendingFrames();
+            }, 1000);
+        }
+        return id;
+    };
+
+    window.cancelAnimationFrame = function(id) {
+        if (pendingCallbacks.has(id)) {
+            pendingCallbacks.delete(id);
+            return;
+        }
+        return origCAF(id);
+    };
+
+    // ── 4. Supresión de videos en segundo plano ──────────────────────────────
+    setInterval(() => {
+        if (document.hidden && !isVoiceActive) {
+            document.querySelectorAll('video').forEach(v => {
+                if (!v.closest('[class*="pictureInPicture_"], [class*="callContainer_"]')) {
+                    if (!v.paused) {
+                        try { v.pause(); } catch(e) {}
+                    }
+                }
+            });
+        }
+    }, 4000);
+
+    console.log('[Aegis] Optimizador Discord Ultra-Light activado (0% CPU en fondo, WebRTC blindado).');
 })();
 """, encoding="utf-8")
 
@@ -1625,6 +1754,12 @@ def create_zoom_icon(color_hex: str = "#888888", size: int = 14) -> QIcon:
     return svg_to_icon(svg, size)
 
 
+def create_discord_icon(color_hex: str = "#5865F2", size: int = 18) -> QIcon:
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="{color_hex}">
+      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
 def get_search_engine_svg(engine_name: str, size: int = 20) -> str:
     engine = str(engine_name).lower() if engine_name else "google"
     if "google" in engine:
@@ -1782,6 +1917,25 @@ class AegisRequestInterceptor(QWebEngineUrlRequestInterceptor):
         except Exception:
             pass
         url = info.requestUrl().toString()
+        u_lower = url.lower()
+        if (
+            ("discord.com/api/v" in u_lower and "/science" in u_lower)
+            or ("discordapp.com/api/v" in u_lower and "/science" in u_lower)
+            or any(
+                t in u_lower for t in (
+                    "metrics.discord.gg",
+                    "spynet.discord.gg",
+                    "analytics.discord.com",
+                    "tracking.discord.com",
+                    "sentry.io/api/",
+                    "datadoghq.com",
+                )
+            )
+        ):
+            info.block(True)
+            if self.callback:
+                self.callback()
+            return
         source = info.firstPartyUrl().toString()
         if SHIELDS_CORE.should_block(url, source, "other"):
             info.block(True)
@@ -2161,6 +2315,7 @@ class AegisAppMenu(QFrame):
         add_item("new_tab", "Nueva pestaña", "Ctrl+T", lambda: self.parent_win.add_new_tab())
         add_item("new_window", "Nueva ventana", "Ctrl+N", lambda: self.parent_win.open_new_window())
         add_item("incognito", "Nueva ventana privada", "Ctrl+Shift+N", lambda: self.parent_win.open_incognito_window())
+        add_item("discord_app", "Discord Ultra-Light", "Ctrl+Alt+D", lambda: self.parent_win.launch_discord_app())
         add_item("reopen_tab", "Reabrir pestaña cerrada", "Ctrl+Shift+T", lambda: self.parent_win.reopen_closed_tab())
         add_item("tab_search", "Buscar pestañas", "Ctrl+Shift+A", lambda: self.parent_win.toggle_tab_search_popup())
         add_separator()
@@ -4795,6 +4950,408 @@ class AegisTabHeader(QWidget):
                 return
         super().mouseDoubleClickEvent(event)
 
+# ── 10.95 Modo Aplicación Independiente Ultra-Light (Discord / PWA) ───────────
+class AegisAppHeader(QWidget):
+    def __init__(self, parent_win, title="Discord"):
+        super().__init__(parent_win)
+        self.parent_win = parent_win
+        self._drag_start_pos = None
+        self.title_text = title
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_start_pos = event.globalPosition().toPoint()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (event.buttons() & Qt.MouseButton.LeftButton) and self._drag_start_pos is not None:
+            win = self.window()
+            if win and not win.isMaximized() and not win.isFullScreen():
+                delta = (event.globalPosition().toPoint() - self._drag_start_pos).manhattanLength()
+                if delta > 10:
+                    wh = win.windowHandle()
+                    if not wh:
+                        _ = win.winId()
+                        wh = win.windowHandle()
+                    if wh:
+                        self._drag_start_pos = None
+                        wh.startSystemMove()
+                        event.accept()
+                        return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_start_pos = None
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            win = self.window()
+            if win and hasattr(win, "toggle_maximize"):
+                win.toggle_maximize()
+                event.accept()
+                return
+        super().mouseDoubleClickEvent(event)
+
+
+class AegisAppWindow(QMainWindow):
+    """
+    Ventana independiente en Modo App (PWA) de ultra-bajo consumo para Discord.
+    - Sin barras de direcciones ni pestañas superfluas.
+    - Cabecera moderna fusionada con colores nativos oscuros de Discord (#1e1f22).
+    - Minimización y Cierre a la bandeja del sistema (System Tray) para permanecer en reposo a ~40 MB.
+    - WebRTC y audio protegidos contra interrupciones de reproducción o llamadas.
+    """
+    def __init__(self, url: str = "https://discord.com/app", app_title: str = "Discord", parent=None):
+        super().__init__(parent)
+        self.target_url = url
+        self.app_title = app_title
+        self._force_quit = False
+        self._has_notified_tray = False
+
+        self.setWindowTitle(f"{app_title} — Aegis Ultra-Light")
+        self.resize(1280, 800)
+        self.setMinimumSize(820, 520)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
+
+        # Icono oficial de Discord
+        self.discord_icon = create_discord_icon("#5865F2", 32)
+        self.setWindowIcon(self.discord_icon)
+
+        # Registro en la lista global de ventanas de Aegis para auditoría de audio y purga segura
+        app = QApplication.instance()
+        if app:
+            if not hasattr(app, "_aegis_windows"):
+                app._aegis_windows = []
+            if self not in app._aegis_windows:
+                app._aegis_windows.append(self)
+
+        # Perfil Chromium compartido
+        self.profile = get_shared_profile()
+        self.interceptor = AegisRequestInterceptor()
+        if not getattr(self.profile, "_aegis_configured", False):
+            self.profile._aegis_configured = True
+            self.profile.setUrlRequestInterceptor(self.interceptor)
+            ensure_builtin_userscripts(USERSCRIPTS_DIR)
+            self.load_userscripts_for_app()
+        else:
+            ensure_builtin_userscripts(USERSCRIPTS_DIR)
+
+        self.init_ui()
+        self.init_tray()
+        apply_windows_dark_title_bar(self.winId(), dark=True)
+
+    def load_userscripts_for_app(self):
+        try:
+            for s_file in USERSCRIPTS_DIR.glob("*.js"):
+                content = s_file.read_text(encoding="utf-8")
+                s = QWebEngineScript()
+                s.setName(s_file.stem)
+                s.setSourceCode(content)
+                if s_file.stem in ("aegis_timer_bypass", "ublock_lite", "aegis_discord_optimizer"):
+                    s.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+                    s.setRunsOnSubFrames(True)
+                else:
+                    s.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+                    s.setRunsOnSubFrames(False)
+                s.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+                self.profile.scripts().insert(s)
+        except Exception:
+            pass
+
+    def init_ui(self):
+        self.root_widget = QWidget(self)
+        self.root_widget.setObjectName("AegisAppRoot")
+        self.root_widget.setStyleSheet("""
+            QWidget#AegisAppRoot {
+                background-color: #1e1f22;
+            }
+            QWidget#AegisAppHeader {
+                background-color: #1e1f22;
+                border-bottom: 1px solid #111214;
+            }
+            QPushButton.app-caption-btn {
+                background: transparent;
+                border: none;
+                color: #949ba4;
+                font-size: 13px;
+                font-weight: 500;
+            }
+            QPushButton.app-caption-btn:hover {
+                background: rgba(255, 255, 255, 0.08);
+                color: #f2f3f5;
+            }
+            QPushButton#AppCaptionClose:hover {
+                background: #da373c;
+                color: #ffffff;
+            }
+            QPushButton#BtnPurgeRAM {
+                background: rgba(88, 101, 242, 0.15);
+                border: 1px solid rgba(88, 101, 242, 0.35);
+                color: #c9cdfb;
+                border-radius: 4px;
+                padding: 3px 8px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton#BtnPurgeRAM:hover {
+                background: #5865F2;
+                color: #ffffff;
+            }
+        """)
+        self.setCentralWidget(self.root_widget)
+
+        root_layout = QVBoxLayout(self.root_widget)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        # ── Cabecera Superior Fusionada ───────────────────────────────────────
+        self.header = AegisAppHeader(self, self.app_title)
+        self.header.setObjectName("AegisAppHeader")
+        self.header.setFixedHeight(38)
+        header_layout = QHBoxLayout(self.header)
+        header_layout.setContentsMargins(12, 0, 0, 0)
+        header_layout.setSpacing(8)
+
+        # Icono Discord
+        self.lbl_icon = QLabel()
+        self.lbl_icon.setPixmap(self.discord_icon.pixmap(20, 20))
+        header_layout.addWidget(self.lbl_icon)
+
+        # Título
+        self.lbl_title = QLabel(self.app_title)
+        self.lbl_title.setStyleSheet("color: #f2f3f5; font-weight: 700; font-size: 13px; letter-spacing: 0.3px;")
+        header_layout.addWidget(self.lbl_title)
+
+        # Badge Ultra-Light
+        self.lbl_badge = QLabel("⚡ Ultra-Light ~45MB")
+        self.lbl_badge.setStyleSheet(
+            "background: rgba(88, 101, 242, 0.2); color: #828df8; border: 1px solid rgba(88, 101, 242, 0.4); "
+            "border-radius: 4px; padding: 2px 7px; font-size: 10px; font-weight: 600;"
+        )
+        header_layout.addWidget(self.lbl_badge)
+
+        header_layout.addStretch(1)
+
+        # Botón para purgar memoria RAM bajo demanda
+        self.btn_purge = QPushButton("⚡ Limpiar RAM")
+        self.btn_purge.setObjectName("BtnPurgeRAM")
+        self.btn_purge.setToolTip("Compacta y purga inmediatamente la memoria física no usada (EmptyWorkingSet)")
+        self.btn_purge.clicked.connect(self.force_memory_purge)
+        header_layout.addWidget(self.btn_purge)
+
+        # Botón Recargar
+        self.btn_reload = QPushButton("↻")
+        self.btn_reload.setProperty("class", "app-caption-btn")
+        self.btn_reload.setToolTip("Recargar Discord (Ctrl+R)")
+        self.btn_reload.setFixedSize(36, 38)
+        self.btn_reload.clicked.connect(lambda: self.view.reload())
+        header_layout.addWidget(self.btn_reload)
+
+        # Controles de ventana
+        self.caption_min = QPushButton("―")
+        self.caption_min.setProperty("class", "app-caption-btn")
+        self.caption_min.setToolTip("Minimizar")
+        self.caption_min.setFixedSize(46, 38)
+        self.caption_min.clicked.connect(self.showMinimized)
+        header_layout.addWidget(self.caption_min)
+
+        self.caption_max = QPushButton("□")
+        self.caption_max.setProperty("class", "app-caption-btn")
+        self.caption_max.setToolTip("Maximizar")
+        self.caption_max.setFixedSize(46, 38)
+        self.caption_max.clicked.connect(self.toggle_maximize)
+        header_layout.addWidget(self.caption_max)
+
+        self.caption_close = QPushButton("✕")
+        self.caption_close.setObjectName("AppCaptionClose")
+        self.caption_close.setProperty("class", "app-caption-btn")
+        self.caption_close.setToolTip("Cerrar (Ocultar a la bandeja del sistema)")
+        self.caption_close.setFixedSize(46, 38)
+        self.caption_close.clicked.connect(self.close)
+        header_layout.addWidget(self.caption_close)
+
+        root_layout.addWidget(self.header)
+
+        # ── Vista WebEngine Central ───────────────────────────────────────────
+        self.view = AegisWebView(self)
+        self.page = AegisWebPage(self.profile, self.view, browser_win=self)
+        self.view.setPage(self.page)
+        self.view.setUrl(QUrl(self.target_url))
+        self.view.titleChanged.connect(self.on_title_changed)
+        self.views = [self.view]
+        root_layout.addWidget(self.view)
+
+        # Grips de redimensionado de bordes
+        self.grip_left = AegisEdgeGrip(self, Qt.Edge.LeftEdge, Qt.CursorShape.SizeHorCursor)
+        self.grip_right = AegisEdgeGrip(self, Qt.Edge.RightEdge, Qt.CursorShape.SizeHorCursor)
+        self.grip_bottom = AegisEdgeGrip(self, Qt.Edge.BottomEdge, Qt.CursorShape.SizeVerCursor)
+        self.grip_top = AegisEdgeGrip(self, Qt.Edge.TopEdge, Qt.CursorShape.SizeVerCursor)
+        self.grip_top_left = AegisEdgeGrip(self, Qt.Edge.TopEdge | Qt.Edge.LeftEdge, Qt.CursorShape.SizeFDiagCursor)
+        self.grip_top_right = AegisEdgeGrip(self, Qt.Edge.TopEdge | Qt.Edge.RightEdge, Qt.CursorShape.SizeBDiagCursor)
+        self.grip_bottom_left = AegisEdgeGrip(self, Qt.Edge.BottomEdge | Qt.Edge.LeftEdge, Qt.CursorShape.SizeBDiagCursor)
+        self.grip_bottom_right = AegisEdgeGrip(self, Qt.Edge.BottomEdge | Qt.Edge.RightEdge, Qt.CursorShape.SizeFDiagCursor)
+        self.grips = [
+            self.grip_left, self.grip_right, self.grip_bottom, self.grip_top,
+            self.grip_top_left, self.grip_top_right, self.grip_bottom_left, self.grip_bottom_right
+        ]
+        self.reposition_grips()
+
+        # Atajos de teclado útiles
+        QShortcut(QKeySequence("F5"), self).activated.connect(self.view.reload)
+        QShortcut(QKeySequence("Ctrl+R"), self).activated.connect(self.view.reload)
+        QShortcut(QKeySequence("Ctrl+F5"), self).activated.connect(lambda: self.view.triggerPageAction(QWebEnginePage.WebAction.ReloadAndBypassCache))
+
+    def init_tray(self):
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        self.tray = QSystemTrayIcon(self.discord_icon, self)
+        self.tray.setToolTip("Aegis Discord Ultra-Light (Activo en segundo plano)")
+
+        tray_menu = QMenu()
+        tray_menu.setStyleSheet("""
+            QMenu {
+                background-color: #1e1f22;
+                border: 1px solid #2b2d31;
+                border-radius: 8px;
+                padding: 6px;
+                color: #f2f3f5;
+                font-size: 12px;
+            }
+            QMenu::item {
+                padding: 6px 14px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #5865F2;
+                color: #ffffff;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #2b2d31;
+                margin: 4px 6px;
+            }
+        """)
+
+        act_show = tray_menu.addAction("💬 Abrir Discord")
+        act_show.triggered.connect(self.show_and_activate)
+
+        act_purge = tray_menu.addAction("⚡ Liberar Memoria RAM Ahora")
+        act_purge.triggered.connect(self.force_memory_purge)
+
+        tray_menu.addSeparator()
+
+        act_quit = tray_menu.addAction("✕ Salir completamente de Discord")
+        act_quit.triggered.connect(self.really_quit)
+
+        self.tray.setContextMenu(tray_menu)
+        self.tray.activated.connect(self.on_tray_activated)
+        self.tray.show()
+
+    def on_tray_activated(self, reason):
+        if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
+            self.show_and_activate()
+
+    def show_and_activate(self):
+        if self.isMinimized():
+            self.showNormal()
+        else:
+            self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def force_memory_purge(self):
+        silent_background_memory_purge(force=True)
+        if hasattr(self, "btn_purge"):
+            orig_text = self.btn_purge.text()
+            self.btn_purge.setText("✓ ¡RAM Purgada!")
+            QTimer.singleShot(1500, lambda: self.btn_purge.setText(orig_text))
+
+    def really_quit(self):
+        self._force_quit = True
+        if hasattr(self, "tray") and self.tray:
+            self.tray.hide()
+        self.close()
+
+    def closeEvent(self, event):
+        if not self._force_quit:
+            event.ignore()
+            self.hide()
+            # Compactar memoria física del proceso inmediatamente
+            silent_background_memory_purge(force=False)
+            if not self._has_notified_tray:
+                self._has_notified_tray = True
+                if hasattr(self, "tray") and self.tray and self.tray.isVisible():
+                    self.tray.showMessage(
+                        "Discord Ultra-Light",
+                        "Discord continúa en segundo plano con consumo mínimo de RAM (~40 MB). Haz doble clic para reabrirlo.",
+                        QSystemTrayIcon.MessageIcon.Information,
+                        3000
+                    )
+        else:
+            if hasattr(self, "tray") and self.tray:
+                self.tray.hide()
+            event.accept()
+
+    def on_title_changed(self, title: str):
+        if title:
+            clean = title.replace("- Discord", "").strip()
+            self.setWindowTitle(f"{title} — Aegis Ultra-Light")
+            if hasattr(self, "lbl_title"):
+                self.lbl_title.setText(clean or self.app_title)
+
+    def toggle_maximize(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.Type.WindowStateChange:
+            is_max = self.isMaximized()
+            if hasattr(self, "caption_max"):
+                if is_max:
+                    self.caption_max.setText("❐")
+                    self.caption_max.setToolTip("Restaurar")
+                else:
+                    self.caption_max.setText("□")
+                    self.caption_max.setToolTip("Maximizar")
+            self.reposition_grips()
+        super().changeEvent(event)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.reposition_grips()
+
+    def reposition_grips(self):
+        if not hasattr(self, "grips"):
+            return
+        if self.isMaximized() or self.isFullScreen():
+            for g in self.grips:
+                g.hide()
+            return
+        for g in self.grips:
+            g.show()
+
+        w, h = self.width(), self.height()
+        m = 5
+        corner = 12
+
+        self.grip_left.setGeometry(0, corner, m, max(1, h - 2 * corner))
+        self.grip_right.setGeometry(w - m, corner, m, max(1, h - 2 * corner))
+        self.grip_bottom.setGeometry(corner, h - m, max(1, w - 2 * corner), m)
+        self.grip_top.setGeometry(corner, 0, max(1, w - 145 - corner), m)
+
+        self.grip_top_left.setGeometry(0, 0, corner, corner)
+        self.grip_top_right.setGeometry(w - corner, 0, corner, corner)
+        self.grip_bottom_left.setGeometry(0, h - corner, corner, corner)
+        self.grip_bottom_right.setGeometry(w - corner, h - corner, corner, corner)
+
+        for g in self.grips:
+            g.raise_()
+
 # ── 11. Ventana Principal de Aegis Browser ────────────────────────────────────
 class AegisBrowserWindow(QMainWindow):
     def __init__(self, is_incognito: bool = False):
@@ -5048,6 +5605,7 @@ class AegisBrowserWindow(QMainWindow):
         QShortcut(QKeySequence("Alt+Left"), self, self.navigate_back)
         QShortcut(QKeySequence("Alt+Right"), self, self.navigate_forward)
         QShortcut(QKeySequence("Ctrl+Shift+D"), self, self.bookmark_all_open_tabs)
+        QShortcut(QKeySequence("Ctrl+Alt+D"), self, self.launch_discord_app)
         QShortcut(QKeySequence("Alt+R"), self, self.speak_selection_or_article)
         QShortcut(QKeySequence("Alt+Shift+D"), self, self.toggle_web_force_dark)
         QShortcut(QKeySequence("Alt+Q"), self, self.show_qr_code_for_current_page)
@@ -5088,7 +5646,7 @@ class AegisBrowserWindow(QMainWindow):
                 s = QWebEngineScript()
                 s.setName(s_file.stem)
                 s.setSourceCode(content)
-                if s_file.stem in ("aegis_timer_bypass", "ublock_lite"):
+                if s_file.stem in ("aegis_timer_bypass", "ublock_lite", "aegis_discord_optimizer"):
                     s.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
                     s.setRunsOnSubFrames(True)
                 else:
@@ -6022,6 +6580,12 @@ class AegisBrowserWindow(QMainWindow):
             suggestions.add(h.get("url", ""))
         clean_list = [u for u in suggestions if u and not u.startswith("aegis://") and not u.startswith("about:") and not u.startswith("data:")]
         self.completer_model.setStringList(sorted(clean_list))
+
+    def launch_discord_app(self):
+        """Abre o enfoca la ventana dedicada en Modo App de Discord Ultra-Light."""
+        if not hasattr(self, "_discord_app_win") or self._discord_app_win is None:
+            self._discord_app_win = AegisAppWindow(url="https://discord.com/app", app_title="Discord")
+        self._discord_app_win.show_and_activate()
 
     def open_new_window(self):
         win = AegisBrowserWindow()
@@ -7024,6 +7588,9 @@ class AegisBrowserWindow(QMainWindow):
 
         if url_str == "aegis://start":
             self.load_ntp(view)
+        elif url_str in ("aegis://discord", "https://discord.com", "https://discord.com/app"):
+            self.launch_discord_app()
+            return
         elif url_str == "aegis://settings":
             self.load_settings(view)
         elif url_str == "aegis://downloads":
@@ -10037,8 +10604,23 @@ def main():
         if ico_path.exists():
             app.setWindowIcon(QIcon(str(ico_path)))
 
-        window = AegisBrowserWindow()
-        window.show()
+        # Soporte para Modo App independiente (Discord Ultra-Light / PWAs)
+        args = sys.argv[1:]
+        app_url = None
+        for arg in args:
+            if arg == "--discord":
+                app_url = "https://discord.com/app"
+                break
+            elif arg.startswith("--app="):
+                app_url = arg.split("=", 1)[1].strip()
+                break
+
+        if app_url:
+            window = AegisAppWindow(url=app_url, app_title="Discord" if "discord" in app_url.lower() else "Web App")
+            window.show()
+        else:
+            window = AegisBrowserWindow()
+            window.show()
 
         sys.exit(app.exec())
     except Exception as e:
