@@ -397,33 +397,43 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 """, encoding="utf-8")
 
         privacy_script = scripts_dir / "aegis_privacy_guard.js"
-        if not privacy_script.exists():
+        cur_priv = privacy_script.read_text(encoding="utf-8", errors="ignore") if privacy_script.exists() else ""
+        if not privacy_script.exists() or "getImageData" in cur_priv or "hcaptcha" not in cur_priv:
             privacy_script.write_text(r"""// ==UserScript==
 // @name         Aegis Privacy & Anti-Fingerprinting Guard
-// @description  Protección contra Canvas/AudioContext fingerprinting, mitigación de fugas WebRTC y señal GPC
+// @description  Protección de privacidad estándar, señal GPC y mitigación de fugas WebRTC
 // @match        *://*/*
 // @run-at       document-start
 // ==/UserScript==
 (function() {
     'use strict';
     if (window._aegisPrivacyLoaded) return;
+
+    // Nunca intervenir en iframes o dominios de Captchas ni Autenticación
+    const host = (window.location.hostname || '').toLowerCase();
+    const href = (window.location.href || '').toLowerCase();
+    if (
+        host.includes('hcaptcha.com') ||
+        host.includes('cloudflare.com') ||
+        host.includes('recaptcha') ||
+        host.includes('google.com') ||
+        host.includes('discord.com') ||
+        href.includes('captcha') ||
+        href.includes('turnstile')
+    ) {
+        return;
+    }
+
     window._aegisPrivacyLoaded = true;
     try {
         Object.defineProperty(navigator, 'globalPrivacyControl', { get: () => true, configurable: false });
     } catch(e) {}
     try {
-        Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
-        Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+        Object.defineProperty(navigator, 'doNotTrack', { get: () => '1', configurable: false });
     } catch(e) {}
     try {
-        const origGetImageData = CanvasRenderingContext2D.prototype.getImageData;
-        CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h) {
-            const data = origGetImageData.apply(this, arguments);
-            for (let i = 0; i < data.data.length; i += 400) {
-                data.data[i] = (data.data[i] ^ 1) % 256;
-            }
-            return data;
-        };
+        Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+        Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
     } catch(e) {}
 })();
 """, encoding="utf-8")
@@ -478,7 +488,8 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 """, encoding="utf-8")
 
         discord_opt_script = scripts_dir / "aegis_discord_optimizer.js"
-        if not discord_opt_script.exists():
+        cur_opt = discord_opt_script.read_text(encoding="utf-8", errors="ignore") if discord_opt_script.exists() else ""
+        if not discord_opt_script.exists() or "startsWith('/login')" not in cur_opt:
             discord_opt_script.write_text(r"""// ==UserScript==
 // @name         Aegis Discord Ultra-Light Optimizer
 // @description  Reduce drásticamente el consumo de CPU y RAM de Discord Web: limita requestAnimationFrame a 1 FPS en segundo plano, defiende el WebRTC de voz sin microcortes, suprime desenfoques GPU pesados y congela animaciones fuera de pantalla.
@@ -489,6 +500,13 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 (function() {
     'use strict';
     if (window._aegisDiscordOptimizerLoaded) return;
+
+    // No intervenir en iframes externos ni en páginas de autenticación/login
+    const host = (window.location.hostname || '').toLowerCase();
+    const path = (window.location.pathname || '').toLowerCase();
+    if (!host.includes('discord.com')) return;
+    if (path.startsWith('/login') || path.startsWith('/register')) return;
+
     window._aegisDiscordOptimizerLoaded = true;
 
     // ── 1. Inyección de CSS de Ultra-Rendimiento ──────────────────────────────
@@ -1486,7 +1504,7 @@ def get_shared_profile() -> QWebEngineProfile:
         _SHARED_PERSISTENT_PROFILE.setCachePath(str(cache_dir))
         _SHARED_PERSISTENT_PROFILE.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
         _SHARED_PERSISTENT_PROFILE.setHttpUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.5"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         )
         s = _SHARED_PERSISTENT_PROFILE.settings()
         s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, True)
@@ -1918,18 +1936,19 @@ class AegisRequestInterceptor(QWebEngineUrlRequestInterceptor):
             pass
         url = info.requestUrl().toString()
         u_lower = url.lower()
-        if (
-            ("discord.com/api/v" in u_lower and "/science" in u_lower)
-            or ("discordapp.com/api/v" in u_lower and "/science" in u_lower)
-            or any(
-                t in u_lower for t in (
-                    "metrics.discord.gg",
-                    "spynet.discord.gg",
-                    "analytics.discord.com",
-                    "tracking.discord.com",
-                    "sentry.io/api/",
-                    "datadoghq.com",
-                )
+
+        # Permitir siempre peticiones legítimas de la API y autenticación de Discord
+        if "discord.com/api/" in u_lower or "discordapp.com/api/" in u_lower:
+            return
+
+        if any(
+            t in u_lower for t in (
+                "metrics.discord.gg",
+                "spynet.discord.gg",
+                "analytics.discord.com",
+                "tracking.discord.com",
+                "sentry.io/api/",
+                "datadoghq.com",
             )
         ):
             info.block(True)
@@ -1937,6 +1956,9 @@ class AegisRequestInterceptor(QWebEngineUrlRequestInterceptor):
                 self.callback()
             return
         source = info.firstPartyUrl().toString()
+        if "discord.com" in source.lower() or "discordapp.com" in source.lower():
+            if "discord" in u_lower or "hcaptcha" in u_lower or "cloudflare" in u_lower:
+                return
         if SHIELDS_CORE.should_block(url, source, "other"):
             info.block(True)
             if self.callback:
@@ -4646,10 +4668,20 @@ class AegisWebPage(QWebEnginePage):
 
     def createWindow(self, window_type: QWebEnginePage.WebWindowType) -> QWebEnginePage:
         # Permite popups de OAuth (Google, Discord, Spotify) y target="_blank"
-        if self.browser_win:
+        if self.browser_win and hasattr(self.browser_win, "add_new_tab"):
             new_view = self.browser_win.add_new_tab()
             return new_view.page()
-        return super().createWindow(window_type)
+        # Si es una ventana en Modo App (ej. Discord) o no tiene pestañas, abrir popup nativo
+        popup = QWebEngineView()
+        popup_page = AegisWebPage(self.profile(), popup, browser_win=self.browser_win)
+        popup.setPage(popup_page)
+        popup.resize(600, 720)
+        popup.setWindowTitle("Autenticación")
+        popup.show()
+        if not hasattr(self, "_active_popups"):
+            self._active_popups = []
+        self._active_popups.append(popup)
+        return popup_page
 
     def handle_feature_permission(self, security_origin: QUrl, feature: QWebEnginePage.Feature):
         # Auto-conceder permisos esenciales para Discord (micrófono, cámara, pantalla, notificaciones, portapapeles) y Spotify
@@ -5436,7 +5468,7 @@ class AegisBrowserWindow(QMainWindow):
         if self.is_incognito:
             self.profile = QWebEngineProfile(self)
             self.profile.setHttpUserAgent(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Aegis/1.3.5"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
             )
             s = self.profile.settings()
             s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, True)
