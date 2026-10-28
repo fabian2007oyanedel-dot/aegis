@@ -535,7 +535,7 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 
         discord_opt_script = scripts_dir / "aegis_discord_optimizer.js"
         cur_opt = discord_opt_script.read_text(encoding="utf-8", errors="ignore") if discord_opt_script.exists() else ""
-        if not discord_opt_script.exists() or "startOptimizerWhenLoggedIn" not in cur_opt:
+        if not discord_opt_script.exists() or "setupResponsiveDrawer" not in cur_opt:
             discord_opt_script.write_text(r"""// ==UserScript==
 // @name         Aegis Discord Ultra-Light Optimizer
 // @description  Reduce drásticamente el consumo de CPU y RAM de Discord Web: limita requestAnimationFrame a 1 FPS en segundo plano, defiende el WebRTC de voz sin microcortes, suprime desenfoques GPU pesados y congela animaciones fuera de pantalla.
@@ -679,7 +679,118 @@ def ensure_builtin_userscripts(scripts_dir: Path):
             }
         }, 4000);
 
-        console.log('[Aegis] Optimizador Discord Ultra-Light activado (0% CPU en fondo, WebRTC blindado).');
+        // ── 5. Responsive Drawer para Panel Lateral (Opción B) ───────────────────
+        function setupResponsiveDrawer() {
+            if (document.getElementById('aegis-discord-drawer-css')) return;
+            const target = document.head || document.documentElement;
+            if (!target) return;
+            const style = document.createElement('style');
+            style.id = 'aegis-discord-drawer-css';
+            style.textContent = `
+                @media (max-width: 680px) {
+                    nav[class*="guilds_"] {
+                        position: fixed !important;
+                        top: 0 !important;
+                        bottom: 0 !important;
+                        left: -320px !important;
+                        width: 72px !important;
+                        z-index: 10002 !important;
+                        transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.6) !important;
+                    }
+                    div[class*="sidebar_"] {
+                        position: fixed !important;
+                        top: 0 !important;
+                        bottom: 0 !important;
+                        left: -320px !important;
+                        width: 240px !important;
+                        z-index: 10001 !important;
+                        transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.6) !important;
+                    }
+
+                    body.aegis-drawer-open nav[class*="guilds_"] {
+                        transform: translateX(320px) !important;
+                    }
+                    body.aegis-drawer-open div[class*="sidebar_"] {
+                        transform: translateX(392px) !important;
+                    }
+
+                    div[class*="chat_"],
+                    main[class*="chatContent_"],
+                    form[class*="form_"],
+                    div[class*="messagesWrapper_"] {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        margin-left: 0 !important;
+                    }
+
+                    [class*="title_"] {
+                        padding-left: 42px !important;
+                    }
+
+                    #aegis-discord-hamburger {
+                        position: fixed;
+                        top: 8px;
+                        left: 8px;
+                        width: 30px;
+                        height: 30px;
+                        background: #5865F2;
+                        border-radius: 8px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: #ffffff;
+                        cursor: pointer;
+                        z-index: 10005;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+                        font-size: 16px;
+                        font-weight: bold;
+                        user-select: none;
+                        transition: transform 0.15s, background 0.15s;
+                    }
+                    #aegis-discord-hamburger:hover {
+                        background: #4752c4;
+                        transform: scale(1.08);
+                    }
+                }
+            `;
+            try {
+                target.appendChild(style);
+            } catch(e) {}
+
+            function ensureHamburgerBtn() {
+                if (document.getElementById('aegis-discord-hamburger')) return;
+                const btn = document.createElement('div');
+                btn.id = 'aegis-discord-hamburger';
+                btn.innerHTML = '&#9776;';
+                btn.title = 'Servidores y Canales (Aegis Drawer)';
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    document.body.classList.toggle('aegis-drawer-open');
+                };
+                document.body.appendChild(btn);
+
+                document.addEventListener('click', (e) => {
+                    if (document.body.classList.contains('aegis-drawer-open')) {
+                        if (!e.target.closest('nav[class*="guilds_"], div[class*="sidebar_"], #aegis-discord-hamburger')) {
+                            document.body.classList.remove('aegis-drawer-open');
+                        }
+                    }
+                });
+
+                document.addEventListener('click', (e) => {
+                    if (e.target.closest('[class*="channel_"], [class*="link_"]')) {
+                        setTimeout(() => document.body.classList.remove('aegis-drawer-open'), 150);
+                    }
+                });
+            }
+            ensureHamburgerBtn();
+            setInterval(ensureHamburgerBtn, 2000);
+        }
+        setupResponsiveDrawer();
+
+        console.log('[Aegis] Optimizador Discord Ultra-Light activado (0% CPU en fondo, WebRTC blindado, Responsive Drawer OK).');
     }
 
     if (document.readyState === 'loading') {
@@ -1818,13 +1929,81 @@ def create_extension_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
     </svg>"""
     return svg_to_icon(svg, size)
 
-def create_aniplay_icon(color_hex: str = "#ff5370", size: int = 16) -> QIcon:
-    """Icono de AniPlay Anime Hub: pantalla con botón play central."""
+def create_aegisplay_icon(color_hex: str = "#ff5370", size: int = 16) -> QIcon:
+    """Icono de AegisPlay Media Hub: monitor de pantalla con símbolo Play central."""
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="2" y="4" width="20" height="13" rx="2" ry="2"/>
       <polygon points="10 8 16 10.5 10 13 10 8" fill="{color_hex}"/>
       <line x1="8" y1="20" x2="16" y2="20"/>
       <line x1="12" y1="17" x2="12" y2="20"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_aniplay_icon(color_hex: str = "#ff5370", size: int = 16) -> QIcon:
+    return create_aegisplay_icon(color_hex, size)
+
+def create_notes_icon(color_hex: str = "#8b949e", size: int = 18) -> QIcon:
+    """Icono vectorial de bloc de notas y trazo de lápiz estilizado (SVG puro)."""
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+      <line x1="9" y1="11" x2="15" y2="11"/>
+      <line x1="9" y1="15" x2="13" y2="15"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_bookmark_ribbon_icon(color_hex: str = "#8b949e", size: int = 18) -> QIcon:
+    """Icono vectorial de cinta marcapáginas estilizada."""
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_history_clock_icon(color_hex: str = "#8b949e", size: int = 18) -> QIcon:
+    """Icono vectorial de reloj de historial con flecha circular."""
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_reading_book_icon(color_hex: str = "#8b949e", size: int = 18) -> QIcon:
+    """Icono vectorial de libro abierto para lista de lectura."""
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_security_key_icon(color_hex: str = "#8b949e", size: int = 18) -> QIcon:
+    """Icono vectorial de escudo de seguridad y clave de contraseñas."""
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <circle cx="12" cy="11" r="2"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_camera_viewfinder_icon(color_hex: str = "#8b949e", size: int = 18) -> QIcon:
+    """Icono vectorial de lente y visor de captura de pantalla."""
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+      <circle cx="12" cy="13" r="4"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_plus_icon(color_hex: str = "#388bfd", size: int = 18) -> QIcon:
+    """Icono vectorial '+' estilizado para añadir paneles personalizados."""
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>"""
+    return svg_to_icon(svg, size)
+
+def create_pin_icon(color_hex: str = "#8b949e", size: int = 16) -> QIcon:
+    """Icono vectorial de chincheta / pin para fijar el panel lateral."""
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="17" x2="12" y2="22"/>
+      <path d="M5 17h14l-2-7V4h1V2H6v2h1v6l-2 7z"/>
     </svg>"""
     return svg_to_icon(svg, size)
 
@@ -4143,12 +4322,148 @@ class AegisBraveImportDialog(QDialog):
         """
         self.setStyleSheet(qss)
 
+# ── 10.3.8b Diálogo para Añadir Paneles Web Personalizados al Dock ───────────
+class AegisAddPanelDialog(QDialog):
+    """Diálogo elegante para añadir cualquier sitio o servicio web al panel lateral vertical estilo Opera GX."""
+    def __init__(self, browser_win, parent=None):
+        super().__init__(parent or browser_win)
+        self.browser_win = browser_win
+        self.setWindowTitle("Añadir Panel Web a la Barra Lateral")
+        self.setFixedWidth(460)
+        self.setModal(True)
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        t = THEMES.get(self.browser_win.current_theme_name, THEMES["Oscuro"])
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {t['bg']};
+                color: {t['text']};
+            }}
+            QLabel {{
+                color: {t['text']};
+                font-size: 12px;
+            }}
+            QLineEdit {{
+                background: {t['surface']};
+                color: {t['text']};
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 13px;
+            }}
+            QLineEdit:focus {{
+                border-color: {t['accent']};
+            }}
+            QPushButton {{
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 600;
+                font-size: 12px;
+            }}
+        """)
+
+        lbl_head = QLabel("Añadir Panel Web Personalizado")
+        lbl_head.setStyleSheet("font-size: 15px; font-weight: 700;")
+        layout.addWidget(lbl_head)
+
+        lbl_desc = QLabel("Agrega cualquier página, reproductor o mensajería web a la barra lateral para acceder en 1-clic.")
+        lbl_desc.setWordWrap(True)
+        lbl_desc.setStyleSheet("color: #8b949e; font-size: 11px;")
+        layout.addWidget(lbl_desc)
+
+        # Preajustes populares
+        lbl_presets = QLabel("Sugerencias populares (1-clic):")
+        lbl_presets.setStyleSheet("font-weight: 600; font-size: 11px; margin-top: 4px;")
+        layout.addWidget(lbl_presets)
+
+        presets_layout = QHBoxLayout()
+        presets_layout.setSpacing(6)
+        presets = [
+            ("YT Music", "https://music.youtube.com", "#ff0000"),
+            ("WhatsApp", "https://web.whatsapp.com", "#25d366"),
+            ("Spotify", "https://open.spotify.com", "#1db954"),
+            ("Telegram", "https://web.telegram.org/k/", "#229ed9"),
+            ("Twitch", "https://www.twitch.tv", "#9146ff"),
+            ("ChatGPT", "https://chatgpt.com", "#10a37f"),
+        ]
+        for name, url, color in presets:
+            btn_p = QPushButton(name)
+            btn_p.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_p.setStyleSheet(f"background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: {color};")
+            btn_p.clicked.connect(lambda _, n=name, u=url: self._fill_preset(n, u))
+            presets_layout.addWidget(btn_p)
+        layout.addLayout(presets_layout)
+
+        # Campos
+        layout.addWidget(QLabel("Nombre del Panel:"))
+        self.txt_name = QLineEdit()
+        self.txt_name.setPlaceholderText("Ej. YouTube Music")
+        layout.addWidget(self.txt_name)
+
+        layout.addWidget(QLabel("URL del Sitio Web:"))
+        self.txt_url = QLineEdit()
+        self.txt_url.setPlaceholderText("https://music.youtube.com")
+        layout.addWidget(self.txt_url)
+
+        # Botones de acción
+        btns_layout = QHBoxLayout()
+        btns_layout.addStretch()
+
+        btn_cancel = QPushButton("Cancelar")
+        btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cancel.setStyleSheet("background: transparent; color: #8b949e; border: 1px solid rgba(255,255,255,0.12);")
+        btn_cancel.clicked.connect(self.reject)
+        btns_layout.addWidget(btn_cancel)
+
+        btn_save = QPushButton("Añadir al Dock")
+        btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_save.setStyleSheet(f"background: {t['accent']}; color: #ffffff; border: none;")
+        btn_save.clicked.connect(self.save_panel)
+        btns_layout.addWidget(btn_save)
+
+        layout.addLayout(btns_layout)
+
+    def _fill_preset(self, name, url):
+        self.txt_name.setText(name)
+        self.txt_url.setText(url)
+
+    def save_panel(self):
+        import time
+        name = self.txt_name.text().strip()
+        url = self.txt_url.text().strip()
+        if not url:
+            return
+        if not (url.startswith("http://") or url.startswith("https://") or url.startswith("aegis://")):
+            url = "https://" + url
+        if not name:
+            name = url.split("//")[-1].split("/")[0].replace("www.", "")
+
+        pid = f"p_{int(time.time() * 1000)}"
+        custom_panels = self.browser_win.config.setdefault("custom_side_panels", [])
+        custom_panels.append({
+            "id": pid,
+            "name": name,
+            "url": url,
+            "icon": f"{url.rstrip('/')}/favicon.ico"
+        })
+        self.browser_win.save_config()
+        self.browser_win.vertical_dock.refresh_custom_panels()
+        self.browser_win.show_toast(f"Panel '{name}' añadido a la barra lateral.")
+        self.accept()
+
+
 # ── 10.3.9 Barra Lateral Vertical Estilo Opera GX (Dock Izquierdo) ──────────────
 class AegisVerticalDock(QFrame):
     """
     Barra lateral vertical ultra-estilizada estilo Opera GX (48px de ancho).
     Ubicada en el extremo izquierdo de Aegis Browser.
-    Permite acceso rápido con 1-clic a Discord, Anime Hub, Notas, Marcadores y Ajustes.
+    Permite acceso rápido con 1-clic a Discord, AegisPlay, Notas, Marcadores, Ajustes y Paneles Personalizados.
+    100% libre de emojis, con iconos vectoriales SVG limpios.
     """
     def __init__(self, browser_win):
         super().__init__(browser_win)
@@ -4157,6 +4472,7 @@ class AegisVerticalDock(QFrame):
         self.setFixedWidth(48)
         self.active_tool = None
         self.buttons = {}
+        self.custom_panel_buttons = {}
         self.init_ui()
 
     def init_ui(self):
@@ -4176,16 +4492,17 @@ class AegisVerticalDock(QFrame):
         layout.addWidget(self.btn_discord)
         self.buttons["discord"] = self.btn_discord
 
-        # 2. AniPlay Anime Hub
-        self.btn_aniplay = QPushButton()
-        self.btn_aniplay.setIcon(create_aniplay_icon("#ff5370", 20))
-        self.btn_aniplay.setIconSize(QSize(20, 20))
-        self.btn_aniplay.setToolTip("AniPlay Anime Hub")
-        self.btn_aniplay.setFixedSize(38, 38)
-        self.btn_aniplay.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_aniplay.clicked.connect(lambda: self.browser_win.toggle_side_panel("aniplay"))
-        layout.addWidget(self.btn_aniplay)
-        self.buttons["aniplay"] = self.btn_aniplay
+        # 2. AegisPlay Hub (Anime, Películas y Series)
+        self.btn_aegisplay = QPushButton()
+        self.btn_aegisplay.setIcon(create_aegisplay_icon("#ff5370", 20))
+        self.btn_aegisplay.setIconSize(QSize(20, 20))
+        self.btn_aegisplay.setToolTip("AegisPlay Media Hub (Anime, Películas y Series)")
+        self.btn_aegisplay.setFixedSize(38, 38)
+        self.btn_aegisplay.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_aegisplay.clicked.connect(lambda: self.browser_win.toggle_side_panel("aegisplay"))
+        layout.addWidget(self.btn_aegisplay)
+        self.buttons["aegisplay"] = self.btn_aegisplay
+        self.btn_aniplay = self.btn_aegisplay
 
         # Separador sutil
         sep1 = QFrame()
@@ -4193,8 +4510,10 @@ class AegisVerticalDock(QFrame):
         sep1.setObjectName("VerticalDockSep")
         layout.addWidget(sep1)
 
-        # 3. Notas Rápidas
-        self.btn_notes = QPushButton("📝")
+        # 3. Notas Rápidas (Icono vectorial SVG)
+        self.btn_notes = QPushButton()
+        self.btn_notes.setIcon(create_notes_icon("#8b949e", 20))
+        self.btn_notes.setIconSize(QSize(20, 20))
         self.btn_notes.setToolTip("Bloc de Notas Rápido (Ctrl+B)")
         self.btn_notes.setFixedSize(38, 38)
         self.btn_notes.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -4202,8 +4521,10 @@ class AegisVerticalDock(QFrame):
         layout.addWidget(self.btn_notes)
         self.buttons["notes"] = self.btn_notes
 
-        # 4. Marcadores Rápidos
-        self.btn_bookmarks = QPushButton("🔖")
+        # 4. Marcadores Rápidos (Icono vectorial SVG)
+        self.btn_bookmarks = QPushButton()
+        self.btn_bookmarks.setIcon(create_bookmark_ribbon_icon("#8b949e", 20))
+        self.btn_bookmarks.setIconSize(QSize(20, 20))
         self.btn_bookmarks.setToolTip("Marcadores (Ctrl+D)")
         self.btn_bookmarks.setFixedSize(38, 38)
         self.btn_bookmarks.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -4211,8 +4532,10 @@ class AegisVerticalDock(QFrame):
         layout.addWidget(self.btn_bookmarks)
         self.buttons["bookmarks"] = self.btn_bookmarks
 
-        # 5. Historial Rápido
-        self.btn_history = QPushButton("🕒")
+        # 5. Historial Rápido (Icono vectorial SVG)
+        self.btn_history = QPushButton()
+        self.btn_history.setIcon(create_history_clock_icon("#8b949e", 20))
+        self.btn_history.setIconSize(QSize(20, 20))
         self.btn_history.setToolTip("Historial de Navegación (Ctrl+H)")
         self.btn_history.setFixedSize(38, 38)
         self.btn_history.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -4220,8 +4543,10 @@ class AegisVerticalDock(QFrame):
         layout.addWidget(self.btn_history)
         self.buttons["history"] = self.btn_history
 
-        # 6. Lista de Lectura
-        self.btn_reading = QPushButton("📚")
+        # 6. Lista de Lectura (Icono vectorial SVG)
+        self.btn_reading = QPushButton()
+        self.btn_reading.setIcon(create_reading_book_icon("#8b949e", 20))
+        self.btn_reading.setIconSize(QSize(20, 20))
         self.btn_reading.setToolTip("Lista de Lectura")
         self.btn_reading.setFixedSize(38, 38)
         self.btn_reading.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -4229,23 +4554,49 @@ class AegisVerticalDock(QFrame):
         layout.addWidget(self.btn_reading)
         self.buttons["reading"] = self.btn_reading
 
-        # 7. Generador de Contraseñas
-        self.btn_pass = QPushButton("🔐")
-        self.btn_pass.setToolTip("Generador de Contraseñas")
+        # 7. Generador de Contraseñas (Icono vectorial SVG)
+        self.btn_pass = QPushButton()
+        self.btn_pass.setIcon(create_security_key_icon("#8b949e", 20))
+        self.btn_pass.setIconSize(QSize(20, 20))
+        self.btn_pass.setToolTip("Generador de Contraseñas Seguras")
         self.btn_pass.setFixedSize(38, 38)
         self.btn_pass.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_pass.clicked.connect(lambda: self.browser_win.toggle_side_panel("passwords"))
         layout.addWidget(self.btn_pass)
         self.buttons["passwords"] = self.btn_pass
 
-        # 8. Captura de Pantalla
-        self.btn_shot = QPushButton("📸")
-        self.btn_shot.setToolTip("Captura de Pantalla")
+        # 8. Captura de Pantalla (Icono vectorial SVG)
+        self.btn_shot = QPushButton()
+        self.btn_shot.setIcon(create_camera_viewfinder_icon("#8b949e", 20))
+        self.btn_shot.setIconSize(QSize(20, 20))
+        self.btn_shot.setToolTip("Captura de Pantalla Web")
         self.btn_shot.setFixedSize(38, 38)
         self.btn_shot.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_shot.clicked.connect(lambda: self.browser_win.toggle_side_panel("screenshot"))
         layout.addWidget(self.btn_shot)
         self.buttons["screenshot"] = self.btn_shot
+
+        # Separador para paneles personalizados
+        sep_custom = QFrame()
+        sep_custom.setFixedHeight(1)
+        sep_custom.setObjectName("VerticalDockSep")
+        layout.addWidget(sep_custom)
+
+        # Contenedor para botones de paneles web personalizados del usuario
+        self.custom_panels_layout = QVBoxLayout()
+        self.custom_panels_layout.setContentsMargins(0, 0, 0, 0)
+        self.custom_panels_layout.setSpacing(6)
+        layout.addLayout(self.custom_panels_layout)
+
+        # Botón [+] para añadir nuevos paneles web (YouTube Music, WhatsApp, etc.)
+        self.btn_add_panel = QPushButton()
+        self.btn_add_panel.setIcon(create_plus_icon("#388bfd", 18))
+        self.btn_add_panel.setIconSize(QSize(18, 18))
+        self.btn_add_panel.setToolTip("Añadir panel web personalizado (+)")
+        self.btn_add_panel.setFixedSize(38, 38)
+        self.btn_add_panel.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_add_panel.clicked.connect(self.open_add_panel_dialog)
+        layout.addWidget(self.btn_add_panel)
 
         layout.addStretch()
 
@@ -4265,6 +4616,96 @@ class AegisVerticalDock(QFrame):
         self.btn_settings.clicked.connect(lambda: self.browser_win.open_internal_page("aegis://settings"))
         layout.addWidget(self.btn_settings)
         self.buttons["settings"] = self.btn_settings
+
+        # Cargar paneles personalizados existentes
+        self.refresh_custom_panels()
+
+    def open_add_panel_dialog(self):
+        dlg = AegisAddPanelDialog(self.browser_win, self)
+        dlg.exec()
+
+    def refresh_custom_panels(self):
+        """Reconstruye los botones de paneles web personalizados añadidos por el usuario."""
+        while self.custom_panels_layout.count() > 0:
+            item = self.custom_panels_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+        self.custom_panel_buttons.clear()
+
+        panels = self.browser_win.config.get("custom_side_panels", []) if self.browser_win else []
+        for p in panels:
+            pid = p.get("id")
+            name = p.get("name", "Web")
+            url = p.get("url", "")
+
+            btn = QPushButton()
+            icon = self._get_panel_icon(p)
+            btn.setIcon(icon)
+            btn.setIconSize(QSize(20, 20))
+            btn.setToolTip(f"{name} · {url}")
+            btn.setFixedSize(38, 38)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            tool_key = f"custom_{pid}"
+            btn.clicked.connect(lambda _, k=tool_key: self.browser_win.toggle_side_panel(k))
+            btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            btn.customContextMenuRequested.connect(lambda pos, p_info=p: self._show_custom_panel_menu(p_info, pos))
+            self.custom_panels_layout.addWidget(btn)
+            self.buttons[tool_key] = btn
+            self.custom_panel_buttons[pid] = btn
+
+    def _get_panel_icon(self, p: dict) -> QIcon:
+        url_lower = p.get("url", "").lower()
+        if "music.youtube" in url_lower:
+            svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="#ff0000"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16" fill="#ffffff"/></svg>'
+            return svg_to_icon(svg, 20)
+        elif "whatsapp" in url_lower:
+            svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#25d366" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>'
+            return svg_to_icon(svg, 20)
+        elif "spotify" in url_lower:
+            svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="#1db954"><circle cx="12" cy="12" r="10"/><path d="M7 9c3-1 7-1 10 1M8 12c2.5-.8 6-.8 8 .8M9 15c2-.5 4.5-.5 6 .6" stroke="#000" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>'
+            return svg_to_icon(svg, 20)
+        elif "telegram" in url_lower:
+            svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="#229ed9"><circle cx="12" cy="12" r="10"/><path d="M17 7l-10 4 3 2 1 4 2-2 3 2 2-9z" fill="#ffffff"/></svg>'
+            return svg_to_icon(svg, 20)
+        elif "twitch" in url_lower:
+            svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="#9146ff"><path d="M5 2h15v13l-4 4h-4l-3 3v-3H5V2zm11 10V6h-2v6h2zm-5 0V6H9v6h2z" fill="#ffffff"/></svg>'
+            return svg_to_icon(svg, 20)
+        elif "chatgpt" in url_lower or "openai" in url_lower:
+            svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#10a37f" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="#10a37f"/></svg>'
+            return svg_to_icon(svg, 20)
+        else:
+            first_char = (p.get("name") or "W")[0].upper()
+            svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="10" fill="#388bfd"/><text x="12" y="16" font-size="12" font-family="sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">{first_char}</text></svg>'
+            return svg_to_icon(svg, 20)
+
+    def _show_custom_panel_menu(self, panel_info: dict, pos):
+        menu = QMenu(self)
+        a_open = menu.addAction("↗ Abrir en pestaña principal")
+        a_rel = menu.addAction("⟳ Recargar panel")
+        menu.addSeparator()
+        a_del = menu.addAction("✕ Eliminar de la barra lateral")
+
+        action = menu.exec(QCursor.pos())
+        if action == a_open:
+            self.browser_win.add_new_tab(panel_info.get("url", ""))
+        elif action == a_rel:
+            tool_key = f"custom_{panel_info.get('id')}"
+            if hasattr(self.browser_win.sidebar, "reload_custom_panel"):
+                self.browser_win.sidebar.reload_custom_panel(tool_key)
+        elif action == a_del:
+            self._delete_custom_panel(panel_info.get("id"))
+
+    def _delete_custom_panel(self, pid: str):
+        panels = self.browser_win.config.get("custom_side_panels", [])
+        self.browser_win.config["custom_side_panels"] = [p for p in panels if p.get("id") != pid]
+        self.browser_win.save_config()
+        self.refresh_custom_panels()
+        if getattr(self.browser_win, "_current_side_tool", None) == f"custom_{pid}":
+            self.browser_win.sidebar.hide()
+            self.browser_win._current_side_tool = None
+            self.set_active_tool(None)
+        self.browser_win.show_toast("Panel eliminado de la barra lateral.")
 
     def set_active_tool(self, tool_name: str | None):
         self.active_tool = tool_name
@@ -4306,13 +4747,18 @@ class AegisVerticalDock(QFrame):
 
 # ── 10.3.10 Barra Lateral de Productividad y Herramientas Rápidas (Ctrl+B) ──────
 class AegisSidebarWidget(QFrame):
+    """
+    Panel lateral multifunción y expandible estilo Opera GX.
+    Integra Discord, AegisPlay, Notas, Marcadores, Historial, Herramientas y Paneles Web Personalizados.
+    100% libre de emojis, con iconos vectoriales limpios y ancho redimensionable.
+    """
     def __init__(self, parent_win=None):
         super().__init__(parent_win)
         self.parent_win = parent_win
         self.setObjectName("AegisSidebarWidget")
-        self.setFixedWidth(420)
         self.reading_list = []
         self._discord_loaded = False
+        self.custom_views = {}
         self.load_reading_list()
         self.init_ui()
 
@@ -4334,48 +4780,68 @@ class AegisSidebarWidget(QFrame):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Barra de botones de herramientas superior
+        # Barra de botones de herramientas superior (Iconos vectoriales 0 emojis)
         top_bar = QWidget()
         top_bar.setObjectName("SidebarTopBar")
         top_layout = QHBoxLayout(top_bar)
         top_layout.setContentsMargins(8, 6, 8, 6)
         top_layout.setSpacing(4)
 
-        self.btn_tool_notes = QPushButton("📝")
-        self.btn_tool_notes.setToolTip("Bloc de Notas Rápido")
-        self.btn_tool_reading = QPushButton("📚")
-        self.btn_tool_reading.setToolTip("Lista de Lectura")
-        self.btn_tool_history = QPushButton("🕒")
-        self.btn_tool_history.setToolTip("Historial Rápido")
-        self.btn_tool_bookmarks = QPushButton("🔖")
-        self.btn_tool_bookmarks.setToolTip("Marcadores")
-        self.btn_tool_pass = QPushButton("🔐")
-        self.btn_tool_pass.setToolTip("Generador de Contraseñas")
-        self.btn_tool_shot = QPushButton("📸")
-        self.btn_tool_shot.setToolTip("Captura de Pantalla")
-
         self.btn_tool_discord = QPushButton()
-        self.btn_tool_discord.setIcon(create_discord_icon("#5865F2", 18))
-        self.btn_tool_discord.setIconSize(QSize(18, 18))
-        self.btn_tool_discord.setToolTip("Discord Web Panel")
+        self.btn_tool_discord.setIcon(create_discord_icon("#5865F2", 16))
+        self.btn_tool_discord.setIconSize(QSize(16, 16))
+        self.btn_tool_discord.setToolTip("Discord Web")
 
-        self.btn_tool_aniplay = QPushButton("▶")
-        self.btn_tool_aniplay.setToolTip("AniPlay Anime Hub")
+        self.btn_tool_aegisplay = QPushButton()
+        self.btn_tool_aegisplay.setIcon(create_aegisplay_icon("#ff5370", 16))
+        self.btn_tool_aegisplay.setIconSize(QSize(16, 16))
+        self.btn_tool_aegisplay.setToolTip("AegisPlay Media Hub")
+        self.btn_tool_aniplay = self.btn_tool_aegisplay
+
+        self.btn_tool_notes = QPushButton()
+        self.btn_tool_notes.setIcon(create_notes_icon("#8b949e", 16))
+        self.btn_tool_notes.setIconSize(QSize(16, 16))
+        self.btn_tool_notes.setToolTip("Bloc de Notas Rápido")
+
+        self.btn_tool_reading = QPushButton()
+        self.btn_tool_reading.setIcon(create_reading_book_icon("#8b949e", 16))
+        self.btn_tool_reading.setIconSize(QSize(16, 16))
+        self.btn_tool_reading.setToolTip("Lista de Lectura")
+
+        self.btn_tool_history = QPushButton()
+        self.btn_tool_history.setIcon(create_history_clock_icon("#8b949e", 16))
+        self.btn_tool_history.setIconSize(QSize(16, 16))
+        self.btn_tool_history.setToolTip("Historial Rápido")
+
+        self.btn_tool_bookmarks = QPushButton()
+        self.btn_tool_bookmarks.setIcon(create_bookmark_ribbon_icon("#8b949e", 16))
+        self.btn_tool_bookmarks.setIconSize(QSize(16, 16))
+        self.btn_tool_bookmarks.setToolTip("Marcadores")
+
+        self.btn_tool_pass = QPushButton()
+        self.btn_tool_pass.setIcon(create_security_key_icon("#8b949e", 16))
+        self.btn_tool_pass.setIconSize(QSize(16, 16))
+        self.btn_tool_pass.setToolTip("Generador de Contraseñas")
+
+        self.btn_tool_shot = QPushButton()
+        self.btn_tool_shot.setIcon(create_camera_viewfinder_icon("#8b949e", 16))
+        self.btn_tool_shot.setIconSize(QSize(16, 16))
+        self.btn_tool_shot.setToolTip("Captura de Pantalla")
 
         tools = [
             (self.btn_tool_discord, 0),
+            (self.btn_tool_aegisplay, 7),
             (self.btn_tool_notes, 1),
             (self.btn_tool_reading, 2),
             (self.btn_tool_history, 3),
             (self.btn_tool_bookmarks, 4),
             (self.btn_tool_pass, 5),
             (self.btn_tool_shot, 6),
-            (self.btn_tool_aniplay, 7),
         ]
 
         for btn, idx in tools:
             btn.setProperty("class", "sidebar-tool-btn")
-            btn.setFixedSize(30, 26)
+            btn.setFixedSize(28, 26)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(lambda _, i=idx: self.switch_tab(i))
             top_layout.addWidget(btn)
@@ -4393,7 +4859,7 @@ class AegisSidebarWidget(QFrame):
 
         self.stack = QStackedWidget()
 
-        # 0. Tab Discord (Panel lateral estilo Opera GX)
+        # 0. Tab Discord (Panel lateral estilo Opera GX con Responsive Drawer)
         w_discord = QWidget()
         l_d = QVBoxLayout(w_discord)
         l_d.setContentsMargins(0, 0, 0, 0)
@@ -4445,7 +4911,7 @@ class AegisSidebarWidget(QFrame):
         l_n = QVBoxLayout(w_notes)
         l_n.setContentsMargins(12, 10, 12, 10)
         l_n.setSpacing(8)
-        lbl_notes_title = QLabel("📝 Notas Rápidas (Autoguardado)")
+        lbl_notes_title = QLabel("Notas Rápidas (Autoguardado)")
         lbl_notes_title.setStyleSheet("font-weight: 700; font-size: 12px; color: #f0f6fc;")
         l_n.addWidget(lbl_notes_title)
         self.txt_notes = QTextEdit()
@@ -4455,7 +4921,7 @@ class AegisSidebarWidget(QFrame):
         self.txt_notes.setPlainText(saved_notes)
         self.txt_notes.textChanged.connect(self.on_notes_changed)
         l_n.addWidget(self.txt_notes)
-        btn_copy_notes = QPushButton("📋 Copiar notas")
+        btn_copy_notes = QPushButton("Copiar notas")
         btn_copy_notes.setProperty("class", "sidebar-action-btn")
         btn_copy_notes.clicked.connect(lambda: (QApplication.clipboard().setText(self.txt_notes.toPlainText()), self.parent_win.show_toast("Notas copiadas al portapapeles.")))
         l_n.addWidget(btn_copy_notes)
@@ -4466,7 +4932,7 @@ class AegisSidebarWidget(QFrame):
         l_r = QVBoxLayout(w_reading)
         l_r.setContentsMargins(12, 10, 12, 10)
         l_r.setSpacing(8)
-        btn_add_reading = QPushButton("➕ Añadir pestaña actual")
+        btn_add_reading = QPushButton("Añadir pestaña actual")
         btn_add_reading.setProperty("class", "sidebar-action-btn")
         btn_add_reading.clicked.connect(self.add_current_to_reading)
         l_r.addWidget(btn_add_reading)
@@ -4483,7 +4949,7 @@ class AegisSidebarWidget(QFrame):
         l_h.setSpacing(8)
         self.hist_filter = QLineEdit()
         self.hist_filter.setObjectName("SidebarSearchInput")
-        self.hist_filter.setPlaceholderText("🔍 Filtrar historial...")
+        self.hist_filter.setPlaceholderText("Filtrar historial...")
         self.hist_filter.textChanged.connect(self.refresh_quick_history)
         l_h.addWidget(self.hist_filter)
         self.list_history = QListWidget()
@@ -4499,7 +4965,7 @@ class AegisSidebarWidget(QFrame):
         l_bm.setSpacing(8)
         self.bm_filter = QLineEdit()
         self.bm_filter.setObjectName("SidebarSearchInput")
-        self.bm_filter.setPlaceholderText("🔍 Filtrar marcadores...")
+        self.bm_filter.setPlaceholderText("Filtrar marcadores...")
         self.bm_filter.textChanged.connect(self.refresh_quick_bookmarks)
         l_bm.addWidget(self.bm_filter)
         self.list_bookmarks = QListWidget()
@@ -4513,7 +4979,7 @@ class AegisSidebarWidget(QFrame):
         l_p = QVBoxLayout(w_pass)
         l_p.setContentsMargins(12, 12, 12, 12)
         l_p.setSpacing(10)
-        lbl_p_title = QLabel("🔐 Generador de Contraseñas")
+        lbl_p_title = QLabel("Generador de Contraseñas")
         lbl_p_title.setStyleSheet("font-weight: 700; font-size: 12px; color: #f0f6fc;")
         l_p.addWidget(lbl_p_title)
 
@@ -4537,7 +5003,7 @@ class AegisSidebarWidget(QFrame):
         self.pass_output.setReadOnly(True)
         l_p.addWidget(self.pass_output)
 
-        btn_gen = QPushButton("🔄 Generar y copiar")
+        btn_gen = QPushButton("Generar y copiar")
         btn_gen.setProperty("class", "sidebar-action-btn")
         btn_gen.clicked.connect(self.generate_and_copy_pass)
         l_p.addWidget(btn_gen)
@@ -4549,7 +5015,7 @@ class AegisSidebarWidget(QFrame):
         l_s = QVBoxLayout(w_shot)
         l_s.setContentsMargins(12, 12, 12, 12)
         l_s.setSpacing(12)
-        lbl_s_title = QLabel("📸 Captura de Pantalla Web")
+        lbl_s_title = QLabel("Captura de Pantalla Web")
         lbl_s_title.setStyleSheet("font-weight: 700; font-size: 12px; color: #f0f6fc;")
         l_s.addWidget(lbl_s_title)
 
@@ -4558,28 +5024,28 @@ class AegisSidebarWidget(QFrame):
         lbl_s_desc.setStyleSheet("font-size: 11px; color: #8b949e;")
         l_s.addWidget(lbl_s_desc)
 
-        btn_take_shot = QPushButton("📸 Capturar Pestaña Actual")
+        btn_take_shot = QPushButton("Capturar Pestaña Actual")
         btn_take_shot.setProperty("class", "sidebar-action-btn")
         btn_take_shot.clicked.connect(self.take_screenshot)
         l_s.addWidget(btn_take_shot)
         l_s.addStretch()
         self.stack.addWidget(w_shot)
 
-        # 7. Tab AniPlay Hub
+        # 7. Tab AegisPlay Hub
         w_ani = QWidget()
         l_ani = QVBoxLayout(w_ani)
         l_ani.setContentsMargins(12, 12, 12, 12)
         l_ani.setSpacing(12)
-        lbl_ani_t = QLabel("▶ AniPlay Anime Hub")
+        lbl_ani_t = QLabel("AegisPlay Media Hub")
         lbl_ani_t.setStyleSheet("font-weight: 700; font-size: 13px; color: #ff5370;")
         l_ani.addWidget(lbl_ani_t)
-        lbl_ani_d = QLabel("Centro multimedia integrado para ver anime en streaming sin anuncios ni ventanas emergentes.")
+        lbl_ani_d = QLabel("Centro multimedia universal para anime, películas y series sin anuncios ni ventanas emergentes.")
         lbl_ani_d.setWordWrap(True)
         lbl_ani_d.setStyleSheet("font-size: 11px; color: #8b949e;")
         l_ani.addWidget(lbl_ani_d)
-        btn_open_aniplay = QPushButton("▶ Abrir Catálogo AniPlay")
+        btn_open_aniplay = QPushButton("Abrir Catálogo AegisPlay")
         btn_open_aniplay.setProperty("class", "sidebar-action-btn")
-        btn_open_aniplay.clicked.connect(lambda: self.parent_win.open_internal_page("aegis://aniplay") if self.parent_win else None)
+        btn_open_aniplay.clicked.connect(lambda: self.parent_win.open_internal_page("aegis://play") if self.parent_win else None)
         l_ani.addWidget(btn_open_aniplay)
         l_ani.addStretch()
         self.stack.addWidget(w_ani)
@@ -4593,16 +5059,15 @@ class AegisSidebarWidget(QFrame):
 
     def switch_tab(self, idx: int):
         self.stack.setCurrentIndex(idx)
+        tool_names = ["discord", "notes", "reading", "history", "bookmarks", "passwords", "screenshot", "aegisplay"]
         if idx == 0:
-            self.setFixedWidth(430)
             self.load_discord()
             if self.parent_win and hasattr(self.parent_win, "vertical_dock"):
                 self.parent_win.vertical_dock.set_active_tool("discord")
-        else:
-            self.setFixedWidth(340)
-            tool_names = ["discord", "notes", "reading", "history", "bookmarks", "passwords", "screenshot", "aniplay"]
-            if idx < len(tool_names) and self.parent_win and hasattr(self.parent_win, "vertical_dock"):
-                self.parent_win.vertical_dock.set_active_tool(tool_names[idx])
+        elif idx < len(tool_names):
+            t_name = tool_names[idx]
+            if self.parent_win and hasattr(self.parent_win, "vertical_dock"):
+                self.parent_win.vertical_dock.set_active_tool(t_name)
             if idx == 2: self.refresh_reading_list()
             elif idx == 3: self.refresh_quick_history()
             elif idx == 4: self.refresh_quick_bookmarks()
@@ -4617,10 +5082,79 @@ class AegisSidebarWidget(QFrame):
             "bookmarks": 4,
             "passwords": 5,
             "screenshot": 6,
+            "aegisplay": 7,
             "aniplay": 7,
         }
-        idx = mapping.get(tool_name, 0)
-        self.switch_tab(idx)
+        if tool_name in mapping:
+            self.switch_tab(mapping[tool_name])
+            return
+
+        # Soporte para paneles web personalizados (custom_p_...)
+        if tool_name.startswith("custom_"):
+            pid = tool_name.replace("custom_", "")
+            if pid not in self.custom_views:
+                self._create_custom_web_panel(pid)
+            if pid in self.custom_views:
+                w_container, view, stack_idx = self.custom_views[pid]
+                self.stack.setCurrentIndex(stack_idx)
+                if self.parent_win and hasattr(self.parent_win, "vertical_dock"):
+                    self.parent_win.vertical_dock.set_active_tool(tool_name)
+
+    def _create_custom_web_panel(self, pid: str):
+        panels = self.parent_win.config.get("custom_side_panels", []) if self.parent_win else []
+        panel_info = next((p for p in panels if p.get("id") == pid), None)
+        if not panel_info:
+            return
+
+        w_panel = QWidget()
+        l_p = QVBoxLayout(w_panel)
+        l_p.setContentsMargins(0, 0, 0, 0)
+        l_p.setSpacing(0)
+
+        # Barra superior de control
+        p_ctrl = QWidget()
+        p_ctrl.setFixedHeight(30)
+        p_ctrl.setStyleSheet("background: rgba(0,0,0,0.18); border-bottom: 1px solid rgba(255,255,255,0.06);")
+        p_ctrl_l = QHBoxLayout(p_ctrl)
+        p_ctrl_l.setContentsMargins(8, 0, 8, 0)
+        p_ctrl_l.setSpacing(6)
+
+        lbl_title = QLabel(panel_info.get("name", "Web Panel"))
+        lbl_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #388bfd;")
+        p_ctrl_l.addWidget(lbl_title)
+        p_ctrl_l.addStretch()
+
+        btn_open = QPushButton("↗ Abrir en pestaña")
+        btn_open.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_open.setStyleSheet("background: transparent; border: none; color: #8b949e; font-size: 11px; font-weight: 600;")
+        btn_open.clicked.connect(lambda _, u=panel_info.get("url"): self.parent_win.add_new_tab(u))
+        p_ctrl_l.addWidget(btn_open)
+
+        profile_to_use = self.parent_win.profile if self.parent_win else get_shared_profile()
+        c_view = AegisWebView(self.parent_win)
+        c_page = AegisWebPage(profile_to_use, c_view, browser_win=self.parent_win)
+        c_view.setPage(c_page)
+
+        btn_rel = QPushButton("⟳")
+        btn_rel.setToolTip("Recargar")
+        btn_rel.setFixedSize(22, 22)
+        btn_rel.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_rel.setStyleSheet("background: transparent; border: none; color: #8b949e; font-size: 13px; font-weight: bold;")
+        btn_rel.clicked.connect(c_view.reload)
+        p_ctrl_l.addWidget(btn_rel)
+
+        l_p.addWidget(p_ctrl)
+        l_p.addWidget(c_view, 1)
+
+        c_view.load(QUrl(panel_info.get("url", "about:blank")))
+        stack_idx = self.stack.addWidget(w_panel)
+        self.custom_views[pid] = (w_panel, c_view, stack_idx)
+
+    def reload_custom_panel(self, tool_name: str):
+        pid = tool_name.replace("custom_", "")
+        if pid in self.custom_views:
+            _, view, _ = self.custom_views[pid]
+            view.reload()
 
     def load_discord(self):
         if not getattr(self, "_discord_loaded", False):
@@ -6688,6 +7222,12 @@ class AegisBrowserWindow(QMainWindow):
         self.tab_search_popup.show()
         self.tab_search_popup.raise_()
 
+    def _on_sidebar_resized(self, pos, index):
+        if hasattr(self, "sidebar") and self.sidebar.isVisible():
+            w = self.sidebar.width()
+            if 300 <= w <= 950:
+                self.config["sidebar_width"] = w
+
     def toggle_side_panel(self, tool_name: str = "discord"):
         """Abre, alterna o cierra el panel lateral estilo Opera GX con la herramienta indicada."""
         if not hasattr(self, "sidebar"):
@@ -6704,6 +7244,10 @@ class AegisBrowserWindow(QMainWindow):
                 self.btn_sidebar.setStyleSheet("")
         else:
             self.sidebar.show()
+            saved_w = self.config.get("sidebar_width", 450)
+            if hasattr(self, "sidebar_splitter"):
+                tot_w = self.sidebar_splitter.width() or 1400
+                self.sidebar_splitter.setSizes([saved_w, max(200, tot_w - saved_w)])
             self._current_side_tool = tool_name
             if hasattr(self, "vertical_dock"):
                 self.vertical_dock.set_active_tool(tool_name)
@@ -6925,6 +7469,12 @@ class AegisBrowserWindow(QMainWindow):
             "chrome://history": "aegis://history",
             "about:extensions": "aegis://extensions",
             "start": "aegis://start",
+            "play": "aegis://play",
+            "aegisplay": "aegis://play",
+            "aniplay": "aegis://play",
+            "cine": "aegis://play",
+            "peliculas": "aegis://play",
+            "anime": "aegis://play",
             "inicio": "aegis://start"
         }
         if text.lower() in shortcuts:
@@ -7586,20 +8136,36 @@ class AegisBrowserWindow(QMainWindow):
         self.devtools_panel.hide()
         self.web_splitter.addWidget(self.devtools_panel)
 
-        # 1. Barra vertical compacta estilo Opera GX en el extremo izquierdo
+        # Splitter horizontal que permite redimensionar suavemente el panel lateral y el área web
+        self.sidebar_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.sidebar_splitter.setObjectName("SidebarSplitter")
+        self.sidebar_splitter.setHandleWidth(4)
+        self.sidebar_splitter.setChildrenCollapsible(False)
+
+        # 1. Barra vertical compacta estilo Opera GX en el extremo izquierdo (48px fijo)
         self.vertical_dock = AegisVerticalDock(self)
         if not self.config.get("show_opera_dock", True):
             self.vertical_dock.hide()
         splitter_layout.addWidget(self.vertical_dock, 0)
 
-        # 2. Panel lateral expandible (Discord, Notas, Marcadores, etc.)
+        # 2. Panel lateral expandible (Discord, AegisPlay, Notas, Marcadores, etc.)
         self.sidebar = AegisSidebarWidget(self)
+        self.sidebar.setMinimumWidth(320)
+        self.sidebar.setMaximumWidth(950)
+        self.sidebar_splitter.addWidget(self.sidebar)
         if not self.config.get("show_sidebar", False):
             self.sidebar.hide()
-        splitter_layout.addWidget(self.sidebar, 0)
 
         # 3. Contenedor de páginas web y DevTools acoplado
-        splitter_layout.addWidget(self.web_splitter, 1)
+        self.sidebar_splitter.addWidget(self.web_splitter)
+        self.sidebar_splitter.setStretchFactor(0, 0)
+        self.sidebar_splitter.setStretchFactor(1, 1)
+
+        saved_sidebar_w = self.config.get("sidebar_width", 450)
+        self.sidebar_splitter.setSizes([saved_sidebar_w, 1400])
+        self.sidebar_splitter.splitterMoved.connect(self._on_sidebar_resized)
+
+        splitter_layout.addWidget(self.sidebar_splitter, 1)
 
         main_layout.addWidget(self.web_content_splitter, 1)
 
@@ -9527,71 +10093,98 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
 # ── 12.2 Plantilla HTML de Configuración (aegis://settings) ───────────────────
 import sys
 
-def get_aniplay_html(theme_class: str = "theme-dark") -> str:
+def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
+    """
+    AegisPlay Media Hub: Centro multimedia universal para Anime, Películas y Series.
+    Vacío por defecto (0 mocks hardcodeados).
+    Soporta importación de repositorios por URL remota o archivo JSON local.
+    Incluye escudo anti-popups, recordatorio de progreso 'Continuar viendo' y reproductor PiP nativo.
+    """
     return f"""<!DOCTYPE html>
 <html lang="es" class="{theme_class}">
 <head>
   <meta charset="UTF-8">
-  <title>AniPlay Hub - Aegis</title>
+  <title>AegisPlay Hub - Centro Multimedia Universal</title>
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     :root, .theme-dark {{
-      --bg: #0d1117;
-      --surface: #161b22;
-      --surface2: #21262d;
+      --bg: #0b0f17;
+      --surface: #141b26;
+      --surface2: #1e2638;
+      --border: rgba(255, 255, 255, 0.08);
       --text: #f0f6fc;
+      --text-muted: #8b949e;
       --accent: #388bfd;
-      --ani-red: #ff5370;
-      --ani-gold: #f1c40f;
+      --play-neon: #ff5370;
+      --gold: #f1c40f;
+      --green: #2ea043;
+      --cinema: #e50914;
+      --series: #3f51b5;
+      --anime: #fa8500;
     }}
     .theme-light {{
-      --bg: #f6f8fa;
+      --bg: #f4f6f9;
       --surface: #ffffff;
-      --surface2: #eaeef2;
+      --surface2: #e9ecef;
+      --border: rgba(0, 0, 0, 0.08);
       --text: #1f2328;
+      --text-muted: #656d76;
       --accent: #0969da;
-      --ani-red: #e53935;
-      --ani-gold: #d4a017;
+      --play-neon: #e53935;
+      --gold: #d4a017;
+      --green: #1a7f37;
+      --cinema: #d32f2f;
+      --series: #303f9f;
+      --anime: #e65100;
     }}
     body {{
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
     }}
     header {{
       background: var(--surface);
-      border-bottom: 1px solid rgba(128, 128, 128, 0.15);
-      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      padding: 12px 28px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
       position: sticky;
       top: 0;
       z-index: 100;
     }}
-    .logo-box {{
+    .brand {{
       display: flex;
       align-items: center;
       gap: 10px;
       font-size: 1.25rem;
       font-weight: 800;
       letter-spacing: -0.5px;
+      cursor: pointer;
     }}
-    .logo-box span {{
-      color: var(--ani-red);
+    .brand svg {{
+      fill: var(--play-neon);
+    }}
+    .brand-accent {{
+      color: var(--play-neon);
     }}
     .search-box {{
       display: flex;
       align-items: center;
       background: var(--bg);
-      border: 1px solid rgba(128, 128, 128, 0.25);
-      border-radius: 20px;
-      padding: 6px 16px;
-      width: 360px;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 7px 18px;
+      width: 380px;
       max-width: 100%;
+      transition: border-color 0.2s;
+    }}
+    .search-box:focus-within {{
+      border-color: var(--accent);
     }}
     .search-box input {{
       background: transparent;
@@ -9601,831 +10194,902 @@ def get_aniplay_html(theme_class: str = "theme-dark") -> str:
       font-size: 0.9rem;
       outline: none;
     }}
+    .header-actions {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }}
+    .btn-import {{
+      background: var(--play-neon);
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform 0.15s, opacity 0.15s;
+    }}
+    .btn-import:hover {{
+      transform: scale(1.03);
+      opacity: 0.95;
+    }}
     .filter-tabs {{
       display: flex;
       gap: 8px;
+      padding: 16px 28px 0 28px;
+      max-width: 1300px;
+      margin: 0 auto;
+      width: 100%;
+      overflow-x: auto;
     }}
     .tab-btn {{
-      background: var(--bg);
-      border: 1px solid rgba(128, 128, 128, 0.2);
-      color: var(--text);
-      padding: 6px 14px;
-      border-radius: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-radius: 20px;
       font-size: 0.85rem;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+      white-space: nowrap;
     }}
-    .tab-btn.active, .tab-btn:hover {{
+    .tab-btn:hover, .tab-btn.active {{
       background: var(--accent);
       color: #ffffff;
       border-color: var(--accent);
     }}
     .container {{
-      max-width: 1200px;
+      max-width: 1300px;
       margin: 0 auto;
-      padding: 24px;
+      padding: 24px 28px 48px 28px;
       width: 100%;
+      flex: 1;
     }}
-    /* Spotlight Hero */
-    .hero {{
-      background: linear-gradient(135deg, rgba(255, 83, 112, 0.15), rgba(56, 139, 253, 0.15)), var(--surface);
-      border: 1px solid rgba(128, 128, 128, 0.15);
-      border-radius: 16px;
-      padding: 28px;
-      margin-bottom: 32px;
-      display: flex;
-      gap: 24px;
-      align-items: center;
-    }}
-    .hero-img {{
-      width: 200px;
-      height: 280px;
-      object-fit: cover;
-      border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    }}
-    .hero-info {{
+    /* Empty State Hero */
+    .empty-hero {{
+      background: linear-gradient(135deg, rgba(255, 83, 112, 0.08), rgba(56, 139, 253, 0.08)), var(--surface);
+      border: 1px dashed rgba(255, 83, 112, 0.35);
+      border-radius: 18px;
+      padding: 48px 32px;
+      text-align: center;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 16px;
     }}
-    .hero-badge {{
-      background: var(--ani-red);
-      color: #fff;
-      font-size: 0.75rem;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 4px;
-      width: fit-content;
-      text-transform: uppercase;
+    .empty-icon {{
+      width: 64px;
+      height: 64px;
+      stroke: var(--play-neon);
     }}
-    .hero-title {{
-      font-size: 1.8rem;
+    .empty-title {{
+      font-size: 1.6rem;
       font-weight: 800;
     }}
-    .hero-meta {{
-      font-size: 0.85rem;
-      opacity: 0.8;
-      display: flex;
-      gap: 14px;
-      align-items: center;
-    }}
-    .hero-desc {{
-      font-size: 0.92rem;
-      line-height: 1.5;
-      opacity: 0.85;
-      max-width: 600px;
-    }}
-    .hero-btn {{
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      padding: 10px 22px;
-      border-radius: 8px;
-      font-weight: 700;
+    .empty-desc {{
+      color: var(--text-muted);
       font-size: 0.95rem;
-      cursor: pointer;
-      width: fit-content;
-      margin-top: 6px;
+      max-width: 620px;
+      line-height: 1.6;
+    }}
+    .empty-actions {{
       display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: transform 0.15s;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 8px;
     }}
-    .hero-btn:hover {{
-      transform: scale(1.03);
+    .btn-demo {{
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.15s;
     }}
-    /* Anime Grid */
-    .section-title {{
-      font-size: 1.25rem;
+    .btn-demo:hover {{
+      background: rgba(255, 255, 255, 0.12);
+    }}
+    /* Continuar Viendo */
+    .history-section {{
+      margin-bottom: 32px;
+      display: none;
+    }}
+    .section-header {{
+      font-size: 1.15rem;
       font-weight: 700;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }}
-    .anime-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-      gap: 18px;
-      margin-bottom: 36px;
+    .history-row {{
+      display: flex;
+      gap: 16px;
+      overflow-x: auto;
+      padding-bottom: 10px;
     }}
-    .anime-card {{
+    .history-card {{
       background: var(--surface);
-      border: 1px solid rgba(128, 128, 128, 0.15);
+      border: 1px solid var(--border);
       border-radius: 12px;
-      overflow: hidden;
+      width: 260px;
+      min-width: 260px;
+      padding: 12px;
       cursor: pointer;
-      transition: transform 0.2s, border-color 0.2s;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: transform 0.18s, border-color 0.18s;
+    }}
+    .history-card:hover {{
+      transform: translateY(-3px);
+      border-color: var(--play-neon);
+    }}
+    .history-prog-bar {{
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }}
+    .history-prog-fill {{
+      height: 100%;
+      background: var(--play-neon);
+    }}
+    /* Grid de Fuentes y Catálogo */
+    .catalog-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 20px;
+    }}
+    .source-card {{
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
       position: relative;
     }}
-    .anime-card:hover {{
-      transform: translateY(-5px);
+    .source-card:hover {{
+      transform: translateY(-3px);
+      border-color: var(--accent);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }}
+    .source-top {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }}
+    .source-brand {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }}
+    .source-icon {{
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+    }}
+    .source-name {{
+      font-size: 1.1rem;
+      font-weight: 700;
+    }}
+    .source-badge {{
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }}
+    .badge-movie {{ background: rgba(229, 9, 20, 0.18); color: #ff5252; border: 1px solid rgba(229, 9, 20, 0.4); }}
+    .badge-series {{ background: rgba(63, 81, 181, 0.18); color: #7986cb; border: 1px solid rgba(63, 81, 181, 0.4); }}
+    .badge-anime {{ background: rgba(250, 133, 0, 0.18); color: #ffb74d; border: 1px solid rgba(250, 133, 0, 0.4); }}
+    .source-desc {{
+      color: var(--text-muted);
+      font-size: 0.88rem;
+      line-height: 1.45;
+      min-height: 38px;
+    }}
+    .source-search {{
+      display: flex;
+      gap: 8px;
+    }}
+    .source-search input {{
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 12px;
+      color: var(--text);
+      font-size: 0.85rem;
+      outline: none;
+    }}
+    .source-search input:focus {{
       border-color: var(--accent);
     }}
-    .card-thumb {{
-      width: 100%;
-      height: 230px;
-      object-fit: cover;
-      display: block;
-    }}
-    .card-info {{
-      padding: 10px 12px;
-    }}
-    .card-title {{
-      font-size: 0.9rem;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-bottom: 4px;
-    }}
-    .card-meta {{
-      font-size: 0.78rem;
-      opacity: 0.7;
+    .source-actions {{
       display: flex;
-      justify-content: space-between;
+      gap: 8px;
+      margin-top: auto;
     }}
-    /* Video Modal Player */
+    .btn-source-action {{
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s, border-color 0.15s;
+    }}
+    .btn-source-action:hover {{
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+    }}
+    /* Modal de Importación */
     .modal-overlay {{
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.85);
+      background: rgba(0, 0, 0, 0.8);
       z-index: 1000;
       align-items: center;
       justify-content: center;
       padding: 20px;
+      backdrop-filter: blur(4px);
     }}
     .modal-content {{
       background: var(--surface);
-      border: 1px solid rgba(128, 128, 128, 0.2);
+      border: 1px solid var(--border);
       border-radius: 16px;
-      width: 900px;
+      width: 580px;
       max-width: 100%;
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
     }}
     .modal-header {{
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 18px;
-      border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+      padding: 16px 22px;
+      border-bottom: 1px solid var(--border);
     }}
     .modal-title {{
-      font-size: 1.1rem;
+      font-size: 1.15rem;
       font-weight: 700;
     }}
     .close-btn {{
       background: transparent;
       border: none;
-      color: var(--text);
+      color: var(--text-muted);
       font-size: 1.5rem;
       cursor: pointer;
     }}
-    .player-box {{
+    .close-btn:hover {{
+      color: var(--text);
+    }}
+    .modal-body {{
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }}
+    .import-tabs {{
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }}
+    .import-tab {{
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+    }}
+    .import-tab.active {{
+      color: var(--play-neon);
+      border-color: var(--play-neon);
+    }}
+    .input-group {{
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }}
+    .input-group label {{
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }}
+    .input-group input, .input-group textarea {{
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-size: 0.9rem;
+      outline: none;
+    }}
+    .file-dropzone {{
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 28px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }}
+    .file-dropzone:hover {{
+      border-color: var(--play-neon);
+    }}
+    /* Modal de Video Player */
+    .player-modal-content {{
+      width: 960px;
+    }}
+    .video-container {{
       width: 100%;
-      height: 480px;
+      height: 520px;
       background: #000;
       position: relative;
     }}
-    .player-box video {{
+    .video-container video {{
       width: 100%;
       height: 100%;
     }}
-    .episode-bar {{
-      padding: 14px 18px;
+    .player-toolbar {{
       background: var(--surface2);
+      padding: 10px 18px;
       display: flex;
       align-items: center;
-      gap: 10px;
-      overflow-x: auto;
+      justify-content: space-between;
+      gap: 12px;
     }}
-    .ep-pill {{
-      background: var(--bg);
-      border: 1px solid rgba(128, 128, 128, 0.2);
+    .speed-btn {{
+      background: var(--surface);
+      border: 1px solid var(--border);
       color: var(--text);
-      padding: 6px 14px;
+      padding: 4px 10px;
       border-radius: 6px;
-      font-size: 0.85rem;
-      font-weight: 600;
+      font-size: 0.8rem;
       cursor: pointer;
-      white-space: nowrap;
     }}
-    .ep-pill.active {{
+    .speed-btn.active {{
       background: var(--accent);
       color: #fff;
-      border-color: var(--accent);
     }}
   </style>
 </head>
 <body>
   <header>
-    <div class="logo-box">
-      <span>▶</span> Aegis AniPlay
+    <div class="brand" onclick="location.reload()">
+      <svg width="22" height="22" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      <span>Aegis<span class="brand-accent">Play</span></span>
     </div>
     <div class="search-box">
-      <input type="text" id="animeSearch" placeholder="Buscar anime, OVA, películas..." oninput="filterAnime(this.value)">
+      <input type="text" id="globalSearch" placeholder="Buscar películas, anime o series en todas las fuentes..." oninput="handleUniversalSearch(this.value)">
     </div>
-    <div class="filter-tabs">
-      <button class="tab-btn active" onclick="setCategory('all', this)">Todos</button>
-      <button class="tab-btn" onclick="setCategory('trending', this)">Tendencias</button>
-      <button class="tab-btn" onclick="setCategory('favs', this)">Favoritos</button>
+    <div class="header-actions">
+      <button class="btn-import" onclick="openImportModal()">
+        <span>+</span> Importar Repositorio
+      </button>
     </div>
   </header>
 
-  <div class="container">
-    <div class="hero">
-      <img src="https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80" class="hero-img" alt="Solo Leveling" />
-      <div class="hero-info">
-        <span class="hero-badge">Estreno Destacado</span>
-        <h1 class="hero-title">Solo Leveling (Arise)</h1>
-        <div class="hero-meta">
-          <span>★ 9.4</span>
-          <span>• Acción / Fantasía</span>
-          <span>• 12 Episodios</span>
-          <span>• Sub / Dub</span>
-        </div>
-        <p class="hero-desc">
-          En un mundo donde cazadores humanos deben luchar contra monstruos mortales para proteger a la humanidad, Sung Jinwoo, el cazador más débil, es bendecido con el misterioso sistema de subida de nivel infinita.
-        </p>
-        <button class="hero-btn" onclick="openPlayer('Solo Leveling', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', 12)">
-          <span>▶</span> Reproducir Episodio 1
-        </button>
-      </div>
-    </div>
-
-    <div class="section-title">
-      <span>Catálogo de Anime</span>
-      <span id="catalogCount" style="font-size: 0.85rem; opacity: 0.65; font-weight: 400;">10 títulos disponibles</span>
-    </div>
-
-    <div class="anime-grid" id="animeGrid"></div>
+  <div class="filter-tabs">
+    <button class="tab-btn active" onclick="setCategory('all', this)">Todos</button>
+    <button class="tab-btn" onclick="setCategory('movie', this)">Películas</button>
+    <button class="tab-btn" onclick="setCategory('series', this)">Series</button>
+    <button class="tab-btn" onclick="setCategory('anime', this)">Anime</button>
+    <button class="tab-btn" onclick="setCategory('repos', this)">Mis Repositorios</button>
   </div>
 
-  <div class="modal-overlay" id="playerModal">
+  <div class="container">
+    <!-- Continuar Viendo -->
+    <div class="history-section" id="historySection">
+      <div class="section-header">
+        <span>Continuar Viendo</span>
+        <button onclick="clearHistory()" style="background:transparent; border:none; color:var(--text-muted); font-size:0.8rem; cursor:pointer;">Limpiar</button>
+      </div>
+      <div class="history-row" id="historyRow"></div>
+    </div>
+
+    <!-- Catálogo de Fuentes -->
+    <div class="section-header">
+      <span id="sectionTitle">Fuentes Disponibles</span>
+      <span id="sourcesCount" style="font-size: 0.85rem; color: var(--text-muted); font-weight: normal;">0 fuentes</span>
+    </div>
+
+    <div class="catalog-grid" id="catalogGrid"></div>
+
+    <!-- Empty State -->
+    <div class="empty-hero" id="emptyState" style="display: none;">
+      <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+        <line x1="8" y1="21" x2="16" y2="21"></line>
+        <line x1="12" y1="17" x2="12" y2="21"></line>
+        <polygon points="10 8 16 10 10 12" fill="var(--play-neon)"></polygon>
+      </svg>
+      <h2 class="empty-title">AegisPlay Media Hub</h2>
+      <p class="empty-desc">
+        Tu centro multimedia universal. Actualmente no tienes repositorios configurados.<br>
+        AegisPlay inicia 100% limpio por defecto. Puedes importar repositorios comunitarios de Anime, Películas y Series, o cargar el catálogo extendido oficial de prueba para comenzar a disfrutar sin publicidad invasiva.
+      </p>
+      <div class="empty-actions">
+        <button class="btn-import" onclick="openImportModal()">+ Importar Repositorio (URL o JSON)</button>
+        <button class="btn-demo" onclick="loadDefaultCatalog()">Cargar Catálogo Oficial Extendido de Prueba</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Importación -->
+  <div class="modal-overlay" id="importModal">
     <div class="modal-content">
       <div class="modal-header">
-        <span class="modal-title" id="currentAnimeTitle">Reproduciendo Anime</span>
+        <span class="modal-title">Importar Repositorio a AegisPlay</span>
+        <button class="close-btn" onclick="closeImportModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="import-tabs">
+          <div class="import-tab active" onclick="switchImportTab('url', this)">URL Remota</div>
+          <div class="import-tab" onclick="switchImportTab('file', this)">Archivo JSON Local</div>
+        </div>
+
+        <div id="tabUrlContent">
+          <div class="input-group">
+            <label>Enlace URL del Repositorio (JSON o raw GitHub):</label>
+            <input type="text" id="repoUrlInput" placeholder="https://raw.githubusercontent.com/.../aegisplay_sources.json">
+          </div>
+          <p style="font-size:0.8rem; color:var(--text-muted); margin-top:8px;">
+            Aegis descargará y sincronizará la lista de fuentes automáticamente.
+          </p>
+          <button class="btn-import" style="margin-top:14px; width:100%; justify-content:center;" onclick="importFromUrl()">Descargar e Importar</button>
+        </div>
+
+        <div id="tabFileContent" style="display:none;">
+          <input type="file" id="repoFileInput" accept=".json" style="display:none;" onchange="handleFileSelect(event)">
+          <div class="file-dropzone" onclick="document.getElementById('repoFileInput').click()">
+            <p style="font-size:0.95rem; font-weight:600;">Haz clic aquí para seleccionar tu archivo JSON</p>
+            <p style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">Soporta formato oficial de repositorio AegisPlay</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Video Player -->
+  <div class="modal-overlay" id="playerModal">
+    <div class="modal-content player-modal-content">
+      <div class="modal-header">
+        <span class="modal-title" id="playerTitle">Reproductor Nativo AegisPlay</span>
         <button class="close-btn" onclick="closePlayer()">×</button>
       </div>
-      <div class="player-box">
-        <video id="videoElement" controls autoplay></video>
+      <div class="video-container">
+        <video id="videoPlayer" controls autoplay></video>
       </div>
-      <div class="episode-bar" id="episodesBar"></div>
+      <div class="player-toolbar">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:0.85rem; color:var(--text-muted);">Velocidad:</span>
+          <button class="speed-btn" onclick="setSpeed(0.75, this)">0.75x</button>
+          <button class="speed-btn active" onclick="setSpeed(1.0, this)">1.0x</button>
+          <button class="speed-btn" onclick="setSpeed(1.25, this)">1.25x</button>
+          <button class="speed-btn" onclick="setSpeed(1.5, this)">1.5x</button>
+          <button class="speed-btn" onclick="setSpeed(2.0, this)">2.0x</button>
+        </div>
+        <button class="btn-demo" style="padding:6px 14px; font-size:0.82rem;" onclick="togglePiP()">Picture-in-Picture (PiP)</button>
+      </div>
     </div>
   </div>
 
   <script>
-    const animeCatalog = [
-      {{ id: 1, title: 'Solo Leveling', rating: 9.4, eps: 12, genre: 'Acción / Fantasía', img: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&q=80', trending: true }},
-      {{ id: 2, title: 'Jujutsu Kaisen', rating: 9.2, eps: 47, genre: 'Sobrenatural / Shonen', img: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=400&q=80', trending: true }},
-      {{ id: 3, title: 'Demon Slayer: Kimetsu no Yaiba', rating: 9.3, eps: 55, genre: 'Acción / Histórico', img: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&q=80', trending: true }},
-      {{ id: 4, title: 'Frieren: Beyond Journey', rating: 9.5, eps: 28, genre: 'Aventura / Fantasía', img: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&q=80', trending: true }},
-      {{ id: 5, title: 'Attack on Titan (Shingeki)', rating: 9.6, eps: 87, genre: 'Militar / Misterio', img: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=400&q=80', trending: false }},
-      {{ id: 6, title: 'Chainsaw Man', rating: 8.9, eps: 12, genre: 'Acción / Terror', img: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&q=80', trending: true }},
-      {{ id: 7, title: 'One Piece (Egghead Arc)', rating: 9.2, eps: 1100, genre: 'Aventura / Comedia', img: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=400&q=80', trending: false }},
-      {{ id: 8, title: 'Bleach: TYBW', rating: 9.1, eps: 26, genre: 'Acción / Sobrenatural', img: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=400&q=80', trending: true }},
-      {{ id: 9, title: 'Spy x Family', rating: 8.8, eps: 37, genre: 'Comedia / Espías', img: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=400&q=80', trending: false }},
-      {{ id: 10, title: 'Death Note', rating: 9.0, eps: 37, genre: 'Psicológico / Thriller', img: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=400&q=80', trending: false }}
+    const DEFAULT_SOURCES = [
+      {{
+        id: "cinecalidad",
+        name: "Cinecalidad",
+        category: "movie",
+        badge: "Películas HD 4K",
+        language: "Latino / Castellano",
+        icon: "https://cinecalidad.ms/favicon.ico",
+        base_url: "https://cinecalidad.ms",
+        search_url: "https://cinecalidad.ms/?s={{query}}",
+        trending_url: "https://cinecalidad.ms/peliculas/",
+        color: "#e50914",
+        description: "Estrenos de cartelera, cine clásico y producciones en alta definición 4K."
+      }},
+      {{
+        id: "repelis",
+        name: "Repelis",
+        category: "movie",
+        badge: "Estrenos & Clásicos",
+        language: "Español / Subtitulado",
+        icon: "https://repelis.lat/favicon.ico",
+        base_url: "https://repelis.lat",
+        search_url: "https://repelis.lat/buscar?q={{query}}",
+        trending_url: "https://repelis.lat/estrenos",
+        color: "#00d2c4",
+        description: "Catálogo variado de películas con múltiples servidores de reproducción."
+      }},
+      {{
+        id: "pelisplus",
+        name: "PelisPlus HD",
+        category: "series",
+        badge: "Series Completas",
+        language: "Multi-Audio",
+        icon: "https://pelisplushd.nz/favicon.ico",
+        base_url: "https://pelisplushd.nz",
+        search_url: "https://pelisplushd.nz/search?s={{query}}",
+        trending_url: "https://pelisplushd.nz/series",
+        color: "#3f51b5",
+        description: "Series de televisión completas por temporadas, miniseries y documentales."
+      }},
+      {{
+        id: "cuevana",
+        name: "Cuevana 3",
+        category: "movie",
+        badge: "Cine & Tendencias",
+        language: "Latino / Subtitulado",
+        icon: "https://cuevana3.me/favicon.ico",
+        base_url: "https://cuevana3.me",
+        search_url: "https://cuevana3.me/search?q={{query}}",
+        trending_url: "https://cuevana3.me/inicio",
+        color: "#f59e0b",
+        description: "Plataforma popular de cine y series con servidores rápidos y reproducción fluida."
+      }},
+      {{
+        id: "animeflv",
+        name: "AnimeFLV",
+        category: "anime",
+        badge: "Simulcast Oficial",
+        language: "Japonés Subtitulado",
+        icon: "https://www3.animeflv.net/favicon.ico",
+        base_url: "https://www3.animeflv.net",
+        search_url: "https://www3.animeflv.net/browse?q={{query}}",
+        trending_url: "https://www3.animeflv.net",
+        color: "#fa8500",
+        description: "El portal de animación japonesa líder con estrenos semanales en emisión continua."
+      }},
+      {{
+        id: "jkanime",
+        name: "JKanime",
+        category: "anime",
+        badge: "Anime Clásico y Emisión",
+        language: "Japonés Subtitulado",
+        icon: "https://jkanime.net/assets/images/favicon.ico",
+        base_url: "https://jkanime.net",
+        search_url: "https://jkanime.net/buscar/{{query}}/",
+        trending_url: "https://jkanime.net",
+        color: "#1778f2",
+        description: "Directorio completo de series de animación japonesa, películas y OVAs."
+      }}
     ];
 
     let currentCategory = 'all';
 
-    function renderGrid(items) {{
-      const grid = document.getElementById('animeGrid');
+    function getSources() {{
+      try {{
+        const raw = localStorage.getItem('aegisplay_sources');
+        if (!raw) return [];
+        return JSON.parse(raw);
+      }} catch(e) {{
+        return [];
+      }}
+    }}
+
+    function saveSources(sources) {{
+      localStorage.setItem('aegisplay_sources', JSON.stringify(sources));
+      renderCatalog();
+    }}
+
+    function loadDefaultCatalog() {{
+      saveSources(DEFAULT_SOURCES);
+    }}
+
+    function renderCatalog() {{
+      const sources = getSources();
+      const grid = document.getElementById('catalogGrid');
+      const empty = document.getElementById('emptyState');
+      const countLabel = document.getElementById('sourcesCount');
+
+      if (!sources || sources.length === 0) {{
+        grid.style.display = 'none';
+        empty.style.display = 'flex';
+        countLabel.innerText = '0 fuentes configuradas';
+        return;
+      }}
+
+      grid.style.display = 'grid';
+      empty.style.display = 'none';
+
+      let filtered = sources;
+      if (currentCategory !== 'all' && currentCategory !== 'repos') {{
+        filtered = sources.filter(s => s.category === currentCategory);
+      }}
+
       grid.innerHTML = '';
-      items.forEach(anime => {{
+      countLabel.innerText = `${{filtered.length}} fuentes ${{currentCategory !== 'all' ? '(' + currentCategory + ')' : ''}}`;
+
+      filtered.forEach(source => {{
         const card = document.createElement('div');
-        card.className = 'anime-card';
-        card.onclick = () => openPlayer(anime.title, 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', Math.min(anime.eps, 12));
+        card.className = 'source-card';
+        const badgeClass = source.category === 'movie' ? 'badge-movie' : (source.category === 'series' ? 'badge-series' : 'badge-anime');
+        
         card.innerHTML = `
-          <img src="${{anime.img}}" class="card-thumb" alt="${{anime.title}}" />
-          <div class="card-info">
-            <div class="card-title">${{anime.title}}</div>
-            <div class="card-meta">
-              <span>★ ${{anime.rating}}</span>
-              <span>${{anime.eps}} Eps</span>
+          <div class="source-top">
+            <div class="source-brand">
+              <img src="${{source.icon}}" class="source-icon" onerror="this.src='https://raw.githubusercontent.com/fabian2007oyanedel-dot/aegis/main/icons/play_icon.png'">
+              <div>
+                <div class="source-name">${{source.name}}</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">${{source.language || 'Español'}}</div>
+              </div>
             </div>
+            <span class="source-badge ${{badgeClass}}">${{source.badge || source.category}}</span>
+          </div>
+          <p class="source-desc">${{source.description || 'Fuente multimedia compatible con Aegis AdShield.'}}</p>
+          <div class="source-search">
+            <input type="text" placeholder="Buscar en ${{source.name}}..." onkeydown="if(event.key==='Enter') searchInSource('${{source.id}}', this.value)">
+            <button class="btn-demo" style="padding:6px 12px;" onclick="searchInSource('${{source.id}}', this.previousElementSibling.value)">🔍</button>
+          </div>
+          <div class="source-actions">
+            <button class="btn-source-action" onclick="openSourceUrl('${{source.base_url}}')">Explorar Sitio Limpio</button>
+            <button class="btn-source-action" onclick="openSourceUrl('${{source.trending_url || source.base_url}}')">Tendencias / Estrenos</button>
           </div>
         `;
         grid.appendChild(card);
       }});
-      document.getElementById('catalogCount').innerText = `${{items.length}} títulos disponibles`;
+
+      renderHistory();
     }}
 
     function setCategory(cat, btn) {{
       currentCategory = cat;
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      filterAnime(document.getElementById('animeSearch').value);
+      renderCatalog();
     }}
 
-    function filterAnime(query) {{
+    function openSourceUrl(url) {{
+      window.location.href = url;
+    }}
+
+    function searchInSource(sourceId, query) {{
+      query = (query || '').trim();
+      if (!query) return;
+      const sources = getSources();
+      const s = sources.find(item => item.id === sourceId);
+      if (s && s.search_url) {{
+        window.location.href = s.search_url.replace('{{query}}', encodeURIComponent(query));
+      }}
+    }}
+
+    function handleUniversalSearch(query) {{
       query = (query || '').toLowerCase().trim();
-      let list = animeCatalog;
-      if (currentCategory === 'trending') {{
-        list = list.filter(a => a.trending);
-      }} else if (currentCategory === 'favs') {{
-        const favs = JSON.parse(localStorage.getItem('aegis_ani_favs') || '[]');
-        list = list.filter(a => favs.includes(a.id));
+      if (!query) {{
+        renderCatalog();
+        return;
       }}
-      if (query) {{
-        list = list.filter(a => a.title.toLowerCase().includes(query) || a.genre.toLowerCase().includes(query));
-      }}
-      renderGrid(list);
+      const sources = getSources();
+      const matched = sources.filter(s => 
+        s.name.toLowerCase().includes(query) || 
+        (s.description || '').toLowerCase().includes(query) ||
+        (s.category || '').toLowerCase().includes(query)
+      );
+      const grid = document.getElementById('catalogGrid');
+      grid.innerHTML = '';
+      matched.forEach(source => {{
+        // render matching cards
+        const card = document.createElement('div');
+        card.className = 'source-card';
+        card.innerHTML = `
+          <div class="source-top">
+            <div class="source-brand">
+              <img src="${{source.icon}}" class="source-icon">
+              <div>
+                <div class="source-name">${{source.name}}</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">${{source.language || 'Español'}}</div>
+              </div>
+            </div>
+            <span class="source-badge badge-${{source.category}}">${{source.badge || source.category}}</span>
+          </div>
+          <p class="source-desc">${{source.description || ''}}</p>
+          <div class="source-actions">
+            <button class="btn-source-action" onclick="searchInSource('${{source.id}}', '${{query}}')">Buscar "${{query}}" en ${{source.name}}</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      }});
+      document.getElementById('sourcesCount').innerText = `${{matched.length}} fuentes coincidentes`;
     }}
 
-    function openPlayer(title, sampleUrl, epsCount) {{
-      document.getElementById('currentAnimeTitle').innerText = title;
-      const vid = document.getElementById('videoElement');
-      vid.src = sampleUrl;
-      vid.play().catch(() => {{}});
-      
-      const epBar = document.getElementById('episodesBar');
-      epBar.innerHTML = '';
-      for (let i = 1; i <= epsCount; i++) {{
-        const pill = document.createElement('button');
-        pill.className = 'ep-pill' + (i === 1 ? ' active' : '');
-        pill.innerText = `Episodio ${{i}}`;
-        pill.onclick = () => {{
-          document.querySelectorAll('.ep-pill').forEach(p => p.classList.remove('active'));
-          pill.classList.add('active');
-          vid.currentTime = 0;
-          vid.play().catch(() => {{}});
-        }};
-        epBar.appendChild(pill);
-      }}
-      document.getElementById('playerModal').style.display = 'flex';
+    /* Continuar Viendo / Historial */
+    function renderHistory() {{
+      try {{
+        const raw = localStorage.getItem('aegisplay_history');
+        if (!raw) return;
+        const history = JSON.parse(raw);
+        if (!history || history.length === 0) return;
+
+        const sec = document.getElementById('historySection');
+        const row = document.getElementById('historyRow');
+        sec.style.display = 'block';
+        row.innerHTML = '';
+
+        history.slice(0, 8).forEach(item => {{
+          const pct = Math.min(100, Math.round((item.time / (item.duration || 1)) * 100));
+          const card = document.createElement('div');
+          card.className = 'history-card';
+          card.onclick = () => openPlayer(item.title, item.video_url, item.time);
+          card.innerHTML = `
+            <div style="font-weight:700; font-size:0.92rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${{item.title}}</div>
+            <div style="font-size:0.78rem; color:var(--text-muted);">${{item.source || 'AegisPlay'}} · Min ${{Math.floor(item.time / 60)}}:${{Math.floor(item.time % 60).toString().padStart(2, '0')}}</div>
+            <div class="history-prog-bar"><div class="history-prog-fill" style="width:${{pct}}%;"></div></div>
+          `;
+          row.appendChild(card);
+        }});
+      }} catch(e) {{}}
+    }}
+
+    function clearHistory() {{
+      localStorage.removeItem('aegisplay_history');
+      document.getElementById('historySection').style.display = 'none';
+    }}
+
+    /* Modales */
+    function openImportModal() {{
+      document.getElementById('importModal').style.display = 'flex';
+    }}
+    function closeImportModal() {{
+      document.getElementById('importModal').style.display = 'none';
+    }}
+    function switchImportTab(type, el) {{
+      document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('tabUrlContent').style.display = type === 'url' ? 'block' : 'none';
+      document.getElementById('tabFileContent').style.display = type === 'file' ? 'block' : 'none';
+    }}
+
+    function importFromUrl() {{
+      const url = document.getElementById('repoUrlInput').value.trim();
+      if (!url) return;
+      fetch(url)
+        .then(res => res.json())
+        .then(data => {{
+          if (data && Array.isArray(data.sources)) {{
+            const current = getSources();
+            const combined = [...current];
+            data.sources.forEach(s => {{
+              if (!combined.some(c => c.id === s.id)) combined.push(s);
+            }});
+            saveSources(combined);
+            closeImportModal();
+            alert(`¡Repositorio "${{data.repository_name || 'Comunitario'}}" importado con éxito (${{data.sources.length}} fuentes agregadas)!`);
+          }} else {{
+            alert('El archivo JSON no tiene un formato de repositorio válido (falta array de sources).');
+          }}
+        }})
+        .catch(err => {{
+          alert('Error al descargar el repositorio: ' + err.message);
+        }});
+    }}
+
+    function handleFileSelect(e) {{
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {{
+        try {{
+          const data = JSON.parse(event.target.result);
+          if (data && Array.isArray(data.sources)) {{
+            const current = getSources();
+            const combined = [...current];
+            data.sources.forEach(s => {{
+              if (!combined.some(c => c.id === s.id)) combined.push(s);
+            }});
+            saveSources(combined);
+            closeImportModal();
+            alert(`¡Repositorio "${{data.repository_name || file.name}}" importado con éxito (${{data.sources.length}} fuentes agregadas)!`);
+          }} else {{
+            alert('El archivo no contiene un array válido de fuentes.');
+          }}
+        }} catch(err) {{
+          alert('Error al leer el archivo JSON: ' + err.message);
+        }}
+      }};
+      reader.readAsText(file);
+    }}
+
+    /* Reproductor Nativo */
+    let currentVideoMeta = null;
+    function openPlayer(title, videoUrl, resumeTime = 0) {{
+      const modal = document.getElementById('playerModal');
+      const v = document.getElementById('videoPlayer');
+      document.getElementById('playerTitle').innerText = title;
+      currentVideoMeta = {{ title, videoUrl }};
+      v.src = videoUrl;
+      v.onloadedmetadata = () => {{
+        if (resumeTime > 0) v.currentTime = resumeTime;
+        v.play();
+      }};
+      modal.style.display = 'flex';
+
+      // Auto guardar progreso cada 5 segundos
+      v.ontimeupdate = () => {{
+        if (v.currentTime > 5 && v.duration > 0) {{
+          try {{
+            const raw = localStorage.getItem('aegisplay_history') || '[]';
+            let list = JSON.parse(raw);
+            list = list.filter(item => item.title !== title);
+            list.unshift({{
+              title,
+              video_url: videoUrl,
+              time: v.currentTime,
+              duration: v.duration,
+              date: Date.now()
+            }});
+            localStorage.setItem('aegisplay_history', JSON.stringify(list.slice(0, 20)));
+          }} catch(e) {{}}
+        }}
+      }};
     }}
 
     function closePlayer() {{
-      const vid = document.getElementById('videoElement');
-      vid.pause();
-      vid.src = '';
-      document.getElementById('playerModal').style.display = 'none';
+      const modal = document.getElementById('playerModal');
+      const v = document.getElementById('videoPlayer');
+      v.pause();
+      v.src = '';
+      modal.style.display = 'none';
+      renderHistory();
     }}
 
-    window.addEventListener('keydown', (e) => {{
-      if (e.key === 'Escape') closePlayer();
-    }});
-    document.getElementById('playerModal').addEventListener('click', (e) => {{
-      if (e.target.id === 'playerModal') closePlayer();
-    }});
+    function setSpeed(spd, btn) {{
+      const v = document.getElementById('videoPlayer');
+      v.playbackRate = spd;
+      document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }}
 
-    renderGrid(animeCatalog);
+    function togglePiP() {{
+      const v = document.getElementById('videoPlayer');
+      if (document.pictureInPictureElement) {{
+        document.exitPictureInPicture();
+      }} else if (v.requestPictureInPicture) {{
+        v.requestPictureInPicture();
+      }}
+    }}
+
+    // Iniciar renderizado
+    renderCatalog();
   </script>
 </body>
 </html>"""
 
-def get_settings_html(theme_class: str = "theme-dark", config: dict = None) -> str:
-    if config is None:
-        config = {}
-    tab_h = "selected" if config.get("tab_position", "horizontal") == "horizontal" else ""
-    tab_v = "selected" if config.get("tab_position") == "vertical" else ""
-    th_dark = "selected" if config.get("theme", "Oscuro") == "Oscuro" else ""
-    th_light = "selected" if config.get("theme") == "Claro" else ""
-    
-    bm_show = "selected" if config.get("show_bookmarks_bar", True) else ""
-    bm_hide = "" if config.get("show_bookmarks_bar", True) else "selected"
+def get_aniplay_html(theme_class: str = "theme-dark") -> str:
+    return get_aegisplay_html(theme_class)
 
-    sb_show = "selected" if config.get("show_sidebar", False) else ""
-    sb_hide = "" if config.get("show_sidebar", False) else "selected"
-
-    cur_eng = config.get("search_engine", "Google").lower()
-    eng_google = "selected" if cur_eng == "google" else ""
-    eng_ddg = "selected" if cur_eng == "duckduckgo" else ""
-    eng_bing = "selected" if cur_eng == "bing" else ""
-    eng_brave = "selected" if cur_eng == "brave" else ""
-    eng_yahoo = "selected" if cur_eng == "yahoo" else ""
-    eng_startpage = "selected" if cur_eng == "startpage" else ""
-    eng_ecosia = "selected" if cur_eng == "ecosia" else ""
-
-    sh_on = "selected" if config.get("shields_enabled", True) else ""
-    sh_off = "" if config.get("shields_enabled", True) else "selected"
-
-    https_on = "selected" if config.get("https_only_mode", False) else ""
-    https_off = "" if config.get("https_only_mode", False) else "selected"
-
-    webrtc_on = "selected" if config.get("webrtc_protection", True) else ""
-    webrtc_off = "" if config.get("webrtc_protection", True) else "selected"
-
-    bypass_on = "selected" if config.get("bypass_countdown", True) else ""
-    bypass_off = "" if config.get("bypass_countdown", True) else "selected"
-    fp_on = "selected" if config.get("fingerprint_protection", True) else ""
-    fp_off = "" if config.get("fingerprint_protection", True) else "selected"
-
-    clear_exit_on = "selected" if config.get("clear_data_on_exit", False) else ""
-    clear_exit_off = "" if config.get("clear_data_on_exit", False) else "selected"
-
-    ask_dl_on = "selected" if config.get("ask_download_location", False) else ""
-    ask_dl_off = "" if config.get("ask_download_location", False) else "selected"
-
-    startup_mode = config.get("on_startup", "ntp")
-    start_ntp = "selected" if startup_mode == "ntp" else ""
-    start_restore = "selected" if startup_mode == "restore_session" else ""
-
-    sleep_timeout = config.get("sleeping_tabs_timeout", 900)
-    sl_300 = "selected" if sleep_timeout == 300 else ""
-    sl_900 = "selected" if sleep_timeout == 900 else ""
-    sl_1800 = "selected" if sleep_timeout == 1800 else ""
-    sl_3600 = "selected" if sleep_timeout == 3600 else ""
-    sl_0 = "selected" if sleep_timeout == 0 else ""
-
-    dl_dir = config.get("download_directory", str(Path.home() / "Downloads"))
-
-    return f"""<!DOCTYPE html>
-<html lang="es" class="{theme_class}">
-<head>
-  <meta charset="UTF-8">
-  <title>Configuración - Aegis</title>
-  <style>
-    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    :root, .theme-dark {{
-      --bg: #0d1117;
-      --surface: #161b22;
-      --text: #f0f6fc;
-      --accent: #388bfd;
-    }}
-    .theme-light {{
-      --bg: #f6f8fa;
-      --surface: #ffffff;
-      --text: #1f2328;
-      --accent: #0969da;
-    }}
-    body {{
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      min-height: 100vh;
-      padding: 3rem 1.5rem;
-      display: flex;
-      justify-content: center;
-    }}
-    .container {{
-      width: 100%;
-      max-width: 760px;
-    }}
-    .header {{
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 2rem;
-      padding-bottom: 1rem;
-      border-bottom: 1px solid rgba(128, 128, 128, 0.15);
-    }}
-    .title {{
-      font-size: 1.5rem;
-      font-weight: 700;
-    }}
-    .card {{
-      background: var(--surface);
-      border: 1px solid rgba(128, 128, 128, 0.14);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 1.5rem;
-    }}
-    .card-title {{
-      font-size: 1rem;
-      font-weight: 600;
-      margin-bottom: 14px;
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }}
-    .setting-row {{
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 0;
-      border-bottom: 1px solid rgba(128, 128, 128, 0.08);
-    }}
-    .setting-row:last-child {{
-      border-bottom: none;
-      padding-bottom: 0;
-    }}
-    .setting-info {{
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      max-width: 480px;
-    }}
-    .setting-name {{
-      font-size: 0.9rem;
-      font-weight: 500;
-    }}
-    .setting-desc {{
-      font-size: 0.8rem;
-      opacity: 0.65;
-      line-height: 1.35;
-    }}
-    select, button.action-btn {{
-      background: var(--bg);
-      color: var(--text);
-      border: 1px solid rgba(128, 128, 128, 0.25);
-      border-radius: 6px;
-      padding: 6px 12px;
-      font-size: 0.85rem;
-      font-weight: 500;
-      cursor: pointer;
-      outline: none;
-    }}
-    select:focus, button.action-btn:hover {{
-      border-color: var(--accent);
-    }}
-    button.btn-danger {{
-      background: transparent;
-      color: #ff6b6b;
-      border-color: rgba(255, 107, 107, 0.4);
-    }}
-    button.btn-danger:hover {{
-      background: #ff6b6b;
-      color: #ffffff;
-    }}
-    .shortcut-table {{
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 8px;
-      font-size: 0.85rem;
-    }}
-    .shortcut-table td {{
-      padding: 8px 6px;
-      border-bottom: 1px solid rgba(128, 128, 128, 0.08);
-    }}
-    .kbd-key {{
-      background: var(--bg);
-      border: 1px solid rgba(128, 128, 128, 0.25);
-      border-radius: 4px;
-      padding: 2px 6px;
-      font-family: monospace;
-      font-size: 0.8rem;
-      font-weight: 600;
-    }}
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
-      <h1 class="title">Configuración</h1>
-    </div>
-
-    <!-- 1. Apariencia y Diseño -->
-    <div class="card">
-      <h2 class="card-title">🎨 Apariencia y Diseño</h2>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Tema de interfaz</span>
-          <span class="setting-desc">Paleta estricta de 4 colores de alto contraste</span>
-        </div>
-        <select onchange="updateSetting('theme', this.value)">
-          <option value="Oscuro" {th_dark}>Oscuro (#0d1117)</option>
-          <option value="Claro" {th_light}>Claro (#f6f8fa)</option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Orientación de pestañas</span>
-          <span class="setting-desc">Barra horizontal clásica o panel lateral vertical (Arc style)</span>
-        </div>
-        <select onchange="updateSetting('tab_position', this.value)">
-          <option value="horizontal" {tab_h}>Horizontal clásica (arriba)</option>
-          <option value="vertical" {tab_v}>Vertical lateral (estilo Arc)</option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Barra de marcadores</span>
-          <span class="setting-desc">Mostrar u ocultar la barra horizontal de marcadores (Ctrl+Shift+B)</span>
-        </div>
-        <select onchange="updateSetting('show_bookmarks_bar', this.value === 'true')">
-          <option value="true" {bm_show}>Mostrar siempre</option>
-          <option value="false" {bm_hide}>Ocultar</option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Barra lateral de herramientas</span>
-          <span class="setting-desc">Acceso rápido a notas, lectura y contraseñas (Ctrl+B)</span>
-        </div>
-        <select onchange="updateSetting('show_sidebar', this.value === 'true')">
-          <option value="true" {sb_show}>Visible</option>
-          <option value="false" {sb_hide}>Oculta</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- 2. Motor de Búsqueda -->
-    <div class="card">
-      <h2 class="card-title">🔍 Motor de Búsqueda</h2>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Buscador predeterminado</span>
-          <span class="setting-desc">Utilizado al escribir directamente en el Omnibox y en la Nueva Pestaña</span>
-        </div>
-        <select onchange="updateSetting('search_engine', this.value)">
-          <option value="Google" {eng_google}>Google</option>
-          <option value="DuckDuckGo" {eng_ddg}>DuckDuckGo (Privado)</option>
-          <option value="Brave" {eng_brave}>Brave Search</option>
-          <option value="Bing" {eng_bing}>Microsoft Bing</option>
-          <option value="Yahoo" {eng_yahoo}>Yahoo</option>
-          <option value="Startpage" {eng_startpage}>Startpage</option>
-          <option value="Ecosia" {eng_ecosia}>Ecosia</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- 3. Escudos, Privacidad y Seguridad -->
-    <div class="card">
-      <h2 class="card-title">🛡️ Escudos, Privacidad y Seguridad</h2>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Aegis Shields</span>
-          <span class="setting-desc">Bloqueo de anuncios, rastreadores y telemetría por socket Rust FFI</span>
-        </div>
-        <select onchange="updateSetting('shields_enabled', this.value === 'true')">
-          <option value="true" {sh_on}>Activado (Recomendado)</option>
-          <option value="false" {sh_off}>Desactivado</option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Forzar conexiones HTTPS (HTTPS-Only)</span>
-          <span class="setting-desc">Actualizar automáticamente solicitudes HTTP inseguras a HTTPS</span>
-        </div>
-        <select onchange="updateSetting('https_only_mode', this.value === 'true')">
-          <option value="true" {https_on}>Activado</option>
-          <option value="false" {https_off}>Desactivado</option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Protección de fuga de IP por WebRTC</span>
-          <span class="setting-desc">Evita que servidores WebRTC obtengan tu IP local de red privada</span>
-        </div>
-        <select onchange="updateSetting('webrtc_protection', this.value === 'true')">
-          <option value="true" {webrtc_on}>Protegido (Recomendado)</option>
-          <option value="false" {webrtc_off}>Estándar</option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Protección contra huella digital (Anti-Fingerprinting)</span>
-          <span class="setting-desc">Inyecta ruido imperceptible en Canvas y Audio para evitar perfilado</span>
-        </div>
-        <select onchange="updateSetting('fingerprint_protection', this.value === 'true')">
-          <option value="true" {fp_on}>Activado</option>
-          <option value="false" {fp_off}>Desactivado</option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Bypass de temporizadores y acortadores</span>
-          <span class="setting-desc">Salto automático e instantáneo de tiempos de espera en descargas y enlaces (CurseForge, Mega, Adf.ly, Linkvertise, Mediafire, etc.)</span>
-        </div>
-        <select onchange="updateSetting('bypass_countdown', this.value === 'true')">
-          <option value="true" {bypass_on}>Activado (Recomendado)</option>
-          <option value="false" {bypass_off}>Desactivado</option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Borrar datos al cerrar el navegador</span>
-          <span class="setting-desc">Elimina cookies y caché temporal al salir de Aegis</span>
-        </div>
-        <select onchange="updateSetting('clear_data_on_exit', this.value === 'true')">
-          <option value="true" {clear_exit_on}>Activado</option>
-          <option value="false" {clear_exit_off}>Desactivado</option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Limpiar datos de navegación ahora</span>
-          <span class="setting-desc">Abre el diálogo completo de borrado de historial, cookies y caché</span>
-        </div>
-        <button class="action-btn btn-danger" onclick="openClearDataModal()">Borrar Datos... (Ctrl+Shift+Del)</button>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Importar datos desde Brave Browser</span>
-          <span class="setting-desc">Transfiere de forma segura y 100% local tu historial, sitios frecuentes y marcadores guardados en Brave</span>
-        </div>
-        <button class="action-btn" style="background:#388bfd;color:#ffffff;border:none;" onclick="openBraveImportModal()">🦁 Importar desde Brave...</button>
-      </div>
-    </div>
-
-    <!-- 4. Pestañas y Rendimiento -->
-    <div class="card">
-      <h2 class="card-title">⚡ Rendimiento y Memoria</h2>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Tiempo de reposo de pestañas inactivas (Sleeping Tabs)</span>
-          <span class="setting-desc">Libera RAM y recursos de GPU en pestañas en segundo plano (con escudo de audio activo)</span>
-        </div>
-        <select onchange="updateSetting('sleeping_tabs_timeout', parseInt(this.value))">
-          <option value="300" {sl_300}>A los 5 minutos</option>
-          <option value="900" {sl_900}>A los 15 minutos (Predeterminado)</option>
-          <option value="1800" {sl_1800}>A los 30 minutos</option>
-          <option value="3600" {sl_3600}>A la 1 hora</option>
-          <option value="0" {sl_0}>Desactivado</option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Compactación silenciosa de memoria RAM</span>
-          <span class="setting-desc">Alineación WorkingSet del kernel de Windows cada 90s sin afectar la reproducción</span>
-        </div>
-        <span style="font-size: 0.85rem; color: #2ea043; font-weight: 600;">✓ 100% Automático</span>
-      </div>
-    </div>
-
-    <!-- 5. Descargas -->
-    <div class="card">
-      <h2 class="card-title">📥 Descargas</h2>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Ubicación de descarga</span>
-          <span class="setting-desc">{dl_dir}</span>
-        </div>
-        <button class="action-btn" onclick="chooseDownloadDir()">Cambiar carpeta...</button>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Preguntar dónde guardar cada archivo</span>
-          <span class="setting-desc">Mostrar selector de archivos antes de iniciar la descarga</span>
-        </div>
-        <select onchange="updateSetting('ask_download_location', this.value === 'true')">
-          <option value="true" {ask_dl_on}>Sí, preguntar siempre</option>
-          <option value="false" {ask_dl_off}>Guardar automáticamente</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- 6. Al Iniciar -->
-    <div class="card">
-      <h2 class="card-title">🚀 Al Iniciar Aegis</h2>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-name">Página de inicio</span>
-          <span class="setting-desc">Elige qué abrir al iniciar Aegis Browser</span>
-        </div>
-        <select onchange="updateSetting('on_startup', this.value)">
-          <option value="ntp" {start_ntp}>Abrir página de Nueva Pestaña</option>
-          <option value="restore_session" {start_restore}>Continuar donde lo dejaste (Restaurar sesión previa)</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- 7. Atajos de Teclado -->
-    <div class="card">
-      <h2 class="card-title">⌨️ Atajos de Teclado Principales</h2>
-      <table class="shortcut-table">
-        <tr><td>Nueva pestaña</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">T</span></td></tr>
-        <tr><td>Cerrar pestaña actual</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">W</span></td></tr>
-        <tr><td>Reabrir pestaña cerrada</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">Shift</span> + <span class="kbd-key">T</span></td></tr>
-        <tr><td>Buscar pestañas abiertas / recientes</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">Shift</span> + <span class="kbd-key">A</span></td></tr>
-        <tr><td>Barra lateral de herramientas</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">B</span></td></tr>
-        <tr><td>Barra de marcadores</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">Shift</span> + <span class="kbd-key">B</span></td></tr>
-        <tr><td>Borrar datos de navegación</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">Shift</span> + <span class="kbd-key">Del</span></td></tr>
-        <tr><td>Modo Lectura libre de distracciones</td><td style="text-align:right;"><span class="kbd-key">F9</span></td></tr>
-        <tr><td>Capturar pantalla de la pestaña</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">Shift</span> + <span class="kbd-key">S</span></td></tr>
-        <tr><td>Guardar página como PDF</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">P</span></td></tr>
-        <tr><td>Imagen en imagen (Picture-in-Picture)</td><td style="text-align:right;"><span class="kbd-key">Alt</span> + <span class="kbd-key">P</span></td></tr>
-        <tr><td>Silenciar / Activar sonido de pestaña</td><td style="text-align:right;"><span class="kbd-key">Ctrl</span> + <span class="kbd-key">M</span></td></tr>
-        <tr><td>Pantalla completa</td><td style="text-align:right;"><span class="kbd-key">F11</span></td></tr>
-        <tr><td>Herramientas de Desarrollador (DevTools)</td><td style="text-align:right;"><span class="kbd-key">F12</span></td></tr>
-      </table>
-    </div>
-
-  </div>
-
-  <script>
-    function updateSetting(key, val) {{
-      const payload = JSON.stringify({{key: key, value: val}});
-      window.location.href = 'aegis://action?set_config=' + encodeURIComponent(payload);
-    }}
-    function chooseDownloadDir() {{
-      window.location.href = 'aegis://action?choose_download_dir=1';
-    }}
-    function openClearDataModal() {{
-      window.location.href = 'aegis://action?open_clear_data_modal=1';
-    }}
-    function openBraveImportModal() {{
-      window.location.href = 'aegis://action?import_brave=1';
-    }}
-  </script>
-</body>
-</html>
-"""
-
-# ── 12.3 Plantilla HTML de Descargas (aegis://downloads) ──────────────────────
 def get_downloads_html(theme_class: str = "theme-dark", downloads: list = None) -> str:
     if downloads is None:
         downloads = []

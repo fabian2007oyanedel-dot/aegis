@@ -1,0 +1,93 @@
+{
+  "repository_name": "AegisPlay Catálogo Oficial Extendido (Híbrido)",
+  "version": "1.2.0",
+  "author": "Aegis Media Project",
+  "homepage": "https://github.com/fabian2007oyanedel-dot/aegis",
+  "description": "Catálogo extendido híbrido para Anime, Películas y Series en streaming sin publicidad.",
+  "sources": [
+    {
+      "id": "cinecalidad",
+      "name": "Cinecalidad",
+      "category": "movie",
+      "language": "Latino / Castellano",
+      "badge": "Películas HD 4K",
+      "icon": "https://cinecalidad.ms/favicon.ico",
+      "base_url": "https://cinecalidad.ms",
+      "search_url": "https://cinecalidad.ms/?s={query}",
+      "trending_url": "https://cinecalidad.ms/peliculas/",
+      "color": "#e50914",
+      "description": "Estrenos de cartelera, cine clásico y producciones en alta definición 4K.",
+      "enabled": true
+    },
+    {
+      "id": "repelis",
+      "name": "Repelis",
+      "category": "movie",
+      "language": "Español / Subtitulado",
+      "badge": "Estrenos & Clásicos",
+      "icon": "https://repelis.lat/favicon.ico",
+      "base_url": "https://repelis.lat",
+      "search_url": "https://repelis.lat/buscar?q={query}",
+      "trending_url": "https://repelis.lat/estrenos",
+      "color": "#00d2c4",
+      "description": "Catálogo variado de películas con múltiples servidores de reproducción.",
+      "enabled": true
+    },
+    {
+      "id": "pelisplus",
+      "name": "PelisPlus HD",
+      "category": "series",
+      "language": "Multi-Audio",
+      "badge": "Series Completas",
+      "icon": "https://pelisplushd.nz/favicon.ico",
+      "base_url": "https://pelisplushd.nz",
+      "search_url": "https://pelisplushd.nz/search?s={query}",
+      "trending_url": "https://pelisplushd.nz/series",
+      "color": "#3f51b5",
+      "description": "Series de televisión completas por temporadas, miniseries y documentales.",
+      "enabled": true
+    },
+    {
+      "id": "cuevana",
+      "name": "Cuevana 3",
+      "category": "movie",
+      "language": "Latino / Subtitulado",
+      "badge": "Cine & Tendencias",
+      "icon": "https://cuevana3.me/favicon.ico",
+      "base_url": "https://cuevana3.me",
+      "search_url": "https://cuevana3.me/search?q={query}",
+      "trending_url": "https://cuevana3.me/inicio",
+      "color": "#f59e0b",
+      "description": "Plataforma popular de cine y series con servidores rápidos.",
+      "enabled": true
+    },
+    {
+      "id": "animeflv",
+      "name": "AnimeFLV",
+      "category": "anime",
+      "language": "Japonés Subtitulado",
+      "badge": "Simulcast Oficial",
+      "icon": "https://www3.animeflv.net/favicon.ico",
+      "base_url": "https://www3.animeflv.net",
+      "search_url": "https://www3.animeflv.net/browse?q={query}",
+      "trending_url": "https://www3.animeflv.net",
+      "color": "#fa8500",
+      "description": "El portal de anime más visitado con estrenos de temporada en emisión.",
+      "enabled": true
+    },
+    {
+      "id": "jkanime",
+      "name": "JKanime",
+      "category": "anime",
+      "language": "Japonés Subtitulado",
+      "badge": "Anime Clásico y En Emisión",
+      "icon": "https://jkanime.net/assets/images/favicon.ico",
+      "base_url": "https://jkanime.net",
+      "search_url": "https://jkanime.net/buscar/{query}/",
+      "trending_url": "https://jkanime.net",
+      "color": "#1778f2",
+      "description": "Directorio completo de series de animación japonesa, películas y OVAs.",
+      "enabled": true
+    }
+  ]
+}
