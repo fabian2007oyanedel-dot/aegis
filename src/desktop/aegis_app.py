@@ -4143,14 +4143,176 @@ class AegisBraveImportDialog(QDialog):
         """
         self.setStyleSheet(qss)
 
+# ── 10.3.9 Barra Lateral Vertical Estilo Opera GX (Dock Izquierdo) ──────────────
+class AegisVerticalDock(QFrame):
+    """
+    Barra lateral vertical ultra-estilizada estilo Opera GX (48px de ancho).
+    Ubicada en el extremo izquierdo de Aegis Browser.
+    Permite acceso rápido con 1-clic a Discord, Anime Hub, Notas, Marcadores y Ajustes.
+    """
+    def __init__(self, browser_win):
+        super().__init__(browser_win)
+        self.browser_win = browser_win
+        self.setObjectName("AegisVerticalDock")
+        self.setFixedWidth(48)
+        self.active_tool = None
+        self.buttons = {}
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 8, 4, 8)
+        layout.setSpacing(6)
+        layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+
+        # 1. Discord (Panel lateral estilo Opera GX con icono oficial Blurple)
+        self.btn_discord = QPushButton()
+        self.btn_discord.setIcon(create_discord_icon("#5865F2", 22))
+        self.btn_discord.setIconSize(QSize(22, 22))
+        self.btn_discord.setToolTip("Discord (Panel lateral estilo Opera GX · Ctrl+Alt+D)")
+        self.btn_discord.setFixedSize(38, 38)
+        self.btn_discord.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_discord.clicked.connect(lambda: self.browser_win.toggle_side_panel("discord"))
+        layout.addWidget(self.btn_discord)
+        self.buttons["discord"] = self.btn_discord
+
+        # 2. AniPlay Anime Hub
+        self.btn_aniplay = QPushButton()
+        self.btn_aniplay.setIcon(create_aniplay_icon("#ff5370", 20))
+        self.btn_aniplay.setIconSize(QSize(20, 20))
+        self.btn_aniplay.setToolTip("AniPlay Anime Hub")
+        self.btn_aniplay.setFixedSize(38, 38)
+        self.btn_aniplay.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_aniplay.clicked.connect(lambda: self.browser_win.toggle_side_panel("aniplay"))
+        layout.addWidget(self.btn_aniplay)
+        self.buttons["aniplay"] = self.btn_aniplay
+
+        # Separador sutil
+        sep1 = QFrame()
+        sep1.setFixedHeight(1)
+        sep1.setObjectName("VerticalDockSep")
+        layout.addWidget(sep1)
+
+        # 3. Notas Rápidas
+        self.btn_notes = QPushButton("📝")
+        self.btn_notes.setToolTip("Bloc de Notas Rápido (Ctrl+B)")
+        self.btn_notes.setFixedSize(38, 38)
+        self.btn_notes.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_notes.clicked.connect(lambda: self.browser_win.toggle_side_panel("notes"))
+        layout.addWidget(self.btn_notes)
+        self.buttons["notes"] = self.btn_notes
+
+        # 4. Marcadores Rápidos
+        self.btn_bookmarks = QPushButton("🔖")
+        self.btn_bookmarks.setToolTip("Marcadores (Ctrl+D)")
+        self.btn_bookmarks.setFixedSize(38, 38)
+        self.btn_bookmarks.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_bookmarks.clicked.connect(lambda: self.browser_win.toggle_side_panel("bookmarks"))
+        layout.addWidget(self.btn_bookmarks)
+        self.buttons["bookmarks"] = self.btn_bookmarks
+
+        # 5. Historial Rápido
+        self.btn_history = QPushButton("🕒")
+        self.btn_history.setToolTip("Historial de Navegación (Ctrl+H)")
+        self.btn_history.setFixedSize(38, 38)
+        self.btn_history.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_history.clicked.connect(lambda: self.browser_win.toggle_side_panel("history"))
+        layout.addWidget(self.btn_history)
+        self.buttons["history"] = self.btn_history
+
+        # 6. Lista de Lectura
+        self.btn_reading = QPushButton("📚")
+        self.btn_reading.setToolTip("Lista de Lectura")
+        self.btn_reading.setFixedSize(38, 38)
+        self.btn_reading.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_reading.clicked.connect(lambda: self.browser_win.toggle_side_panel("reading"))
+        layout.addWidget(self.btn_reading)
+        self.buttons["reading"] = self.btn_reading
+
+        # 7. Generador de Contraseñas
+        self.btn_pass = QPushButton("🔐")
+        self.btn_pass.setToolTip("Generador de Contraseñas")
+        self.btn_pass.setFixedSize(38, 38)
+        self.btn_pass.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_pass.clicked.connect(lambda: self.browser_win.toggle_side_panel("passwords"))
+        layout.addWidget(self.btn_pass)
+        self.buttons["passwords"] = self.btn_pass
+
+        # 8. Captura de Pantalla
+        self.btn_shot = QPushButton("📸")
+        self.btn_shot.setToolTip("Captura de Pantalla")
+        self.btn_shot.setFixedSize(38, 38)
+        self.btn_shot.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_shot.clicked.connect(lambda: self.browser_win.toggle_side_panel("screenshot"))
+        layout.addWidget(self.btn_shot)
+        self.buttons["screenshot"] = self.btn_shot
+
+        layout.addStretch()
+
+        # Separador inferior
+        sep2 = QFrame()
+        sep2.setFixedHeight(1)
+        sep2.setObjectName("VerticalDockSep")
+        layout.addWidget(sep2)
+
+        # 9. Configuración
+        self.btn_settings = QPushButton()
+        self.btn_settings.setIcon(create_settings_icon("#8b949e", 18))
+        self.btn_settings.setIconSize(QSize(18, 18))
+        self.btn_settings.setToolTip("Configuración de Aegis (aegis://settings)")
+        self.btn_settings.setFixedSize(38, 38)
+        self.btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_settings.clicked.connect(lambda: self.browser_win.open_internal_page("aegis://settings"))
+        layout.addWidget(self.btn_settings)
+        self.buttons["settings"] = self.btn_settings
+
+    def set_active_tool(self, tool_name: str | None):
+        self.active_tool = tool_name
+        if self.browser_win:
+            t = THEMES.get(self.browser_win.current_theme_name, THEMES["Oscuro"])
+            self.apply_theme(t)
+
+    def apply_theme(self, t: dict):
+        rgb_accent = hex_to_rgb(t["accent"])
+        rgb_text = hex_to_rgb(t["text"])
+        self.setStyleSheet(f"""
+            QFrame#AegisVerticalDock {{
+                background-color: {t['bg']};
+                border-right: 1px solid rgba({rgb_text}, 0.08);
+            }}
+            QFrame#VerticalDockSep {{
+                background-color: rgba({rgb_text}, 0.1);
+            }}
+            QPushButton {{
+                background: transparent;
+                border: none;
+                border-radius: 8px;
+                color: {t['text']};
+                font-size: 15px;
+            }}
+            QPushButton:hover {{
+                background-color: {t['surface']};
+            }}
+        """)
+        for name, btn in self.buttons.items():
+            if name == self.active_tool:
+                btn.setStyleSheet(f"""
+                    background-color: rgba({rgb_accent}, 0.18);
+                    border: 1px solid rgba({rgb_accent}, 0.4);
+                    border-radius: 8px;
+                """)
+            else:
+                btn.setStyleSheet("")
+
 # ── 10.3.10 Barra Lateral de Productividad y Herramientas Rápidas (Ctrl+B) ──────
 class AegisSidebarWidget(QFrame):
     def __init__(self, parent_win=None):
         super().__init__(parent_win)
         self.parent_win = parent_win
         self.setObjectName("AegisSidebarWidget")
-        self.setFixedWidth(310)
+        self.setFixedWidth(420)
         self.reading_list = []
+        self._discord_loaded = False
         self.load_reading_list()
         self.init_ui()
 
@@ -4192,22 +4354,28 @@ class AegisSidebarWidget(QFrame):
         self.btn_tool_shot = QPushButton("📸")
         self.btn_tool_shot.setToolTip("Captura de Pantalla")
 
+        self.btn_tool_discord = QPushButton()
+        self.btn_tool_discord.setIcon(create_discord_icon("#5865F2", 18))
+        self.btn_tool_discord.setIconSize(QSize(18, 18))
+        self.btn_tool_discord.setToolTip("Discord Web Panel")
+
         self.btn_tool_aniplay = QPushButton("▶")
         self.btn_tool_aniplay.setToolTip("AniPlay Anime Hub")
 
         tools = [
-            (self.btn_tool_notes, 0),
-            (self.btn_tool_reading, 1),
-            (self.btn_tool_history, 2),
-            (self.btn_tool_bookmarks, 3),
-            (self.btn_tool_pass, 4),
-            (self.btn_tool_shot, 5),
-            (self.btn_tool_aniplay, 6),
+            (self.btn_tool_discord, 0),
+            (self.btn_tool_notes, 1),
+            (self.btn_tool_reading, 2),
+            (self.btn_tool_history, 3),
+            (self.btn_tool_bookmarks, 4),
+            (self.btn_tool_pass, 5),
+            (self.btn_tool_shot, 6),
+            (self.btn_tool_aniplay, 7),
         ]
 
         for btn, idx in tools:
             btn.setProperty("class", "sidebar-tool-btn")
-            btn.setFixedSize(32, 28)
+            btn.setFixedSize(30, 26)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(lambda _, i=idx: self.switch_tab(i))
             top_layout.addWidget(btn)
@@ -4218,12 +4386,59 @@ class AegisSidebarWidget(QFrame):
         self.btn_close.setProperty("class", "sidebar-close-btn")
         self.btn_close.setFixedSize(24, 24)
         self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_close.clicked.connect(lambda: self.parent_win.toggle_sidebar())
+        self.btn_close.clicked.connect(lambda: self.parent_win.toggle_sidebar(force_hide=True))
         top_layout.addWidget(self.btn_close)
 
         main_layout.addWidget(top_bar)
 
         self.stack = QStackedWidget()
+
+        # 0. Tab Discord (Panel lateral estilo Opera GX)
+        w_discord = QWidget()
+        l_d = QVBoxLayout(w_discord)
+        l_d.setContentsMargins(0, 0, 0, 0)
+        l_d.setSpacing(0)
+
+        d_ctrl = QWidget()
+        d_ctrl.setFixedHeight(30)
+        d_ctrl.setStyleSheet("background: rgba(0,0,0,0.18); border-bottom: 1px solid rgba(255,255,255,0.06);")
+        d_ctrl_l = QHBoxLayout(d_ctrl)
+        d_ctrl_l.setContentsMargins(8, 0, 8, 0)
+        d_ctrl_l.setSpacing(6)
+
+        lbl_d_icon = QLabel()
+        lbl_d_icon.setPixmap(create_discord_icon("#5865F2", 16).pixmap(16, 16))
+        d_ctrl_l.addWidget(lbl_d_icon)
+
+        lbl_d_title = QLabel("Discord")
+        lbl_d_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #5865F2;")
+        d_ctrl_l.addWidget(lbl_d_title)
+        d_ctrl_l.addStretch()
+
+        btn_d_tab = QPushButton("↗ Abrir en pestaña")
+        btn_d_tab.setToolTip("Abrir Discord en una pestaña normal del navegador")
+        btn_d_tab.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_d_tab.setStyleSheet("background: transparent; border: none; color: #8b949e; font-size: 11px; font-weight: 600;")
+        btn_d_tab.clicked.connect(self.open_discord_in_new_tab)
+        d_ctrl_l.addWidget(btn_d_tab)
+
+        btn_d_rel = QPushButton("⟳")
+        btn_d_rel.setToolTip("Recargar Discord")
+        btn_d_rel.setFixedSize(22, 22)
+        btn_d_rel.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_d_rel.setStyleSheet("background: transparent; border: none; color: #8b949e; font-size: 13px; font-weight: bold;")
+        btn_d_rel.clicked.connect(self.reload_discord)
+        d_ctrl_l.addWidget(btn_d_rel)
+
+        l_d.addWidget(d_ctrl)
+
+        profile_to_use = self.parent_win.profile if self.parent_win else get_shared_profile()
+        self.discord_view = AegisWebView(self.parent_win)
+        self.discord_page = AegisWebPage(profile_to_use, self.discord_view, browser_win=self.parent_win)
+        self.discord_view.setPage(self.discord_page)
+        l_d.addWidget(self.discord_view, 1)
+
+        self.stack.addWidget(w_discord)
 
         # 1. Notas Rápidas
         w_notes = QWidget()
@@ -4378,10 +4593,50 @@ class AegisSidebarWidget(QFrame):
 
     def switch_tab(self, idx: int):
         self.stack.setCurrentIndex(idx)
-        if idx == 1: self.refresh_reading_list()
-        elif idx == 2: self.refresh_quick_history()
-        elif idx == 3: self.refresh_quick_bookmarks()
-        elif idx == 4: self.generate_password()
+        if idx == 0:
+            self.setFixedWidth(430)
+            self.load_discord()
+            if self.parent_win and hasattr(self.parent_win, "vertical_dock"):
+                self.parent_win.vertical_dock.set_active_tool("discord")
+        else:
+            self.setFixedWidth(340)
+            tool_names = ["discord", "notes", "reading", "history", "bookmarks", "passwords", "screenshot", "aniplay"]
+            if idx < len(tool_names) and self.parent_win and hasattr(self.parent_win, "vertical_dock"):
+                self.parent_win.vertical_dock.set_active_tool(tool_names[idx])
+            if idx == 2: self.refresh_reading_list()
+            elif idx == 3: self.refresh_quick_history()
+            elif idx == 4: self.refresh_quick_bookmarks()
+            elif idx == 5: self.generate_password()
+
+    def switch_to_tool(self, tool_name: str):
+        mapping = {
+            "discord": 0,
+            "notes": 1,
+            "reading": 2,
+            "history": 3,
+            "bookmarks": 4,
+            "passwords": 5,
+            "screenshot": 6,
+            "aniplay": 7,
+        }
+        idx = mapping.get(tool_name, 0)
+        self.switch_tab(idx)
+
+    def load_discord(self):
+        if not getattr(self, "_discord_loaded", False):
+            self._discord_loaded = True
+            self.discord_view.load(QUrl("https://discord.com/app"))
+
+    def reload_discord(self):
+        if hasattr(self, "discord_view"):
+            self.discord_view.reload()
+
+    def open_discord_in_new_tab(self):
+        if self.parent_win:
+            u = self.discord_view.url().toString()
+            if not u or u == "about:blank":
+                u = "https://discord.com/app"
+            self.parent_win.add_new_tab(u)
 
     def on_notes_changed(self):
         if self.parent_win:
@@ -4491,7 +4746,7 @@ class AegisSidebarWidget(QFrame):
         qss = f"""
             QFrame#AegisSidebarWidget {{
                 background-color: {t['surface']};
-                border-left: 1px solid rgba({rgb_text}, 0.12);
+                border-right: 1px solid rgba({rgb_text}, 0.12);
             }}
             QWidget#SidebarTopBar {{
                 background-color: {t['bg']};
@@ -6433,18 +6688,45 @@ class AegisBrowserWindow(QMainWindow):
         self.tab_search_popup.show()
         self.tab_search_popup.raise_()
 
-    def toggle_sidebar(self):
+    def toggle_side_panel(self, tool_name: str = "discord"):
+        """Abre, alterna o cierra el panel lateral estilo Opera GX con la herramienta indicada."""
         if not hasattr(self, "sidebar"):
             return
-        is_hidden = self.sidebar.isHidden()
-        self.sidebar.setVisible(is_hidden)
-        self.config["show_sidebar"] = is_hidden
-        self.save_config()
-        if is_hidden:
-            t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
-            self.btn_sidebar.setStyleSheet(f"color: {t['accent']}; font-weight: bold;")
+        is_same = getattr(self, "_current_side_tool", None) == tool_name
+        if self.sidebar.isVisible() and is_same:
+            self.sidebar.hide()
+            self._current_side_tool = None
+            if hasattr(self, "vertical_dock"):
+                self.vertical_dock.set_active_tool(None)
+            self.config["show_sidebar"] = False
+            self.save_config()
+            if hasattr(self, "btn_sidebar"):
+                self.btn_sidebar.setStyleSheet("")
         else:
-            self.btn_sidebar.setStyleSheet("")
+            self.sidebar.show()
+            self._current_side_tool = tool_name
+            if hasattr(self, "vertical_dock"):
+                self.vertical_dock.set_active_tool(tool_name)
+            self.sidebar.switch_to_tool(tool_name)
+            self.config["show_sidebar"] = True
+            self.save_config()
+            if hasattr(self, "btn_sidebar"):
+                t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+                self.btn_sidebar.setStyleSheet(f"color: {t['accent']}; font-weight: bold;")
+
+    def toggle_sidebar(self, force_hide: bool = False):
+        """Compatibilidad para alternar el panel lateral con Ctrl+B o botón superior."""
+        if force_hide or self.sidebar.isVisible():
+            self.sidebar.hide()
+            self._current_side_tool = None
+            if hasattr(self, "vertical_dock"):
+                self.vertical_dock.set_active_tool(None)
+            self.config["show_sidebar"] = False
+            self.save_config()
+            if hasattr(self, "btn_sidebar"):
+                self.btn_sidebar.setStyleSheet("")
+        else:
+            self.toggle_side_panel("discord")
 
     def open_clear_data_dialog(self):
         dlg = AegisClearDataDialog(self)
@@ -6796,10 +7078,8 @@ class AegisBrowserWindow(QMainWindow):
         self.completer_model.setStringList(sorted(clean_suggestions))
 
     def launch_discord_app(self):
-        """Abre o enfoca la ventana dedicada en Modo App de Discord Ultra-Light."""
-        if not hasattr(self, "_discord_app_win") or self._discord_app_win is None:
-            self._discord_app_win = AegisAppWindow(url="https://discord.com/app", app_title="Discord")
-        self._discord_app_win.show_and_activate()
+        """Abre o alterna el panel vertical de Discord estilo Opera GX."""
+        self.toggle_side_panel("discord")
 
     def open_new_window(self):
         win = AegisBrowserWindow()
@@ -7306,12 +7586,20 @@ class AegisBrowserWindow(QMainWindow):
         self.devtools_panel.hide()
         self.web_splitter.addWidget(self.devtools_panel)
 
-        splitter_layout.addWidget(self.web_splitter, 1)
+        # 1. Barra vertical compacta estilo Opera GX en el extremo izquierdo
+        self.vertical_dock = AegisVerticalDock(self)
+        if not self.config.get("show_opera_dock", True):
+            self.vertical_dock.hide()
+        splitter_layout.addWidget(self.vertical_dock, 0)
 
+        # 2. Panel lateral expandible (Discord, Notas, Marcadores, etc.)
         self.sidebar = AegisSidebarWidget(self)
         if not self.config.get("show_sidebar", False):
             self.sidebar.hide()
         splitter_layout.addWidget(self.sidebar, 0)
+
+        # 3. Contenedor de páginas web y DevTools acoplado
+        splitter_layout.addWidget(self.web_splitter, 1)
 
         main_layout.addWidget(self.web_content_splitter, 1)
 
@@ -7743,6 +8031,8 @@ class AegisBrowserWindow(QMainWindow):
         if hasattr(self, "tab_search_popup"):
             self.tab_search_popup.apply_theme(t)
 
+        if hasattr(self, "vertical_dock"):
+            self.vertical_dock.apply_theme(t)
         if hasattr(self, "sidebar"):
             self.sidebar.apply_theme(t)
 
@@ -7851,8 +8141,7 @@ class AegisBrowserWindow(QMainWindow):
         if url_str == "aegis://start":
             self.load_ntp(view)
         elif url_str in ("aegis://discord", "https://discord.com", "https://discord.com/app"):
-            self.launch_discord_app()
-            return
+            view.load(QUrl("https://discord.com/app"))
         elif url_str == "aegis://settings":
             self.load_settings(view)
         elif url_str == "aegis://downloads":
