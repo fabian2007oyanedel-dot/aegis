@@ -4875,22 +4875,23 @@ class AegisOmnibox(QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("Omnibox")
-        self._select_all_pending = False
 
     def focusInEvent(self, event):
         super().focusInEvent(event)
-        self._select_all_pending = True
-        QTimer.singleShot(0, self.selectAll)
+        # Solo seleccionar todo si el foco vino por teclado (Tab o Ctrl+L)
+        if event.reason() in (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason, Qt.FocusReason.ShortcutFocusReason):
+            self.selectAll()
 
     def mousePressEvent(self, event):
+        # Si no tenía foco previo, seleccionar todo al primer clic
+        had_focus = self.hasFocus()
         super().mousePressEvent(event)
-        if self._select_all_pending:
+        if not had_focus:
             self.selectAll()
-            self._select_all_pending = False
 
     def insertFromMimeData(self, source):
         if source and source.hasText():
-            cleaned = source.text().replace("\r\n", " ").replace("\n", " ").replace("\r", " ").strip()
+            cleaned = " ".join(source.text().split())
             self.insert(cleaned)
         else:
             super().insertFromMimeData(source)
@@ -4923,16 +4924,26 @@ class AegisOmnibox(QLineEdit):
             menu.setStyleSheet(p.current_qss)
         menu.exec(event.globalPos())
 
-# ── 10.9 Grips de Redimensionamiento y Cabecera de Ventana Sin Marco ──────────
 def start_native_window_drag(win: QWidget, start_pos=None):
     """
     Arrastre nativo de ventana de Windows (ReleaseCapture + WM_NCLBUTTONDOWN HTCAPTION).
-    Permite mover la ventana de forma 100% fluida, des-maximizar arrastrando desde el tope
-    y soporte completo de Windows Aero Snap (acoplar a bordes/esquinas y maximizar).
+    Permite mover la ventana de forma 100% fluida, des-maximizar arrastrando desde el tope,
+    maximizar automáticamente al tocar la parte superior de la pantalla y soporte de Aero Snap.
     """
     if not win:
         return
     try:
+        # Asegurar estilos Win32 para que Windows DWM reconozca que es maximizable y active Aero Snap
+        if sys.platform == "win32":
+            hwnd = int(win.winId())
+            GWL_STYLE = -16
+            WS_MAXIMIZEBOX = 0x00010000
+            WS_THICKFRAME = 0x00040000
+            style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_STYLE)
+            if not (style & WS_MAXIMIZEBOX):
+                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_STYLE, style | WS_MAXIMIZEBOX | WS_THICKFRAME)
+
+        # Si la ventana está maximizada, restaurarla y recolocarla bajo el cursor de forma proporcional
         if win.isMaximized():
             if start_pos is None:
                 start_pos = QCursor.pos()
@@ -4959,6 +4970,13 @@ def start_native_window_drag(win: QWidget, start_pos=None):
         if sys.platform == "win32":
             ctypes.windll.user32.ReleaseCapture()
             ctypes.windll.user32.SendMessageW(int(win.winId()), 0x00A1, 2, 0)
+            # Al soltar el mouse, si el cursor está en el tope superior de la pantalla, maximizar
+            cur_pos = QCursor.pos()
+            screen = QApplication.screenAt(cur_pos) or QApplication.primaryScreen()
+            if screen:
+                s_top = screen.geometry().top()
+                if cur_pos.y() <= s_top + 4:
+                    win.showMaximized()
             return
     except Exception:
         pass
@@ -6170,6 +6188,9 @@ class AegisBrowserWindow(QMainWindow):
         if 0 <= from_idx < len(self.views) and 0 <= to_idx < len(self.views):
             v = self.views.pop(from_idx)
             self.views.insert(to_idx, v)
+            cur = self.current_view()
+            if cur:
+                self.stack.setCurrentWidget(cur)
 
     def detach_tab_to_new_window(self, index: int, global_pos: QPoint = None):
         if self.tab_bar.count() <= 1 or not (0 <= index < len(self.views)):
@@ -6579,18 +6600,16 @@ class AegisBrowserWindow(QMainWindow):
 
     def open_devtools(self):
         v = self.current_view()
-        if not v:
+        if not v or not hasattr(self, "devtools_panel"):
             return
-        if not hasattr(v, "_devtools_win") or v._devtools_win is None:
-            devtools_view = QWebEngineView()
-            v.page().setDevToolsPage(devtools_view.page())
-            dw = QMainWindow(self)
-            dw.setWindowTitle(f"Herramientas de Desarrollador - {v.title()}")
-            dw.setCentralWidget(devtools_view)
-            dw.resize(920, 620)
-            v._devtools_win = dw
-        v._devtools_win.show()
-        v._devtools_win.raise_()
+        if self.devtools_panel.isVisible():
+            self.devtools_panel.hide()
+            return
+        # Conectar el inspector al view actual y mostrar acoplado en el panel inferior
+        v.page().setDevToolsPage(self.devtools_view.page())
+        self.devtools_panel.show()
+        total_h = self.web_splitter.height() or 800
+        self.web_splitter.setSizes([int(total_h * 0.62), int(total_h * 0.38)])
 
     def navigate_direct(self, url: str):
         v = self.current_view()
@@ -6602,17 +6621,30 @@ class AegisBrowserWindow(QMainWindow):
     def update_omnibox_suggestions(self):
         if not hasattr(self, "completer_model"):
             return
-        suggestions = set()
+        raw_urls = set()
         for b in self.bookmarks_mgr.bookmarks:
-            suggestions.add(b.get("url", ""))
+            raw_urls.add(b.get("url", ""))
         for s in self.history_mgr.data.get("frequent", {}).values():
-            suggestions.add(s.get("url", ""))
+            raw_urls.add(s.get("url", ""))
         for s in self.history_mgr.data.get("custom", []):
-            suggestions.add(s.get("url", ""))
+            raw_urls.add(s.get("url", ""))
         for h in self.history_mgr.data.get("history", [])[:60]:
-            suggestions.add(h.get("url", ""))
-        clean_list = [u for u in suggestions if u and not u.startswith("aegis://") and not u.startswith("about:") and not u.startswith("data:")]
-        self.completer_model.setStringList(sorted(clean_list))
+            raw_urls.add(h.get("url", ""))
+
+        clean_suggestions = set()
+        for u in raw_urls:
+            if not u or u.startswith(("aegis://", "about:", "data:", "javascript:")):
+                continue
+            clean = u
+            if "://" in clean:
+                clean = clean.split("://", 1)[1]
+            if clean.startswith("www."):
+                clean = clean[4:]
+            clean = clean.rstrip("/")
+            if clean:
+                clean_suggestions.add(clean)
+
+        self.completer_model.setStringList(sorted(clean_suggestions))
 
     def launch_discord_app(self):
         """Abre o enfoca la ventana dedicada en Modo App de Discord Ultra-Light."""
@@ -6992,7 +7024,8 @@ class AegisBrowserWindow(QMainWindow):
         self.completer_model = QStringListModel()
         self.completer = QCompleter(self.completer_model, self)
         self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self.completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self.completer.setFilterMode(Qt.MatchFlag.MatchStartsWith)
+        self.completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
         self.url_bar.setCompleter(self.completer)
         self.update_omnibox_suggestions()
 
@@ -7084,8 +7117,47 @@ class AegisBrowserWindow(QMainWindow):
         splitter_layout.setContentsMargins(0, 0, 0, 0)
         splitter_layout.setSpacing(0)
 
+        # Splitter vertical que contiene la página web y el panel de DevTools acoplado abajo (como Chrome/Brave)
+        self.web_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.web_splitter.setHandleWidth(4)
+
         self.stack = QStackedWidget()
-        splitter_layout.addWidget(self.stack, 1)
+        self.web_splitter.addWidget(self.stack)
+
+        # Panel acoplado de Herramientas de Desarrollador (DevTools)
+        self.devtools_panel = QWidget()
+        self.devtools_panel.setObjectName("DevToolsDock")
+        dt_layout = QVBoxLayout(self.devtools_panel)
+        dt_layout.setContentsMargins(0, 0, 0, 0)
+        dt_layout.setSpacing(0)
+
+        # Barra superior de DevTools
+        dt_header = QWidget()
+        dt_header.setFixedHeight(30)
+        dt_header_l = QHBoxLayout(dt_header)
+        dt_header_l.setContentsMargins(8, 0, 4, 0)
+        dt_header_l.setSpacing(6)
+        dt_lbl = QLabel("Herramientas de Desarrollador")
+        dt_lbl.setStyleSheet("font-size: 11px; font-weight: 600; opacity: 0.85;")
+        dt_header_l.addWidget(dt_lbl)
+        dt_header_l.addStretch()
+
+        dt_close_btn = QPushButton("✕")
+        dt_close_btn.setFixedSize(24, 24)
+        dt_close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        dt_close_btn.setToolTip("Cerrar DevTools (F12)")
+        dt_close_btn.setStyleSheet("background: transparent; border: none; font-size: 11px; font-weight: bold;")
+        dt_close_btn.clicked.connect(lambda: self.devtools_panel.hide())
+        dt_header_l.addWidget(dt_close_btn)
+        dt_layout.addWidget(dt_header)
+
+        self.devtools_view = QWebEngineView()
+        dt_layout.addWidget(self.devtools_view)
+
+        self.devtools_panel.hide()
+        self.web_splitter.addWidget(self.devtools_panel)
+
+        splitter_layout.addWidget(self.web_splitter, 1)
 
         self.sidebar = AegisSidebarWidget(self)
         if not self.config.get("show_sidebar", False):
@@ -7884,11 +7956,13 @@ class AegisBrowserWindow(QMainWindow):
         if hasattr(self, "shields_popup") and self.shields_popup.isVisible():
             self.shields_popup.hide()
         if 0 <= index < len(self.views):
-            self.stack.setCurrentIndex(index)
             view = self.views[index]
+            self.stack.setCurrentWidget(view)
             view._last_active_time = time.time()
             if getattr(view, "_is_hibernated", False):
                 self.wake_tab(view)
+            if hasattr(self, "devtools_panel") and self.devtools_panel.isVisible():
+                view.page().setDevToolsPage(self.devtools_view.page())
             self.on_url_changed(view.url(), view)
             if hasattr(self, "btn_back"):
                 self.btn_back.setEnabled(view.history().canGoBack())
@@ -7925,11 +7999,13 @@ class AegisBrowserWindow(QMainWindow):
 
     def navigate_back(self):
         v = self.current_view()
-        if v: v.back()
+        if v and v.history().canGoBack():
+            v.back()
 
     def navigate_forward(self):
         v = self.current_view()
-        if v: v.forward()
+        if v and v.history().canGoForward():
+            v.forward()
 
     def reload_page(self):
         v = self.current_view()
@@ -7971,7 +8047,8 @@ class AegisBrowserWindow(QMainWindow):
             self.load_aniplay(view)
             return
         elif url_str == "aegis://start":
-            self.load_ntp(view)
+            if getattr(view, "_aegis_virtual_url", None) != "aegis://start":
+                self.load_ntp(view)
             return
         elif url_str == "aegis://aniplay":
             self.load_aniplay(view)
