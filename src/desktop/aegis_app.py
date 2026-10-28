@@ -2787,6 +2787,9 @@ class AegisExtensionsPopup(QFrame):
         self.setFixedWidth(350)
         self.parent_win = parent
         self.init_ui()
+        if self.parent_win:
+            t = THEMES.get(self.parent_win.current_theme_name, THEMES["Oscuro"])
+            self.apply_theme(t)
 
     def hideEvent(self, event):
         if self.parent_win:
@@ -2799,9 +2802,9 @@ class AegisExtensionsPopup(QFrame):
         layout.setSpacing(10)
 
         header = QHBoxLayout()
-        lbl_title = QLabel("Extensiones y Complementos")
-        lbl_title.setStyleSheet("font-weight: 700; font-size: 13.5px; color: #f0f6fc;")
-        header.addWidget(lbl_title)
+        self.lbl_title = QLabel("Extensiones y Complementos")
+        self.lbl_title.setStyleSheet("font-weight: 700; font-size: 13.5px;")
+        header.addWidget(self.lbl_title)
         layout.addLayout(header)
 
         # Card de Extensiones de Chrome Web Store
@@ -2820,12 +2823,12 @@ class AegisExtensionsPopup(QFrame):
 
         info_l = QVBoxLayout()
         info_l.setSpacing(2)
-        lbl_s_title = QLabel("Aegis Shields Core")
-        lbl_s_title.setStyleSheet("font-weight: 600; font-size: 12.5px; color: #f0f6fc;")
-        lbl_s_sub = QLabel("Bloqueador nativo en Rust (Adblock + Minería)")
-        lbl_s_sub.setStyleSheet("font-size: 11px; color: #8b949e;")
-        info_l.addWidget(lbl_s_title)
-        info_l.addWidget(lbl_s_sub)
+        self.lbl_s_title = QLabel("Aegis Shields Core")
+        self.lbl_s_title.setStyleSheet("font-weight: 600; font-size: 12.5px;")
+        self.lbl_s_sub = QLabel("Bloqueador nativo en Rust (Adblock + Minería)")
+        self.lbl_s_sub.setStyleSheet("font-size: 11px; opacity: 0.75;")
+        info_l.addWidget(self.lbl_s_title)
+        info_l.addWidget(self.lbl_s_sub)
         sc_layout.addLayout(info_l)
         sc_layout.addStretch()
 
@@ -2899,14 +2902,11 @@ class AegisExtensionsPopup(QFrame):
                 w.deleteLater()
 
         lbl_c = QLabel("Extensiones Chrome Web Store")
-        lbl_c.setStyleSheet("font-weight: 600; font-size: 12.5px; color: #f0f6fc;")
+        lbl_c.setStyleSheet("font-weight: 600; font-size: 12.5px;")
         self.chrome_inner_layout.addWidget(lbl_c)
 
         exts = self.parent_win.extensions_mgr.get_installed_extensions() if (self.parent_win and hasattr(self.parent_win, "extensions_mgr")) else []
         if exts:
-            lbl_c_status = QLabel(f"✓ {len(exts)} activa(s)")
-            lbl_c_status.setStyleSheet("font-size: 11px; color: #2ea043; font-weight: 500;")
-            self.chrome_inner_layout.addWidget(lbl_c_status)
             for ext in exts[:3]:
                 name = ext.get("name", "Extensión")
                 ver = ext.get("version", "")
@@ -2915,14 +2915,14 @@ class AegisExtensionsPopup(QFrame):
                 self.chrome_inner_layout.addWidget(lbl_name)
             if len(exts) > 3:
                 lbl_more = QLabel(f"+ {len(exts) - 3} más en aegis://extensions")
-                lbl_more.setStyleSheet("font-size: 10.5px; opacity: 0.6;")
+                lbl_more.setStyleSheet("font-size: 10.5px; opacity: 0.65;")
                 self.chrome_inner_layout.addWidget(lbl_more)
         else:
             lbl_none_c = QLabel("Sin extensiones de Chrome instaladas")
-            lbl_none_c.setStyleSheet("font-size: 11px; color: #8b949e;")
+            lbl_none_c.setStyleSheet("font-size: 11px; opacity: 0.75;")
             self.chrome_inner_layout.addWidget(lbl_none_c)
 
-        # 2. UserScripts
+        # 2. UserScripts (Sin texto innecesario ni contadores de scripts)
         while self.sc_inner_layout.count():
             item = self.sc_inner_layout.takeAt(0)
             w = item.widget()
@@ -2930,28 +2930,22 @@ class AegisExtensionsPopup(QFrame):
                 w.deleteLater()
 
         lbl_s = QLabel("Scripts de Usuario (UserScripts)")
-        lbl_s.setStyleSheet("font-weight: 600; font-size: 12.5px; color: #f0f6fc;")
+        lbl_s.setStyleSheet("font-weight: 600; font-size: 12.5px;")
         self.sc_inner_layout.addWidget(lbl_s)
 
         scripts = list(USERSCRIPTS_DIR.glob("*.js")) if USERSCRIPTS_DIR.exists() else []
         if scripts:
-            lbl_status = QLabel(f"✓ {len(scripts)} scripts activos cargados")
-            lbl_status.setStyleSheet("font-size: 11px; color: #2ea043; font-weight: 500;")
-            self.sc_inner_layout.addWidget(lbl_status)
-            for s in scripts[:3]:
+            for s in scripts[:4]:
                 lbl_name = QLabel(f"• {s.name}")
-                lbl_name.setStyleSheet("font-size: 11px; opacity: 0.8;")
+                lbl_name.setStyleSheet("font-size: 11px; opacity: 0.85;")
                 self.sc_inner_layout.addWidget(lbl_name)
         else:
             lbl_none = QLabel("No hay scripts instalados aún")
-            lbl_none.setStyleSheet("font-size: 11px; color: #8b949e;")
+            lbl_none.setStyleSheet("font-size: 11px; opacity: 0.75;")
             self.sc_inner_layout.addWidget(lbl_none)
 
     def apply_theme(self, t: dict):
         rgb_text = hex_to_rgb(t["text"])
-        if hasattr(self, "btn_tool_aniplay"):
-            enabled = self.parent_win.config.get("enable_aniplay", False) if self.parent_win else False
-            self.btn_tool_aniplay.setVisible(enabled)
         qss = f"""
             QFrame#AegisExtensionsPopup {{
                 background-color: {t['surface']};
@@ -2973,9 +2967,10 @@ class AegisExtensionsPopup(QFrame):
                 color: {t['text']};
                 padding: 6px 10px;
                 font-size: 12px;
+                text-align: left;
             }}
             QPushButton.menu-item-btn:hover {{
-                background-color: {t['bg']};
+                background-color: rgba({rgb_text}, 0.08);
                 color: {t['accent']};
             }}
             QFrame#MenuSeparator {{
@@ -7661,13 +7656,19 @@ class AegisBrowserWindow(QMainWindow):
         view.page().recentlyAudibleChanged.connect(lambda audible, v=view: self.on_tab_audio_state_changed(v))
         view.page().audioMutedChanged.connect(lambda muted, v=view: self.on_tab_audio_state_changed(v))
 
-        if url_str:
-            view.load(QUrl(url_str))
-        else:
-            self.load_ntp(view)
-
         self.tab_bar.setCurrentIndex(tab_idx)
-        self.stack.setCurrentIndex(stack_idx)
+        self.stack.setCurrentWidget(view)
+
+        if not url_str:
+            self.load_ntp(view)
+            self.url_bar.setText("")
+            engine = self.config.get("search_engine", "Google")
+            placeholder = f"Navegación Privada · Buscar con {engine}..." if getattr(self, "is_incognito", False) else f"Buscar con {engine} o ingresar dirección..."
+            self.url_bar.setPlaceholderText(placeholder)
+            self.url_bar.setFocus()
+        else:
+            view.load(QUrl(url_str))
+
         return view
 
     def load_ntp(self, view: QWebEngineView):
@@ -7677,6 +7678,8 @@ class AegisBrowserWindow(QMainWindow):
             self.tab_bar.setTabIcon(idx, create_shield_icon(t["accent"], 14))
             self.tab_bar.setTabText(idx, "Nueva Pestaña")
         view._aegis_virtual_url = "aegis://start"
+        view._aegis_current_url = "aegis://start"
+        view._aegis_target_url = ""
         engine = self.config.get("search_engine", "Google")
         frequent_sites = self.history_mgr.get_frequent_sites(limit=8)
         html = get_clean_ntp_html(t["ntp_class"], frequent_sites, search_engine=engine)
@@ -7963,6 +7966,21 @@ class AegisBrowserWindow(QMainWindow):
                 self.wake_tab(view)
             if hasattr(self, "devtools_panel") and self.devtools_panel.isVisible():
                 view.page().setDevToolsPage(self.devtools_view.page())
+
+            # Actualizar Omnibox para la nueva pestaña activa
+            virt_u = getattr(view, "_aegis_virtual_url", "")
+            u_str = getattr(view, "_aegis_current_url", "") or view.url().toString() or getattr(view, "_aegis_target_url", "")
+            engine = self.config.get("search_engine", "Google")
+            placeholder = f"Navegación Privada · Buscar con {engine}..." if getattr(self, "is_incognito", False) else f"Buscar con {engine} o ingresar dirección..."
+
+            if not u_str or u_str in ("aegis://start", "about:blank") or virt_u == "aegis://start":
+                self.url_bar.setText("")
+                self.url_bar.setPlaceholderText(placeholder)
+            elif u_str.startswith("aegis://"):
+                self.url_bar.setText(u_str)
+            else:
+                self.url_bar.setText(u_str)
+
             self.on_url_changed(view.url(), view)
             if hasattr(self, "btn_back"):
                 self.btn_back.setEnabled(view.history().canGoBack())
@@ -7995,6 +8013,9 @@ class AegisBrowserWindow(QMainWindow):
         view = self.current_view()
         if view:
             view._aegis_virtual_url = None
+            target_str = target_url.toString()
+            view._aegis_target_url = target_str
+            view._aegis_current_url = target_str
             view.load(target_url)
 
     def navigate_back(self):
@@ -8022,6 +8043,13 @@ class AegisBrowserWindow(QMainWindow):
         if getattr(view, "_aegis_virtual_url", None):
             if url_str.startswith("data:text/html") or url_str.startswith("data:") or not url_str:
                 url_str = view._aegis_virtual_url
+        elif not url_str and getattr(view, "_aegis_current_url", None):
+            url_str = view._aegis_current_url
+
+        if url_str:
+            view._aegis_current_url = url_str
+
+        effective_qurl = QUrl(url_str) if (not qurl.isValid() or qurl.isEmpty()) and url_str else qurl
 
         # Búsqueda disparada desde el buscador central del NTP
         if url_str.startswith("aegis://search?q="):
@@ -8049,6 +8077,15 @@ class AegisBrowserWindow(QMainWindow):
         elif url_str == "aegis://start":
             if getattr(view, "_aegis_virtual_url", None) != "aegis://start":
                 self.load_ntp(view)
+            if view == self.current_view():
+                self.url_bar.setText("")
+                engine = self.config.get("search_engine", "Google")
+                placeholder = f"Navegación Privada · Buscar con {engine}..." if getattr(self, "is_incognito", False) else f"Buscar con {engine} o ingresar dirección..."
+                self.url_bar.setPlaceholderText(placeholder)
+                if hasattr(self, "security_action"):
+                    t_cur = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
+                    self.security_action.setIcon(create_shield_icon(t_cur["accent"], 16))
+                    self.security_action.setToolTip("Página de inicio de Aegis")
             return
         elif url_str == "aegis://aniplay":
             self.load_aniplay(view)
@@ -8157,7 +8194,7 @@ class AegisBrowserWindow(QMainWindow):
 
         if view == self.current_view():
             # Actualizar candado SSL / indicador de seguridad
-            u_scheme = qurl.scheme().lower()
+            u_scheme = effective_qurl.scheme().lower()
             if hasattr(self, "security_action"):
                 t_cur = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
                 if u_scheme == "https":
