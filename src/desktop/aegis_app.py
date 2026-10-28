@@ -4724,12 +4724,12 @@ class AegisTabBar(QTabBar):
         super().__init__(parent)
         self.parent_win = parent
         self.setTabsClosable(True)
-        self.setMovable(True)
+        self.setMovable(False)  # Solo True si count() > 1
         self.setDrawBase(False)
         self.setElideMode(Qt.TextElideMode.ElideRight)
         self.setIconSize(QSize(16, 16))
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self._drag_start_pos = None
+        self._drag_start_global = None
         self._drag_tab_idx = -1
 
     def contextMenuEvent(self, event):
@@ -4742,6 +4742,7 @@ class AegisTabBar(QTabBar):
 
     def tabInserted(self, index: int):
         super().tabInserted(index)
+        self.setMovable(self.count() > 1)
         wrapper = QWidget()
         wrapper.setFixedSize(22, 20)
         wl = QHBoxLayout(wrapper)
@@ -4755,6 +4756,10 @@ class AegisTabBar(QTabBar):
         btn.clicked.connect(lambda _, b=btn: self.on_close_clicked(b))
         wl.addWidget(btn)
         self.setTabButton(index, QTabBar.ButtonPosition.RightSide, wrapper)
+
+    def tabRemoved(self, index: int):
+        super().tabRemoved(index)
+        self.setMovable(self.count() > 1)
 
     def on_close_clicked(self, btn: QPushButton):
         for i in range(self.count()):
@@ -4772,41 +4777,74 @@ class AegisTabBar(QTabBar):
                 return
         elif event.button() == Qt.MouseButton.LeftButton:
             idx = self.tabAt(event.pos())
-            self._drag_start_pos = event.pos()
+            self._drag_start_global = event.globalPosition().toPoint()
             self._drag_tab_idx = idx
+            # Si solo hay 1 pestaña, NO llamar a super() para evitar que QTabBar capture el arrastre
+            # y muestre animaciones de deslizamiento/organización de pestaña
+            if self.count() <= 1:
+                event.accept()
+                return
             super().mousePressEvent(event)
             event.accept()
             return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if (event.buttons() & Qt.MouseButton.LeftButton) and self._drag_start_pos is not None and self._drag_tab_idx != -1:
-            p = event.pos()
-            if p.y() > 70 and self.count() > 1:
-                self.setCursor(Qt.CursorShape.DragMoveCursor)
+        if (event.buttons() & Qt.MouseButton.LeftButton) and hasattr(self, "_drag_start_global") and self._drag_start_global is not None:
+            delta = (event.globalPosition().toPoint() - self._drag_start_global).manhattanLength()
+            # Si solo hay 1 pestaña o el clic fue en área vacía de la barra de pestañas:
+            if self.count() <= 1 or self._drag_tab_idx == -1:
+                if delta > 3:
+                    start_native_window_drag(self.window(), self._drag_start_global)
+                    self._drag_start_global = None
+                    event.accept()
+                    return
             else:
-                self.setCursor(Qt.CursorShape.ArrowCursor)
+                # Si hay más de una pestaña, permitir reorganización o desprendimiento hacia abajo
+                p = event.pos()
+                if p.y() > 60:
+                    self.setCursor(Qt.CursorShape.DragMoveCursor)
+                else:
+                    self.setCursor(Qt.CursorShape.ArrowCursor)
+                super().mouseMoveEvent(event)
+                event.accept()
+                return
         super().mouseMoveEvent(event)
-        event.accept()
 
     def mouseReleaseEvent(self, event):
         self.setCursor(Qt.CursorShape.ArrowCursor)
-        if self._drag_start_pos is not None and self._drag_tab_idx != -1:
-            p = event.pos()
-            if p.y() > 70 and self.count() > 1:
-                global_pos = event.globalPosition().toPoint()
-                tab_idx = self._drag_tab_idx
-                self._drag_start_pos = None
+        if hasattr(self, "_drag_start_global") and self._drag_start_global is not None:
+            if self.count() <= 1:
+                if self._drag_tab_idx != -1 and self._drag_tab_idx < self.count():
+                    self.setCurrentIndex(self._drag_tab_idx)
+                self._drag_start_global = None
                 self._drag_tab_idx = -1
-                self.tabDetached.emit(tab_idx, global_pos)
                 event.accept()
                 return
-            self._drag_start_pos = None
-            self._drag_tab_idx = -1
+            else:
+                p = event.pos()
+                if p.y() > 60 and self._drag_tab_idx != -1:
+                    global_pos = event.globalPosition().toPoint()
+                    tab_idx = self._drag_tab_idx
+                    self._drag_start_global = None
+                    self._drag_tab_idx = -1
+                    self.tabDetached.emit(tab_idx, global_pos)
+                    event.accept()
+                    return
+                self._drag_start_global = None
+                self._drag_tab_idx = -1
         super().mouseReleaseEvent(event)
         event.accept()
 
     def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            idx = self.tabAt(event.pos())
+            if idx == -1 or self.count() <= 1:
+                win = self.window()
+                if win and hasattr(win, "toggle_maximize"):
+                    win.toggle_maximize()
+                    event.accept()
+                    return
         super().mouseDoubleClickEvent(event)
 
     def wheelEvent(self, event):
@@ -4886,6 +4924,52 @@ class AegisOmnibox(QLineEdit):
         menu.exec(event.globalPos())
 
 # ── 10.9 Grips de Redimensionamiento y Cabecera de Ventana Sin Marco ──────────
+def start_native_window_drag(win: QWidget, start_pos=None):
+    """
+    Arrastre nativo de ventana de Windows (ReleaseCapture + WM_NCLBUTTONDOWN HTCAPTION).
+    Permite mover la ventana de forma 100% fluida, des-maximizar arrastrando desde el tope
+    y soporte completo de Windows Aero Snap (acoplar a bordes/esquinas y maximizar).
+    """
+    if not win:
+        return
+    try:
+        if win.isMaximized():
+            if start_pos is None:
+                start_pos = QCursor.pos()
+            normal_geo = win.normalGeometry()
+            w = normal_geo.width() if normal_geo.isValid() and normal_geo.width() > 300 else 1200
+            h = normal_geo.height() if normal_geo.isValid() and normal_geo.height() > 300 else 800
+
+            screen = QApplication.screenAt(start_pos) or QApplication.primaryScreen()
+            screen_geo = screen.availableGeometry() if screen else None
+            screen_w = max(1, win.width())
+
+            ratio = max(0.1, min(0.9, (start_pos.x() - win.x()) / screen_w))
+            new_x = int(start_pos.x() - ratio * w)
+            new_y = int(start_pos.y() - 15)
+
+            if screen_geo:
+                new_x = max(screen_geo.left(), min(new_x, screen_geo.right() - w))
+                new_y = max(screen_geo.top(), min(new_y, screen_geo.bottom() - 100))
+
+            win.showNormal()
+            win.setGeometry(new_x, new_y, w, h)
+            QApplication.processEvents()
+
+        if sys.platform == "win32":
+            ctypes.windll.user32.ReleaseCapture()
+            ctypes.windll.user32.SendMessageW(int(win.winId()), 0x00A1, 2, 0)
+            return
+    except Exception:
+        pass
+
+    wh = win.windowHandle()
+    if not wh:
+        _ = win.winId()
+        wh = win.windowHandle()
+    if wh:
+        wh.startSystemMove()
+
 class AegisEdgeGrip(QWidget):
     def __init__(self, parent, edge, cursor):
         super().__init__(parent)
@@ -4922,19 +5006,12 @@ class AegisTabHeader(QWidget):
 
     def mouseMoveEvent(self, event):
         if (event.buttons() & Qt.MouseButton.LeftButton) and self._drag_start_pos is not None:
-            win = self.window()
-            if win and not win.isMaximized() and not win.isFullScreen():
-                delta = (event.globalPosition().toPoint() - self._drag_start_pos).manhattanLength()
-                if delta > 10:
-                    wh = win.windowHandle()
-                    if not wh:
-                        _ = win.winId()
-                        wh = win.windowHandle()
-                    if wh:
-                        self._drag_start_pos = None
-                        wh.startSystemMove()
-                        event.accept()
-                        return
+            delta = (event.globalPosition().toPoint() - self._drag_start_pos).manhattanLength()
+            if delta > 3:
+                start_native_window_drag(self.window(), self._drag_start_pos)
+                self._drag_start_pos = None
+                event.accept()
+                return
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
@@ -4967,19 +5044,12 @@ class AegisAppHeader(QWidget):
 
     def mouseMoveEvent(self, event):
         if (event.buttons() & Qt.MouseButton.LeftButton) and self._drag_start_pos is not None:
-            win = self.window()
-            if win and not win.isMaximized() and not win.isFullScreen():
-                delta = (event.globalPosition().toPoint() - self._drag_start_pos).manhattanLength()
-                if delta > 10:
-                    wh = win.windowHandle()
-                    if not wh:
-                        _ = win.winId()
-                        wh = win.windowHandle()
-                    if wh:
-                        self._drag_start_pos = None
-                        wh.startSystemMove()
-                        event.accept()
-                        return
+            delta = (event.globalPosition().toPoint() - self._drag_start_pos).manhattanLength()
+            if delta > 3:
+                start_native_window_drag(self.window(), self._drag_start_pos)
+                self._drag_start_pos = None
+                event.accept()
+                return
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
@@ -5003,6 +5073,7 @@ class AegisAppWindow(QMainWindow):
     - Cabecera moderna fusionada con colores nativos oscuros de Discord (#1e1f22).
     - Minimización y Cierre a la bandeja del sistema (System Tray) para permanecer en reposo a ~40 MB.
     - WebRTC y audio protegidos contra interrupciones de reproducción o llamadas.
+    - Sin botones placebo de memoria RAM en la interfaz visual.
     """
     def __init__(self, url: str = "https://discord.com/app", app_title: str = "Discord", parent=None):
         super().__init__(parent)
@@ -5087,19 +5158,6 @@ class AegisAppWindow(QMainWindow):
                 background: #da373c;
                 color: #ffffff;
             }
-            QPushButton#BtnPurgeRAM {
-                background: rgba(88, 101, 242, 0.15);
-                border: 1px solid rgba(88, 101, 242, 0.35);
-                color: #c9cdfb;
-                border-radius: 4px;
-                padding: 3px 8px;
-                font-size: 11px;
-                font-weight: 600;
-            }
-            QPushButton#BtnPurgeRAM:hover {
-                background: #5865F2;
-                color: #ffffff;
-            }
         """)
         self.setCentralWidget(self.root_widget)
 
@@ -5125,22 +5183,7 @@ class AegisAppWindow(QMainWindow):
         self.lbl_title.setStyleSheet("color: #f2f3f5; font-weight: 700; font-size: 13px; letter-spacing: 0.3px;")
         header_layout.addWidget(self.lbl_title)
 
-        # Badge Ultra-Light
-        self.lbl_badge = QLabel("⚡ Ultra-Light ~45MB")
-        self.lbl_badge.setStyleSheet(
-            "background: rgba(88, 101, 242, 0.2); color: #828df8; border: 1px solid rgba(88, 101, 242, 0.4); "
-            "border-radius: 4px; padding: 2px 7px; font-size: 10px; font-weight: 600;"
-        )
-        header_layout.addWidget(self.lbl_badge)
-
         header_layout.addStretch(1)
-
-        # Botón para purgar memoria RAM bajo demanda
-        self.btn_purge = QPushButton("⚡ Limpiar RAM")
-        self.btn_purge.setObjectName("BtnPurgeRAM")
-        self.btn_purge.setToolTip("Compacta y purga inmediatamente la memoria física no usada (EmptyWorkingSet)")
-        self.btn_purge.clicked.connect(self.force_memory_purge)
-        header_layout.addWidget(self.btn_purge)
 
         # Botón Recargar
         self.btn_reload = QPushButton("↻")
@@ -5238,12 +5281,9 @@ class AegisAppWindow(QMainWindow):
         act_show = tray_menu.addAction("💬 Abrir Discord")
         act_show.triggered.connect(self.show_and_activate)
 
-        act_purge = tray_menu.addAction("⚡ Liberar Memoria RAM Ahora")
-        act_purge.triggered.connect(self.force_memory_purge)
-
         tray_menu.addSeparator()
 
-        act_quit = tray_menu.addAction("✕ Salir completamente de Discord")
+        act_quit = tray_menu.addAction("✕ Salir de Discord")
         act_quit.triggered.connect(self.really_quit)
 
         self.tray.setContextMenu(tray_menu)
@@ -5262,13 +5302,6 @@ class AegisAppWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
-    def force_memory_purge(self):
-        silent_background_memory_purge(force=True)
-        if hasattr(self, "btn_purge"):
-            orig_text = self.btn_purge.text()
-            self.btn_purge.setText("✓ ¡RAM Purgada!")
-            QTimer.singleShot(1500, lambda: self.btn_purge.setText(orig_text))
-
     def really_quit(self):
         self._force_quit = True
         if hasattr(self, "tray") and self.tray:
@@ -5279,7 +5312,7 @@ class AegisAppWindow(QMainWindow):
         if not self._force_quit:
             event.ignore()
             self.hide()
-            # Compactar memoria física del proceso inmediatamente
+            # Compactar memoria física del proceso de forma 100% silenciosa en segundo plano
             silent_background_memory_purge(force=False)
             if not self._has_notified_tray:
                 self._has_notified_tray = True
