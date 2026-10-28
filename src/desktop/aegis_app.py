@@ -500,6 +500,39 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 })();
 """, encoding="utf-8")
 
+        turnstile_script = scripts_dir / "aegis_turnstile_polyfill.js"
+        if not turnstile_script.exists():
+            turnstile_script.write_text(r"""// ==UserScript==
+// @name         Aegis Cloudflare Turnstile & IFrame Head Polyfill
+// @description  Garantiza que b.getElementsByTagName('head')[0] siempre devuelva un elemento válido en iframes dinámicos
+// @match        *://*/*
+// @run-at       document-start
+// ==/UserScript==
+(function() {
+    if (window._aegisIFrameHeadPolyfill) return;
+    window._aegisIFrameHeadPolyfill = true;
+    try {
+        const origGetByTag = Document.prototype.getElementsByTagName;
+        Document.prototype.getElementsByTagName = function(tag) {
+            const list = origGetByTag.apply(this, arguments);
+            if (tag && typeof tag === 'string' && tag.toLowerCase() === 'head') {
+                if (!list || list.length === 0) {
+                    let h = this.head;
+                    if (!h && this.documentElement) {
+                        try {
+                            h = this.createElement('head');
+                            this.documentElement.insertBefore(h, this.documentElement.firstChild);
+                        } catch(e) {}
+                    }
+                    if (h) return [h];
+                }
+            }
+            return list;
+        };
+    } catch(e) {}
+})();
+""", encoding="utf-8")
+
         discord_opt_script = scripts_dir / "aegis_discord_optimizer.js"
         cur_opt = discord_opt_script.read_text(encoding="utf-8", errors="ignore") if discord_opt_script.exists() else ""
         if not discord_opt_script.exists() or "startsWith('/login')" not in cur_opt:
@@ -1502,6 +1535,41 @@ class ChromeExtensionManager:
                 pass
 
 _SHARED_PERSISTENT_PROFILE = None
+_DISCORD_PERSISTENT_PROFILE = None
+
+def get_discord_profile() -> QWebEngineProfile:
+    """Perfil dedicado para Discord en Modo App (PWA) con almacenamiento aislado para evitar colisiones de base de datos."""
+    global _DISCORD_PERSISTENT_PROFILE
+    if _DISCORD_PERSISTENT_PROFILE is None:
+        PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+        storage_dir = PROFILE_DIR / "discord_storage"
+        cache_dir = PROFILE_DIR / "discord_cache"
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        app = QApplication.instance()
+        _DISCORD_PERSISTENT_PROFILE = QWebEngineProfile("aegis_discord_profile", app)
+        _DISCORD_PERSISTENT_PROFILE.setPersistentStoragePath(str(storage_dir))
+        _DISCORD_PERSISTENT_PROFILE.setCachePath(str(cache_dir))
+        _DISCORD_PERSISTENT_PROFILE.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
+        _DISCORD_PERSISTENT_PROFILE.setHttpUserAgent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        )
+        s = _DISCORD_PERSISTENT_PROFILE.settings()
+        s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.AllowWindowActivationFromJavaScript, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, False)
+        s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanPaste, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.DnsPrefetchEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.AutoLoadIconsForPage, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.ScreenCaptureEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.BackForwardCacheEnabled, True)
+    return _DISCORD_PERSISTENT_PROFILE
 
 def get_shared_profile() -> QWebEngineProfile:
     global _SHARED_PERSISTENT_PROFILE
@@ -5147,8 +5215,8 @@ class AegisAppWindow(QMainWindow):
             if self not in app._aegis_windows:
                 app._aegis_windows.append(self)
 
-        # Perfil Chromium compartido
-        self.profile = get_shared_profile()
+        # Perfil Chromium aislado y dedicado para Discord
+        self.profile = get_discord_profile()
         self.interceptor = AegisRequestInterceptor()
         if not getattr(self.profile, "_aegis_configured", False):
             self.profile._aegis_configured = True
@@ -5157,6 +5225,7 @@ class AegisAppWindow(QMainWindow):
             self.load_userscripts_for_app()
         else:
             ensure_builtin_userscripts(USERSCRIPTS_DIR)
+            self.load_userscripts_for_app()
 
         self.init_ui()
         self.init_tray()
@@ -5165,15 +5234,27 @@ class AegisAppWindow(QMainWindow):
     def load_userscripts_for_app(self):
         try:
             self.profile.scripts().clear()
+            # 1. Polyfill para Cloudflare Turnstile en iframes dinámicos
+            ts_file = USERSCRIPTS_DIR / "aegis_turnstile_polyfill.js"
+            if ts_file.exists():
+                s_ts = QWebEngineScript()
+                s_ts.setName("aegis_turnstile_polyfill")
+                s_ts.setSourceCode(ts_file.read_text(encoding="utf-8"))
+                s_ts.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+                s_ts.setRunsOnSubFrames(True)
+                s_ts.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+                self.profile.scripts().insert(s_ts)
+
+            # 2. Optimizador nativo para Discord
             opt_file = USERSCRIPTS_DIR / "aegis_discord_optimizer.js"
             if opt_file.exists():
-                s = QWebEngineScript()
-                s.setName("aegis_discord_optimizer")
-                s.setSourceCode(opt_file.read_text(encoding="utf-8"))
-                s.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
-                s.setRunsOnSubFrames(False)
-                s.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
-                self.profile.scripts().insert(s)
+                s_opt = QWebEngineScript()
+                s_opt.setName("aegis_discord_optimizer")
+                s_opt.setSourceCode(opt_file.read_text(encoding="utf-8"))
+                s_opt.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+                s_opt.setRunsOnSubFrames(False)
+                s_opt.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+                self.profile.scripts().insert(s_opt)
         except Exception:
             pass
 
@@ -5724,7 +5805,7 @@ class AegisBrowserWindow(QMainWindow):
                 s = QWebEngineScript()
                 s.setName(s_file.stem)
                 s.setSourceCode(content)
-                if s_file.stem in ("aegis_timer_bypass", "ublock_lite", "aegis_discord_optimizer"):
+                if s_file.stem in ("aegis_timer_bypass", "ublock_lite", "aegis_discord_optimizer", "aegis_turnstile_polyfill"):
                     s.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
                     s.setRunsOnSubFrames(True)
                 else:
