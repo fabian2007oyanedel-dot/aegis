@@ -535,7 +535,7 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 
         discord_opt_script = scripts_dir / "aegis_discord_optimizer.js"
         cur_opt = discord_opt_script.read_text(encoding="utf-8", errors="ignore") if discord_opt_script.exists() else ""
-        if not discord_opt_script.exists() or "startsWith('/login')" not in cur_opt:
+        if not discord_opt_script.exists() or "startOptimizerWhenLoggedIn" not in cur_opt:
             discord_opt_script.write_text(r"""// ==UserScript==
 // @name         Aegis Discord Ultra-Light Optimizer
 // @description  Reduce drásticamente el consumo de CPU y RAM de Discord Web: limita requestAnimationFrame a 1 FPS en segundo plano, defiende el WebRTC de voz sin microcortes, suprime desenfoques GPU pesados y congela animaciones fuera de pantalla.
@@ -547,126 +547,146 @@ def ensure_builtin_userscripts(scripts_dir: Path):
     'use strict';
     if (window._aegisDiscordOptimizerLoaded) return;
 
-    // No intervenir en iframes externos ni en páginas de autenticación/login
     const host = (window.location.hostname || '').toLowerCase();
-    const path = (window.location.pathname || '').toLowerCase();
-    if (!host.includes('discord.com')) return;
-    if (path.startsWith('/login') || path.startsWith('/register')) return;
+    if (!host.includes('discord.com') && !host.includes('discordapp.com')) return;
 
-    window._aegisDiscordOptimizerLoaded = true;
+    if (window.self !== window.top) return;
 
-    // ── 1. Inyección de CSS de Ultra-Rendimiento ──────────────────────────────
-    function injectPerfCSS() {
-        if (document.getElementById('aegis-discord-perf-css')) return;
-        const style = document.createElement('style');
-        style.id = 'aegis-discord-perf-css';
-        style.textContent = `
-            /* Eliminar desenfoques GPU pesados (backdrop-filter) en paneles y modales */
-            *, *::before, *::after {
-                backdrop-filter: none !important;
-                -webkit-backdrop-filter: none !important;
-            }
-            /* Aislamiento de capas de renderizado en mensajes y lista de canales */
-            [class*="messagesWrapper_"], [class*="chatContent_"], [class*="scrollerInner_"] {
-                contain: content !important;
-            }
-            /* Pausar bucle infinito de stickers y emojis animados si no hay hover */
-            [class*="emoji_"]:not(:hover), [class*="sticker_"]:not(:hover) {
-                animation-play-state: paused !important;
-            }
-            /* Optimizar renderizado de avatares en lista de usuarios */
-            [class*="membersWrap_"] [class*="avatar_"] img {
-                image-rendering: -webkit-optimize-contrast;
-            }
-            /* Aceleración de scroll en listas largas */
-            [class*="scrollerBase_"] {
-                will-change: transform;
-                transform: translateZ(0);
-            }
-        `;
-        (document.head || document.documentElement).appendChild(style);
-    }
-    injectPerfCSS();
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', injectPerfCSS);
+    function isAuthOrLogin() {
+        const path = (window.location.pathname || '').toLowerCase();
+        const href = (window.location.href || '').toLowerCase();
+        if (path.startsWith('/login') || path.startsWith('/register') || href.includes('captcha')) {
+            return true;
+        }
+        return !!document.querySelector('input[type="password"], input[name="email"], input[name="login"], [class*="qrCode_"]');
     }
 
-    // ── 2. Monitor Inteligente de Conexión de Voz / WebRTC ────────────────────
-    let isVoiceActive = false;
-    window._aegisIsDiscordVoiceActive = () => isVoiceActive;
-
-    function checkVoiceStatus() {
-        const inVoice = !!document.querySelector(
-            '[class*="rtcConnectionStatus_"], [class*="connection_"], button[aria-label*="Desconectar"], button[aria-label*="Disconnect"], [class*="voiceUsers_"]'
-        );
-        isVoiceActive = inVoice;
-    }
-    setInterval(checkVoiceStatus, 2000);
-
-    // ── 3. Estrangulamiento de requestAnimationFrame en Segundo Plano ─────────
-    const origRAF = window.requestAnimationFrame.bind(window);
-    const origCAF = window.cancelAnimationFrame.bind(window);
-
-    let isHidden = document.hidden;
-    document.addEventListener('visibilitychange', () => {
-        isHidden = document.hidden;
-        if (!isHidden) {
-            flushPendingFrames();
-        }
-    });
-
-    const pendingCallbacks = new Map();
-    let nextCallbackId = 1;
-    let bgTimer = null;
-
-    function flushPendingFrames() {
-        if (pendingCallbacks.size > 0) {
-            const now = performance.now();
-            const entries = Array.from(pendingCallbacks.entries());
-            pendingCallbacks.clear();
-            entries.forEach(([id, cb]) => {
-                try { cb(now); } catch(e) {}
-            });
-        }
-    }
-
-    window.requestAnimationFrame = function(cb) {
-        if (!isHidden || isVoiceActive) {
-            return origRAF(cb);
-        }
-        const id = nextCallbackId++;
-        pendingCallbacks.set(id, cb);
-        if (!bgTimer) {
-            bgTimer = setTimeout(() => {
-                bgTimer = null;
-                flushPendingFrames();
-            }, 1000);
-        }
-        return id;
-    };
-
-    window.cancelAnimationFrame = function(id) {
-        if (pendingCallbacks.has(id)) {
-            pendingCallbacks.delete(id);
+    function startOptimizerWhenLoggedIn() {
+        if (isAuthOrLogin()) {
+            setTimeout(startOptimizerWhenLoggedIn, 1500);
             return;
         }
-        return origCAF(id);
-    };
 
-    // ── 4. Supresión de videos en segundo plano ──────────────────────────────
-    setInterval(() => {
-        if (document.hidden && !isVoiceActive) {
-            document.querySelectorAll('video').forEach(v => {
-                if (!v.closest('[class*="pictureInPicture_"], [class*="callContainer_"]')) {
-                    if (!v.paused) {
-                        try { v.pause(); } catch(e) {}
-                    }
-                }
-            });
+        const hasAppUI = !!document.querySelector('[class*="guilds_"], [class*="sidebar_"], [class*="chatContent_"], [class*="channels_"]');
+        if (!hasAppUI) {
+            setTimeout(startOptimizerWhenLoggedIn, 1500);
+            return;
         }
-    }, 4000);
 
-    console.log('[Aegis] Optimizador Discord Ultra-Light activado (0% CPU en fondo, WebRTC blindado).');
+        if (window._aegisDiscordOptimizerLoaded) return;
+        window._aegisDiscordOptimizerLoaded = true;
+
+        function injectPerfCSS() {
+            if (document.getElementById('aegis-discord-perf-css')) return;
+            const target = document.head || document.documentElement;
+            if (!target) return;
+            const style = document.createElement('style');
+            style.id = 'aegis-discord-perf-css';
+            style.textContent = `
+                *, *::before, *::after {
+                    backdrop-filter: none !important;
+                    -webkit-backdrop-filter: none !important;
+                }
+                [class*="messagesWrapper_"], [class*="chatContent_"], [class*="scrollerInner_"] {
+                    contain: content !important;
+                }
+                [class*="emoji_"]:not(:hover), [class*="sticker_"]:not(:hover) {
+                    animation-play-state: paused !important;
+                }
+                [class*="membersWrap_"] [class*="avatar_"] img {
+                    image-rendering: -webkit-optimize-contrast;
+                }
+                [class*="scrollerBase_"] {
+                    will-change: transform;
+                    transform: translateZ(0);
+                }
+            `;
+            try {
+                target.appendChild(style);
+            } catch(e) {}
+        }
+        injectPerfCSS();
+
+        let isVoiceActive = false;
+        window._aegisIsDiscordVoiceActive = () => isVoiceActive;
+
+        function checkVoiceStatus() {
+            const inVoice = !!document.querySelector(
+                '[class*="rtcConnectionStatus_"], [class*="connection_"], button[aria-label*="Desconectar"], button[aria-label*="Disconnect"], [class*="voiceUsers_"]'
+            );
+            isVoiceActive = inVoice;
+        }
+        setInterval(checkVoiceStatus, 2000);
+
+        const origRAF = window.requestAnimationFrame.bind(window);
+        const origCAF = window.cancelAnimationFrame.bind(window);
+
+        let isHidden = document.hidden;
+        document.addEventListener('visibilitychange', () => {
+            isHidden = document.hidden;
+            if (!isHidden) {
+                flushPendingFrames();
+            }
+        });
+
+        const pendingCallbacks = new Map();
+        let nextCallbackId = 1;
+        let bgTimer = null;
+
+        function flushPendingFrames() {
+            if (pendingCallbacks.size > 0) {
+                const now = performance.now();
+                const entries = Array.from(pendingCallbacks.entries());
+                pendingCallbacks.clear();
+                entries.forEach(([id, cb]) => {
+                    try { cb(now); } catch(e) {}
+                });
+            }
+        }
+
+        window.requestAnimationFrame = function(cb) {
+            if (!isHidden || isVoiceActive) {
+                return origRAF(cb);
+            }
+            const id = nextCallbackId++;
+            pendingCallbacks.set(id, cb);
+            if (!bgTimer) {
+                bgTimer = setTimeout(() => {
+                    bgTimer = null;
+                    flushPendingFrames();
+                }, 1000);
+            }
+            return id;
+        };
+
+        window.cancelAnimationFrame = function(id) {
+            if (pendingCallbacks.has(id)) {
+                pendingCallbacks.delete(id);
+                return;
+            }
+            return origCAF(id);
+        };
+
+        setInterval(() => {
+            if (document.hidden && !isVoiceActive) {
+                document.querySelectorAll('video').forEach(v => {
+                    if (!v.closest('[class*="pictureInPicture_"], [class*="callContainer_"]')) {
+                        if (!v.paused) {
+                            try { v.pause(); } catch(e) {}
+                        }
+                    }
+                });
+            }
+        }, 4000);
+
+        console.log('[Aegis] Optimizador Discord Ultra-Light activado (0% CPU en fondo, WebRTC blindado).');
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startOptimizerWhenLoggedIn);
+    } else {
+        startOptimizerWhenLoggedIn();
+    }
 })();
 """, encoding="utf-8")
 
@@ -2010,17 +2030,33 @@ class AegisRequestInterceptor(QWebEngineUrlRequestInterceptor):
     def interceptRequest(self, info):
         if not self.enabled:
             return
+        url = info.requestUrl().toString()
+        u_lower = url.lower()
+        source = info.firstPartyUrl().toString()
+        s_lower = source.lower()
+
+        # Tráfico de autenticación y servicios de Discord y Captchas 100% limpios y sin filtros
+        is_discord_or_auth = (
+            "discord.com" in u_lower or
+            "discord.gg" in u_lower or
+            "discordapp.com" in u_lower or
+            "discordapp.net" in u_lower or
+            "hcaptcha.com" in u_lower or
+            "cloudflare.com" in u_lower or
+            "turnstile" in u_lower or
+            "recaptcha" in u_lower or
+            "discord.com" in s_lower or
+            "discord.gg" in s_lower or
+            "discordapp.com" in s_lower
+        )
+        if is_discord_or_auth:
+            return
+
         try:
             info.setHttpHeader(b"DNT", b"1")
             info.setHttpHeader(b"Sec-GPC", b"1")
         except Exception:
             pass
-        url = info.requestUrl().toString()
-        u_lower = url.lower()
-
-        # Permitir siempre peticiones legítimas de la API y autenticación de Discord
-        if "discord.com/api/" in u_lower or "discordapp.com/api/" in u_lower:
-            return
 
         if any(
             t in u_lower for t in (
@@ -2036,10 +2072,7 @@ class AegisRequestInterceptor(QWebEngineUrlRequestInterceptor):
             if self.callback:
                 self.callback()
             return
-        source = info.firstPartyUrl().toString()
-        if "discord.com" in source.lower() or "discordapp.com" in source.lower():
-            if "discord" in u_lower or "hcaptcha" in u_lower or "cloudflare" in u_lower:
-                return
+
         if SHIELDS_CORE.should_block(url, source, "other"):
             info.block(True)
             if self.callback:
@@ -5251,7 +5284,7 @@ class AegisAppWindow(QMainWindow):
                 s_opt = QWebEngineScript()
                 s_opt.setName("aegis_discord_optimizer")
                 s_opt.setSourceCode(opt_file.read_text(encoding="utf-8"))
-                s_opt.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+                s_opt.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
                 s_opt.setRunsOnSubFrames(False)
                 s_opt.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
                 self.profile.scripts().insert(s_opt)
@@ -5513,6 +5546,14 @@ class AegisAppWindow(QMainWindow):
 
 # ── 11. Ventana Principal de Aegis Browser ────────────────────────────────────
 class AegisBrowserWindow(QMainWindow):
+    def show_and_activate(self):
+        if self.isMinimized():
+            self.showNormal()
+        else:
+            self.show()
+        self.raise_()
+        self.activateWindow()
+
     def __init__(self, is_incognito: bool = False):
         super().__init__()
         self.is_incognito = is_incognito
@@ -10851,6 +10892,23 @@ def main():
         app.setApplicationName("Aegis")
         app.setApplicationVersion("1.3.5")
 
+        # ── Instancia Única para Prevenir Bloqueos de Base de Datos SQLite y Caché ──
+        from PyQt6.QtNetwork import QLocalSocket, QLocalServer
+        ipc_name = "aegis_browser_single_instance_ipc"
+
+        ipc_socket = QLocalSocket()
+        ipc_socket.connectToServer(ipc_name)
+        if ipc_socket.waitForConnected(400):
+            payload = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "FOCUS"
+            ipc_socket.write(payload.encode("utf-8"))
+            ipc_socket.waitForBytesWritten(1000)
+            ipc_socket.disconnectFromServer()
+            sys.exit(0)
+
+        QLocalServer.removeServer(ipc_name)
+        ipc_server = QLocalServer(app)
+        ipc_server.listen(ipc_name)
+
         if sys.platform == "win32":
             try:
                 import ctypes
@@ -10881,6 +10939,26 @@ def main():
         else:
             window = AegisBrowserWindow()
             window.show()
+
+        def handle_ipc_connection():
+            conn = ipc_server.nextPendingConnection()
+            if not conn:
+                return
+            def on_ready_read():
+                try:
+                    data = bytes(conn.readAll()).decode("utf-8", errors="ignore").strip()
+                    if "--discord" in data:
+                        if hasattr(window, "launch_discord_app"):
+                            window.launch_discord_app()
+                        elif isinstance(window, AegisAppWindow):
+                            window.show_and_activate()
+                    else:
+                        window.show_and_activate()
+                except Exception:
+                    pass
+            conn.readyRead.connect(on_ready_read)
+
+        ipc_server.newConnection.connect(handle_ipc_connection)
 
         sys.exit(app.exec())
     except Exception as e:
