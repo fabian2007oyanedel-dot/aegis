@@ -302,7 +302,8 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 """, encoding="utf-8")
 
         dark_script = scripts_dir / "dark_reader.js"
-        if not dark_script.exists():
+        cur_dark = dark_script.read_text(encoding="utf-8", errors="ignore") if dark_script.exists() else ""
+        if not dark_script.exists() or "discord.com" not in cur_dark:
             dark_script.write_text("""// ==UserScript==
 // @name         Aegis Smart Dark Mode
 // @description  Modo oscuro inteligente para sitios web sin tema nativo
@@ -311,23 +312,33 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 (function() {
     'use strict';
     if (window._aegisDarkInjected) return;
+    const host = (window.location.hostname || '').toLowerCase();
+    if (
+        host.includes('youtube.com') ||
+        host.includes('github.com') ||
+        host.includes('reddit.com') ||
+        host.includes('netflix.com') ||
+        host.includes('discord.com') ||
+        host.includes('discordapp.com')
+    ) return;
     window._aegisDarkInjected = true;
-    const host = window.location.hostname;
-    if (host.includes('youtube.com') || host.includes('github.com') || host.includes('reddit.com') || host.includes('netflix.com')) return;
     const style = document.createElement('style');
     style.id = 'aegis-smart-dark';
     style.textContent = `
         html { filter: invert(90%) hue-rotate(180deg) !important; background: #111 !important; }
         img, video, canvas, iframe, svg, [style*="background-image"] { filter: invert(110%) hue-rotate(180deg) !important; }
     `;
-    if (localStorage.getItem('aegis_force_dark') === '1') {
-        document.documentElement.appendChild(style);
-    }
+    try {
+        if (typeof localStorage !== 'undefined' && localStorage && localStorage.getItem('aegis_force_dark') === '1') {
+            document.documentElement.appendChild(style);
+        }
+    } catch(e) {}
 })();
 """, encoding="utf-8")
 
         ublock_script = scripts_dir / "ublock_lite.js"
-        if not ublock_script.exists():
+        cur_ub = ublock_script.read_text(encoding="utf-8", errors="ignore") if ublock_script.exists() else ""
+        if not ublock_script.exists() or "discord.com" not in cur_ub:
             ublock_script.write_text("""// ==UserScript==
 // @name         Aegis AdBlock & Tracker Zapper
 // @description  Bloqueo de banners intrusivos, popups de suscripción y rastreadores
@@ -335,6 +346,8 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 // ==/UserScript==
 (function() {
     'use strict';
+    const host = (window.location.hostname || '').toLowerCase();
+    if (host.includes('discord.com') || host.includes('discordapp.com')) return;
     const annoyingSelectors = [
         '.ad-banner', '.adsbygoogle', '.advertisement', '#cookie-banner',
         '.cookie-notice', '.cmp-container', '#qc-cmp2-container',
@@ -1504,7 +1517,7 @@ def get_shared_profile() -> QWebEngineProfile:
         _SHARED_PERSISTENT_PROFILE.setCachePath(str(cache_dir))
         _SHARED_PERSISTENT_PROFILE.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
         _SHARED_PERSISTENT_PROFILE.setHttpUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
         )
         s = _SHARED_PERSISTENT_PROFILE.settings()
         s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, True)
@@ -4671,17 +4684,7 @@ class AegisWebPage(QWebEnginePage):
         if self.browser_win and hasattr(self.browser_win, "add_new_tab"):
             new_view = self.browser_win.add_new_tab()
             return new_view.page()
-        # Si es una ventana en Modo App (ej. Discord) o no tiene pestañas, abrir popup nativo
-        popup = QWebEngineView()
-        popup_page = AegisWebPage(self.profile(), popup, browser_win=self.browser_win)
-        popup.setPage(popup_page)
-        popup.resize(600, 720)
-        popup.setWindowTitle("Autenticación")
-        popup.show()
-        if not hasattr(self, "_active_popups"):
-            self._active_popups = []
-        self._active_popups.append(popup)
-        return popup_page
+        return super().createWindow(window_type)
 
     def handle_feature_permission(self, security_origin: QUrl, feature: QWebEnginePage.Feature):
         # Auto-conceder permisos esenciales para Discord (micrófono, cámara, pantalla, notificaciones, portapapeles) y Spotify
@@ -5161,17 +5164,14 @@ class AegisAppWindow(QMainWindow):
 
     def load_userscripts_for_app(self):
         try:
-            for s_file in USERSCRIPTS_DIR.glob("*.js"):
-                content = s_file.read_text(encoding="utf-8")
+            self.profile.scripts().clear()
+            opt_file = USERSCRIPTS_DIR / "aegis_discord_optimizer.js"
+            if opt_file.exists():
                 s = QWebEngineScript()
-                s.setName(s_file.stem)
-                s.setSourceCode(content)
-                if s_file.stem in ("aegis_timer_bypass", "ublock_lite", "aegis_discord_optimizer"):
-                    s.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
-                    s.setRunsOnSubFrames(True)
-                else:
-                    s.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
-                    s.setRunsOnSubFrames(False)
+                s.setName("aegis_discord_optimizer")
+                s.setSourceCode(opt_file.read_text(encoding="utf-8"))
+                s.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+                s.setRunsOnSubFrames(False)
                 s.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
                 self.profile.scripts().insert(s)
         except Exception:
@@ -5468,7 +5468,7 @@ class AegisBrowserWindow(QMainWindow):
         if self.is_incognito:
             self.profile = QWebEngineProfile(self)
             self.profile.setHttpUserAgent(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
             )
             s = self.profile.settings()
             s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, True)
