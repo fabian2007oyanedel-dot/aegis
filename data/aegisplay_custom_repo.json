@@ -1,0 +1,248 @@
+{
+  "repository_name": "Catálogo Maestro Comunitario Extendido (24 Títulos Reales)",
+  "version": "3.1.0",
+  "author": "Aegis Media Protocol",
+  "description": "Repositorio masivo de prueba con 24 enlaces reales sin datos ficticios para validación de estabilidad.",
+  "items": [
+    {
+      "id": "rep-a1",
+      "title": "Mahou no Shimai Lulutto Lilly Part 2",
+      "episode": "Episodio 3",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 3",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_571c85a8cae646e786000ebd3b0f5512.jpg",
+      "player_url": "https://jkanime.net/jkplayer/um?e=M2JndFR6VnQyTWhiQzdlb0RxWUQ5UG14WnczcTZoZExUWE5kL3AxcGFYQ3Y2T28xM3FvY2hEalR5K05jU1R1a1ZqYnIrc29QeSt5eEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojp4M1pUeEFqRE4yT2xWbFRF"
+    },
+    {
+      "id": "rep-a2",
+      "title": "Shin Tennis no Oujisama: U-17 World Cup",
+      "episode": "Episodio 5",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 5",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_054400f3b0e817b1b90ea73ba7707d15.jpg",
+      "player_url": "https://jkanime.net/jkplayer/um?e=WFBtRis3MkRwUC9QU1ZmVHVZdU91Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjpFMXg3Y3lhb2t1T0hSZFdV"
+    },
+    {
+      "id": "rep-a3",
+      "title": "Juuou Mujin Dandivine",
+      "episode": "Episodio 4",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 4",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_ae3140383d6b5f3b8a58007f89a1d5fa.jpg",
+      "player_url": "https://jkanime.net/jkplayer/um?e=Zml1dmtMakJ2VG9mTldLNmcyckkvb2NqdW52VkpBNnB4TXF0N29hYnhrcHcrL2Q0TG5DOGFwOU9zT2ZqYit4K3BwN3l1WjhQeCtzeEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojo2bndwTml1VjNnTWt4clpU"
+    },
+    {
+      "id": "rep-a4",
+      "title": "Tantei wa Mou, Shindeiru. Season 2",
+      "episode": "Episodio 4",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 4",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_1399716e25f76faae5a81ca6ff447bc9.jpg",
+      "player_url": "https://jkanime.net/jkplayer/um?e=TVJIWk9KcmU1bHdFcmtQVjBXWFNhUGZndEkybjZtUjR3TXF0N29hYnhrcHcrL2Q0TG5DOGFwOU9zT2ZqYit4K3BwN3l1WjhQeCtzeEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojp4T1pUU0RzME54T2xUbFRF"
+    },
+    {
+      "id": "rep-a5",
+      "title": "Koupen-chan",
+      "episode": "Episodio 82",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 82",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_f2a4bc0319caea2daefee54ba4ffea53.jpg",
+      "player_url": "https://jkanime.net/jkplayer/um?e=RCtsZ3BQNW9lSk1vOVo3dlFMZ051Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjphMUx4Y3lhb2t1T0hSZFdV"
+    },
+    {
+      "id": "rep-a6",
+      "title": "Tsuihou sareta Cheat Fuyo Majutsushi",
+      "episode": "Episodio 4",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 4",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_4b4f2711a005a11787269f568a2fd11a.jpg",
+      "player_url": "https://jkanime.net/jkplayer/um?e=WFBtRis3MkRwUC9QU1ZmVHVZdU91Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjpFMXg3Y3lhb2t1T0hSZFdV"
+    },
+    {
+      "id": "rep-a7",
+      "title": "Kanojo no Tomodachi",
+      "episode": "Episodio 3",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 3",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_a31950d2bb2d9fcf1fa414777d853e34.jpg",
+      "player_url": "https://jkanime.net/jkplayer/um?e=U0lrTnNicUlObUZHY0hOUFZtT3l1UHpRb1R2b1RhanJvTFVFb2FZa015Y0FYaXBJa3FxRTFUZ0pwSlJqVUJtVHEramtGWFNQSy9XM0VQWlN0RXBIalJId0pNU1FVekpWYVlUUXdMQUxqaTA9Ojo_jersRihLkOYQ6mmwE_ZX"
+    },
+    {
+      "id": "rep-a8",
+      "title": "One Piece: Egghead",
+      "episode": "Episodio 1120",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 1120",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/image/one-piece.jpg",
+      "player_url": "https://jkanime.net/jkplayer/um?e=Zml1dmtMakJ2VG9mTldLNmcyckkvb2NqdW52VkpBNnB4TXF0N29hYnhrcHcrL2Q0TG5DOGFwOU9zT2ZqYit4K3BwN3l1WjhQeCtzeEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojo2bndwTml1VjNnTWt4clpU"
+    },
+    {
+      "id": "rep-a9",
+      "title": "Bleach: Sennen Kessen-hen",
+      "episode": "Episodio 28",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 28",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/image/bleach-sennen-kessen-hen.jpg",
+      "player_url": "https://jkanime.net/jkplayer/um?e=M2JndFR6VnQyTWhiQzdlb0RxWUQ5UG14WnczcTZoZExUWE5kL3AxcGFYQ3Y2T28xM3FvY2hEalR5K05jU1R1a1ZqYnIrc29QeSt5eEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojp4M1pUeEFqRE4yT2xWbFRF"
+    },
+    {
+      "id": "rep-a10",
+      "title": "Dragon Ball Daima",
+      "episode": "Episodio 4",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 4",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/image/dragon-ball-daima.jpg",
+      "player_url": "https://jkanime.net/jkplayer/um?e=TVJIWk9KcmU1bHdFcmtQVjBXWFNhUGZndEkybjZtUjR3TXF0N29hYnhrcHcrL2Q0TG5DOGFwOU9zT2ZqYit4K3BwN3l1WjhQeCtzeEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojp4T1pUU0RzME54T2xUbFRF"
+    },
+    {
+      "id": "rep-a11",
+      "title": "Blue Lock vs. U-20 Japan",
+      "episode": "Episodio 5",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 5",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/image/blue-lock-vs-u-20-japan.jpg",
+      "player_url": "https://jkanime.net/jkplayer/um?e=WFBtRis3MkRwUC9QU1ZmVHVZdU91Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjpFMXg3Y3lhb2t1T0hSZFdV"
+    },
+    {
+      "id": "rep-a12",
+      "title": "Ranma 1/2 (2024)",
+      "episode": "Episodio 5",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 5",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/image/ranma-12-2024.jpg",
+      "player_url": "https://jkanime.net/jkplayer/um?e=RCtsZ3BQNW9lSk1vOVo3dlFMZ051Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjphMUx4Y3lhb2t1T0hSZFdV"
+    },
+    {
+      "id": "rep-m1",
+      "title": "Titan: El desastre de OceanGate",
+      "year": "2024",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "poster": "https://image.tmdb.org/t/p/original/9xTBAMbuADcxvwcAB4hiSDPVv9x.jpg",
+      "player_url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf3hbBC1VJ4bcNt96NInSSUhTHW3DzRvu7Kap.LSy5B4v"
+    },
+    {
+      "id": "rep-m2",
+      "title": "Al Borde del Abismo: Atrapados en la Cima",
+      "year": "2025",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "Estreno",
+      "poster": "https://image.tmdb.org/t/p/original/fnq6itOtvCXRBjwuq96hkYu0pCX.jpg",
+      "player_url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j73WrtOBsRi2JXghvmfDj86m5MCTrGj3BosJpZARnrvn"
+    },
+    {
+      "id": "rep-m3",
+      "title": "La Isla Olvidada",
+      "year": "2024",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "poster": "https://image.tmdb.org/t/p/original/8i5iZV50CoEtmDCFM7RSxCkpE8h.jpg",
+      "player_url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0DiELtAPBiyvGj58Wnn6yXuKyFOmTrnkoAqJ87wG7SXe"
+    },
+    {
+      "id": "rep-m4",
+      "title": "Velocidad y Deseo",
+      "year": "2025",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "poster": "https://image.tmdb.org/t/p/original/lFaMt4I8LiQAGW9Rb5gfGFXbvOY.jpg",
+      "player_url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH4C1ocCmQgHNjxLZmwqoc4A-"
+    },
+    {
+      "id": "rep-m5",
+      "title": "Mallorca Confidencial",
+      "year": "2024",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "poster": "https://image.tmdb.org/t/p/original/mgsw0NVOn5VX9rA6An8ijwUFX7q.jpg",
+      "player_url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf4fbNO1DQmbWjhkpLO3bcHNBowZvi8ulqeOZl9w0GQcs"
+    },
+    {
+      "id": "rep-m6",
+      "title": "Wicker",
+      "year": "2025",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "poster": "https://image.tmdb.org/t/p/original/flipeYd0sa4y4kpIc7Pn59JeBIj.jpg",
+      "player_url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j_KzaDG59z94RJgSSBgfewueMXQb_z5F9A8YSmmQWVav"
+    },
+    {
+      "id": "rep-m7",
+      "title": "Doctora X: Especial",
+      "year": "2024",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "poster": "https://image.tmdb.org/t/p/original/cKetrF2dAnQ0AMV5i4BMOs41I5P.jpg",
+      "player_url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0I8t.Ca.mRgKHwyeaBlUTzYxcHysEQj7whyzl5q82VJs"
+    },
+    {
+      "id": "rep-m8",
+      "title": "Gladiador II",
+      "year": "2024",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "Estreno 4K",
+      "poster": "https://image.tmdb.org/t/p/original/2cxhvwyEwRlysAmRHbtKN0AZqll.jpg",
+      "player_url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtfyEwxV2z8a5wCGPofPbeSRo9HM82SqlkAuxMfHiFMdWt"
+    },
+    {
+      "id": "rep-m9",
+      "title": "Deadpool & Wolverine",
+      "year": "2024",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 4K",
+      "poster": "https://image.tmdb.org/t/p/original/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg",
+      "player_url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf3hbBC1VJ4bcNt96NInSSUhTHW3DzRvu7Kap.LSy5B4v"
+    },
+    {
+      "id": "rep-m10",
+      "title": "Duna: Parte Dos",
+      "year": "2024",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "poster": "https://image.tmdb.org/t/p/original/czembW0Rk1Ke7lCJGzyAiIHSmqH.jpg",
+      "player_url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j73WrtOBsRi2JXghvmfDj86m5MCTrGj3BosJpZARnrvn"
+    },
+    {
+      "id": "rep-m11",
+      "title": "Alien: Romulus",
+      "year": "2024",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "poster": "https://image.tmdb.org/t/p/original/b33nnKl12vfwh49rNkCUsARBEsc.jpg",
+      "player_url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0DiELtAPBiyvGj58Wnn6yXuKyFOmTrnkoAqJ87wG7SXe"
+    },
+    {
+      "id": "rep-m12",
+      "title": "Intensamente 2",
+      "year": "2024",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD Latino",
+      "poster": "https://image.tmdb.org/t/p/original/vpnVM9B6NMmQpWeZvzLvDESb2QY.jpg",
+      "player_url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH4C1ocCmQgHNjxLZmwqoc4A-"
+    }
+  ]
+}

@@ -875,6 +875,117 @@ def ensure_builtin_userscripts(scripts_dir: Path):
         }
         setupResponsiveDrawer();
 
+        // ── 6. Discord Screen Share Picker, Constraint Sanitizer & Safe Teardown ──
+        function setupScreenShareHandler() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) return;
+            if (window._aegisDisplayMediaHooked) return;
+            window._aegisDisplayMediaHooked = true;
+
+            const origGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+
+            function showPickerUI() {
+                return new Promise((resolve) => {
+                    const old = document.getElementById('aegis-screen-modal');
+                    if (old) old.remove();
+
+                    const modal = document.createElement('div');
+                    modal.id = 'aegis-screen-modal';
+                    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+                    modal.innerHTML = `
+                        <div style="background:#2b2d31;border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:24px;width:460px;color:#f2f3f5;box-shadow:0 20px 50px rgba(0,0,0,0.8);">
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                                <div style="font-size:22px;">🛡️</div>
+                                <div style="font-size:17px;font-weight:700;">Transmitir Pantalla (Aegis Shields)</div>
+                            </div>
+                            <div style="font-size:13px;color:#949ba4;margin-bottom:18px;">
+                                Selecciona qué origen de video deseas compartir en esta sala de Discord:
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+                                <button id="aegis-opt-screen" style="background:#1e1f22;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px 14px;color:#fff;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.15s;">
+                                    <span style="font-size:24px;">🖥️</span>
+                                    <div>
+                                        <div style="font-weight:700;font-size:14px;">Pantalla Completa (Monitor Principal)</div>
+                                        <div style="font-size:12px;color:#949ba4;">Transmite todo tu escritorio a 1080p 30/60 FPS fluidos</div>
+                                    </div>
+                                </button>
+                                <button id="aegis-opt-window" style="background:#1e1f22;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px 14px;color:#fff;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.15s;">
+                                    <span style="font-size:24px;">🪟</span>
+                                    <div>
+                                        <div style="font-weight:700;font-size:14px;">Ventana de Aplicación Activa</div>
+                                        <div style="font-size:12px;color:#949ba4;">Transmite únicamente la ventana activa de primer plano</div>
+                                    </div>
+                                </button>
+                            </div>
+                            <div style="display:flex;justify-content:flex-end;gap:8px;">
+                                <button id="aegis-opt-cancel" style="background:transparent;border:none;color:#949ba4;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Cancelar</button>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+
+                    const hoverStyle = (btn) => {
+                        btn.onmouseenter = () => btn.style.borderColor = '#5865F2';
+                        btn.onmouseleave = () => btn.style.borderColor = 'rgba(255,255,255,0.1)';
+                    };
+                    const bScreen = document.getElementById('aegis-opt-screen');
+                    const bWin = document.getElementById('aegis-opt-window');
+                    const bCancel = document.getElementById('aegis-opt-cancel');
+                    if (bScreen) hoverStyle(bScreen);
+                    if (bWin) hoverStyle(bWin);
+
+                    if (bScreen) bScreen.onclick = () => { modal.remove(); resolve({ type: 'screen' }); };
+                    if (bWin) bWin.onclick = () => { modal.remove(); resolve({ type: 'window' }); };
+                    if (bCancel) bCancel.onclick = () => { modal.remove(); resolve(null); };
+                });
+            }
+
+            navigator.mediaDevices.getDisplayMedia = async function(constraints = {}) {
+                const choice = await showPickerUI();
+                if (!choice) {
+                    const err = new Error('Permission denied by user');
+                    err.name = 'NotAllowedError';
+                    throw err;
+                }
+
+                // Sanitizar constraints eliminando cualquier restricción rígida ("exact")
+                // para evitar que Discord lance OverconstrainedError
+                const cleanConstraints = {
+                    video: {
+                        width: { ideal: 1920, max: 1920 },
+                        height: { ideal: 1080, max: 1080 },
+                        frameRate: { ideal: 30, max: 60 }
+                    },
+                    audio: constraints.audio || false
+                };
+
+                const stream = await origGetDisplayMedia(cleanConstraints);
+
+                // Teardown Seguro: previene desincronización de GPU / caída a pantalla en blanco
+                stream.getVideoTracks().forEach(track => {
+                    const origTrackStop = track.stop.bind(track);
+                    track.stop = function() {
+                        // Pausar y desconectar videos asociados antes de liberar el mailbox Skia
+                        document.querySelectorAll('video').forEach(v => {
+                            if (v.srcObject === stream) {
+                                try {
+                                    v.pause();
+                                    v.srcObject = null;
+                                } catch(e) {}
+                            }
+                        });
+                        // Pequeño retardo asíncrono para que Blink finalice los mensajes IPC de WidgetHost
+                        setTimeout(() => {
+                            try { origTrackStop(); } catch(e) {}
+                        }, 50);
+                    };
+                });
+
+                return stream;
+            };
+        }
+        setupScreenShareHandler();
+
+
         console.log('[Aegis] Optimizador Discord Ultra-Light activado (0% CPU en fondo, WebRTC blindado, Responsive Drawer OK).');
     }
 
@@ -887,10 +998,11 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 """, encoding="utf-8")
 
         popup_blocker_script = scripts_dir / "aegis_popup_blocker.js"
-        if not popup_blocker_script.exists():
-            popup_blocker_script.write_text("""// ==UserScript==
-// @name         Aegis Streaming Anti-Popup & AdShield Deflector
-// @description  Elimina popups, popunders, click-traps y redirecciones publicitarias en sitios de streaming y anime (Cinecalidad, AnimeFLV, PelisPlus, Repelis, etc.).
+        cur_popup = popup_blocker_script.read_text(encoding="utf-8", errors="ignore") if popup_blocker_script.exists() else ""
+        if not popup_blocker_script.exists() or "not a robot" not in cur_popup:
+            popup_blocker_script.write_text(r"""// ==UserScript==
+// @name         Aegis Streaming Anti-Popup, Anti-Bot Scam and AdShield Deflector
+// @description  Elimina popups, popunders, alertas falsas de "Not a Robot", trampas de clic y redirecciones publicitarias en sitios de streaming.
 // @match        *://*/*
 // @run-at       document-start
 // ==/UserScript==
@@ -898,29 +1010,80 @@ def ensure_builtin_userscripts(scripts_dir: Path):
     'use strict';
     if (window._aegisPopupBlockerLoaded) return;
     window._aegisPopupBlockerLoaded = true;
-    
+
     const AD_DOMAINS = [
         'popads', 'adcash', 'adsterra', 'propellerads', 'monetag', 'exoclick',
         'trafficfactory', 'onclickalgo', 'onclick', 'adnxs', 'syndication',
         'bet365', '1xbet', 'doubleclick', 'googlesyndication', 'yieldlab',
         'criteo', 'outbrain', 'taboola', 'mgid', 'revcontent', 'zeroredirect',
         'clickadu', 'hilltopads', 'richpush', 'evadav', 'rollerads', 'admaven',
-        'streamtape', 'waaw', 'doodstream', 'filemoon', 'vidhide', 'voe'
+        'streamtape', 'waaw', 'doodstream', 'filemoon', 'vidhide', 'voe',
+        'cerdma', 'livejasmin', 'cyrl', 'redirectin', 'onclickalgo', 'push'
     ];
+
+    if (window.Notification) {
+        try {
+            window.Notification.requestPermission = () => Promise.resolve('denied');
+            Object.defineProperty(window.Notification, 'permission', {
+                get: () => 'denied',
+                configurable: true
+            });
+        } catch(e) {}
+    }
+
+    const origAlert = window.alert;
+    window.alert = function(msg) {
+        const str = String(msg || '').toLowerCase();
+        if (str.includes('robot') || str.includes('confirm') || str.includes('access the content') || str.includes('notific') || str.includes('human')) {
+            console.log('[Aegis Shield] Alerta falsa de verificacion de robot bloqueada:', msg);
+            return;
+        }
+        return origAlert.apply(this, arguments);
+    };
+
+    const origConfirm = window.confirm;
+    window.confirm = function(msg) {
+        const str = String(msg || '').toLowerCase();
+        if (str.includes('robot') || str.includes('confirm') || str.includes('access the content') || str.includes('notific') || str.includes('human')) {
+            console.log('[Aegis Shield] Dialogo falso de confirmacion bloqueado:', msg);
+            return false;
+        }
+        return origConfirm.apply(this, arguments);
+    };
 
     const originalOpen = window.open;
     window.open = function(url, target, features) {
-        if (!url || typeof url !== 'string') return null;
+        if (!url || typeof url !== 'string') {
+            console.log('[Aegis Shield] Bloqueada llamada vacia a window.open()');
+            return null;
+        }
+
         const urlLower = url.toLowerCase();
-        if (AD_DOMAINS.some(d => urlLower.includes(d))) return null;
+        if (AD_DOMAINS.some(d => urlLower.includes(d))) {
+            console.log('[Aegis Shield] Popup publicitario bloqueado:', url);
+            return null;
+        }
+
         const e = window.event;
-        if (e && !e.isTrusted) return null;
+        if (e && !e.isTrusted) {
+            console.log('[Aegis Shield] Popup no confiable bloqueado:', url);
+            return null;
+        }
+
         return originalOpen.apply(this, arguments);
     };
 
-    function cleanClickTraps() {
-        document.querySelectorAll('div, a, span').forEach(el => {
+    function cleanTrapsAndScams() {
+        const badTexts = ['not a robot', 'confirm you are not a robot', 'to access the content', 'allow notifications'];
+        document.querySelectorAll('div, dialog, section, a, span').forEach(el => {
             try {
+                const text = (el.innerText || '').toLowerCase();
+                if (badTexts.some(bt => text.includes(bt)) && el.innerText.length < 500) {
+                    el.remove();
+                    console.log('[Aegis Shield] Overlay falso de robot eliminado:', text.slice(0, 50));
+                    return;
+                }
+
                 const cs = window.getComputedStyle(el);
                 if ((cs.position === 'fixed' || cs.position === 'absolute') && parseInt(cs.zIndex) > 1000) {
                     const rect = el.getBoundingClientRect();
@@ -929,6 +1092,7 @@ def ensure_builtin_userscripts(scripts_dir: Path):
                             const h = el.href.toLowerCase();
                             if (AD_DOMAINS.some(d => h.includes(d)) || !el.innerText.trim()) {
                                 el.remove();
+                                console.log('[Aegis Shield] Click-trap eliminada:', el.href);
                             }
                         }
                     }
@@ -938,11 +1102,11 @@ def ensure_builtin_userscripts(scripts_dir: Path):
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', cleanClickTraps);
+        document.addEventListener('DOMContentLoaded', cleanTrapsAndScams);
     } else {
-        cleanClickTraps();
+        cleanTrapsAndScams();
     }
-    setInterval(cleanClickTraps, 2000);
+    setInterval(cleanTrapsAndScams, 1500);
 })();
 """, encoding="utf-8")
 
@@ -1182,14 +1346,41 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 
 # ── 2. Gestor de Sitios Frecuentes e Historial Real ───────────────────────────
 class HistoryManager:
+    SPAM_AD_DOMAINS = {
+        "redirect", "cerdma", "livejasmin", "cyrl", "traffic", "onclick",
+        "monetag", "adsterra", "popads", "exoclick", "propellerads", "hilltopads",
+        "doubleclick", "adnxs", "yieldlab", "criteo", "bet365", "1xbet", "zeroredirect"
+    }
+
     def __init__(self):
         self.data = {"frequent": {}, "custom": []}
         self.load()
+
+    def sanitize_spam_entries(self):
+        changed = False
+        if "frequent" in self.data and isinstance(self.data["frequent"], dict):
+            keys_to_del = [k for k in self.data["frequent"] if any(d in k.lower() for d in self.SPAM_AD_DOMAINS)]
+            for k in keys_to_del:
+                del self.data["frequent"][k]
+                changed = True
+        if "custom" in self.data and isinstance(self.data["custom"], list):
+            orig_len = len(self.data["custom"])
+            self.data["custom"] = [s for s in self.data["custom"] if not any(d in (s.get("domain","") + s.get("url","")).lower() for d in self.SPAM_AD_DOMAINS)]
+            if len(self.data["custom"]) != orig_len:
+                changed = True
+        if "history" in self.data and isinstance(self.data["history"], list):
+            orig_len = len(self.data["history"])
+            self.data["history"] = [h for h in self.data["history"] if not any(d in (h.get("domain","") + h.get("url","")).lower() for d in self.SPAM_AD_DOMAINS)]
+            if len(self.data["history"]) != orig_len:
+                changed = True
+        if changed:
+            self.save()
 
     def load(self):
         if HISTORY_FILE.exists():
             try:
                 self.data = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+                self.sanitize_spam_entries()
             except Exception:
                 self.data = {"frequent": {}, "custom": []}
 
@@ -1208,6 +1399,8 @@ class HistoryManager:
             if domain.startswith("www."):
                 domain = domain[4:]
             if not domain:
+                return
+            if any(d in domain for d in self.SPAM_AD_DOMAINS):
                 return
 
             # Si es una búsqueda, agrupar en el dominio principal
@@ -5725,17 +5918,32 @@ class AegisWebPage(QWebEnginePage):
         self.browser_win = browser_win
         self.featurePermissionRequested.connect(self.handle_feature_permission)
         self.fullScreenRequested.connect(self.handle_fullscreen_request)
+        self.renderProcessTerminated.connect(self.handle_render_crash)
+
+    def handle_render_crash(self, termination_status, exit_code):
+        print(f"[Aegis CrashGuard] Proceso de renderizado terminado: status={termination_status}, code={exit_code}")
+        # Auto-recuperación si Discord o un reproductor sufre caída de GPU al cortar WebRTC
+        v = self.view()
+        if v and hasattr(v, "url"):
+            u = v.url().toString().lower()
+            if "discord.com" in u or "aegis://" in u:
+                QTimer.singleShot(250, lambda: v.reload())
 
     def createWindow(self, window_type: QWebEnginePage.WebWindowType) -> QWebEnginePage:
-        # Bloquear ventanas emergentes publicitarias no solicitadas (WebDialog) en sitios de streaming
+        # 1. Bloquear WebDialog siempre (popups/popunders flotantes)
         if window_type == QWebEnginePage.WebWindowType.WebDialog:
             return None
 
-        # Si es target="_blank" legítimo abierto en pestaña
+        # 2. Si la página actual es de streaming, reproductor o embed, bloquear aperturas por script
+        cur_url = self.url().toString().lower() if self.url() else ""
+        if any(k in cur_url for k in ["jkplayer", "player.", "embed", "jkanime", "poseidon", "streamwish", "yourupload", "waaw", "dood"]):
+            return None
+
+        # 3. Si es target="_blank" legítimo abierto en pestaña
         if self.browser_win and hasattr(self.browser_win, "add_new_tab"):
             new_view = self.browser_win.add_new_tab()
             return new_view.page()
-        return super().createWindow(window_type)
+        return None
 
     def handle_feature_permission(self, security_origin: QUrl, feature: QWebEnginePage.Feature):
         # Auto-conceder permisos esenciales para Discord (micrófono, cámara, pantalla, notificaciones, portapapeles) y Spotify
@@ -8891,8 +9099,10 @@ class AegisBrowserWindow(QMainWindow):
             self.load_history(view)
         elif url_str == "aegis://extensions":
             self.load_extensions(view)
-        elif url_str in ("aegis://play", "aegis://aegisplay", "aegis://aniplay"):
-            self.load_aegisplay(view)
+        elif url_str.startswith("aegis://play") or url_str.startswith("aegis://aegisplay") or url_str == "aegis://aniplay":
+            parsed = urlparse(url_str)
+            q_param = parse_qs(parsed.query).get("q", [None])[0]
+            self.load_aegisplay(view, query=q_param)
 
     def load_settings(self, view: QWebEngineView):
         idx = self.views.index(view) if view in self.views else -1
@@ -9093,17 +9303,17 @@ class AegisBrowserWindow(QMainWindow):
             return None
         return btn
 
-    def load_aegisplay(self, view: QWebEngineView):
+    def load_aegisplay(self, view: QWebEngineView, query: str = None):
         idx = self.views.index(view) if view in self.views else -1
         t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
         if idx != -1:
             self.tab_bar.setTabIcon(idx, create_aegisplay_icon(t["accent"], 14))
             self.tab_bar.setTabText(idx, "AegisPlay Media Hub")
-        view._aegis_virtual_url = "aegis://play"
-        html = get_aegisplay_html(t["ntp_class"])
+        view._aegis_virtual_url = "aegis://play" if not query else f"aegis://play?q={query}"
+        html = get_aegisplay_html(t["ntp_class"], search_query=query)
         view.setHtml(html, QUrl("aegis://play"))
         if view == self.current_view():
-            self.url_bar.setText("aegis://play")
+            self.url_bar.setText(view._aegis_virtual_url)
 
     def load_aniplay(self, view: QWebEngineView):
         self.load_aegisplay(view)
@@ -9258,8 +9468,10 @@ class AegisBrowserWindow(QMainWindow):
             return
         elif url_str == "aegis://extensions":
             self.load_extensions(view)
-        elif url_str in ("aegis://play", "aegis://aegisplay", "aegis://aniplay"):
-            self.load_aegisplay(view)
+        elif url_str.startswith("aegis://play") or url_str.startswith("aegis://aegisplay") or url_str == "aegis://aniplay":
+            parsed = urlparse(url_str)
+            q_param = parse_qs(parsed.query).get("q", [None])[0]
+            self.load_aegisplay(view, query=q_param)
             return
         elif url_str == "aegis://start":
             if getattr(view, "_aegis_virtual_url", None) != "aegis://start":
@@ -10271,23 +10483,45 @@ def get_clean_ntp_html(theme_class: str = "theme-dark", frequent_sites: list = N
 # ── 12.2 Plantilla HTML de Configuración (aegis://settings) ───────────────────
 import sys
 
-def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
+def get_aegisplay_html(theme_class: str = "theme-dark", search_query: str = None) -> str:
     """
     AegisPlay Media Hub: Centro multimedia universal en vivo para Anime, Películas y Series.
     Conectado al motor de scraping dinámico (media_scraper.py) con 0% de contenido demo o simulado.
-    Reproductor multimedia híbrido con soporte para streams directos y embeds protegidos sin anuncios.
+    Reproductor multimedia puro (0% web externa) con selector de servidores y buscador remoto en vivo.
     """
     try:
         from . import media_scraper
     except Exception:
         import media_scraper
 
-    try:
-        cat_data = media_scraper.get_live_catalog(force_refresh=False)
-        catalog_json_str = json.dumps(cat_data, ensure_ascii=False)
-    except Exception as e:
-        print(f"[AegisPlay] Error cargando catálogo en vivo: {e}")
-        catalog_json_str = '{"repository_name": "AegisPlay", "items": [], "sources": []}'
+    search_title_str = ""
+    if search_query and search_query.strip():
+        q_clean = search_query.strip()
+        search_title_str = f"Resultados en Vivo para: «{q_clean}»"
+        try:
+            results = media_scraper.search_live_sources(q_clean)
+            cat_data = {
+                "repository_name": search_title_str,
+                "version": "3.1.0",
+                "search_query": q_clean,
+                "total_items": len(results),
+                "sources": [
+                    {"name": "JKanime Búsqueda", "type": "anime", "url": "https://jkanime.net"},
+                    {"name": "PoseidonHD Búsqueda", "type": "pelicula", "url": "https://poseidonhd2.co"}
+                ],
+                "items": results
+            }
+            catalog_json_str = json.dumps(cat_data, ensure_ascii=False)
+        except Exception as e:
+            print(f"[AegisPlay] Error en búsqueda remota: {e}")
+            catalog_json_str = '{"repository_name": "AegisPlay", "items": [], "sources": []}'
+    else:
+        try:
+            cat_data = media_scraper.get_live_catalog(force_refresh=False)
+            catalog_json_str = json.dumps(cat_data, ensure_ascii=False)
+        except Exception as e:
+            print(f"[AegisPlay] Error cargando catálogo en vivo: {e}")
+            catalog_json_str = '{"repository_name": "AegisPlay", "items": [], "sources": []}'
 
     template = """<!DOCTYPE html>
 <html lang="es" class="__THEME_CLASS__">
@@ -10420,15 +10654,6 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       border-color: var(--play-neon);
       color: var(--play-neon);
       background: rgba(255, 51, 102, 0.08);
-    }
-    .action-btn.primary {
-      background: var(--play-neon);
-      color: #ffffff;
-      border: none;
-    }
-    .action-btn.primary:hover {
-      filter: brightness(1.1);
-      color: #ffffff;
     }
     .subnav {
       background: var(--surface);
@@ -10683,37 +10908,38 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       color: var(--accent);
       font-weight: 600;
     }
-    /* Modal de Reproducción Híbrido */
+    /* Modal Reproductor Puro */
     .player-modal {
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.9);
-      backdrop-filter: blur(8px);
+      background: rgba(0, 0, 0, 0.92);
+      backdrop-filter: blur(10px);
       z-index: 1000;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 18px;
     }
     .player-content {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 16px;
       width: 100%;
-      max-width: 1100px;
-      max-height: 94vh;
+      max-width: 1150px;
+      max-height: 95vh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8);
     }
     .player-header {
-      padding: 12px 20px;
+      padding: 10px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       border-bottom: 1px solid var(--border);
       background: var(--surface2);
+      gap: 12px;
     }
     .player-title {
       font-size: 1.05rem;
@@ -10721,6 +10947,30 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      flex: 1;
+    }
+    .player-servers {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+    }
+    .btn-server {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .btn-server.active, .btn-server:hover {
+      background: var(--play-neon);
+      color: #ffffff;
+      border-color: var(--play-neon);
     }
     .btn-close-player {
       background: transparent;
@@ -10779,45 +11029,33 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       border-color: var(--play-neon);
       color: var(--play-neon);
     }
-    .episodes-section {
-      padding: 12px 20px;
+    /* Modal de Importación de Repositorio */
+    .import-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(6px);
+      z-index: 1001;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .import-content {
       background: var(--surface);
-      border-top: 1px solid var(--border);
-      max-height: 110px;
-      overflow-y: auto;
-    }
-    .episodes-title {
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-    .episodes-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .ep-pill {
-      background: var(--surface2);
       border: 1px solid var(--border);
-      color: var(--text);
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 0.78rem;
-      cursor: pointer;
-      font-weight: 600;
-    }
-    .ep-pill:hover, .ep-pill.active {
-      background: var(--play-neon);
-      color: #ffffff;
-      border-color: var(--play-neon);
+      border-radius: 14px;
+      padding: 24px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.7);
     }
   </style>
 </head>
 <body>
 
   <header>
-    <div class="brand" onclick="filterCategory('all')">
+    <div class="brand" onclick="window.location.href='aegis://play'">
       <div class="brand-logo">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
           <path d="M12 2.2 L20 5.8 V12.2 C20 16.8 16.6 20.6 12 21.8 C7.4 20.6 4 16.8 4 12.2 V5.8 Z" stroke="var(--play-neon)" stroke-width="1.8" stroke-linejoin="round"/>
@@ -10831,11 +11069,11 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
 
     <div class="search-box">
       <span class="search-icon">🔍</span>
-      <input type="text" class="search-input" id="searchInput" placeholder="Buscar anime o películas en vivo..." oninput="handleSearch(this.value)">
+      <input type="text" class="search-input" id="searchInput" placeholder="Buscar anime o películas en fuentes en vivo (Enter)..." oninput="handleSearchInput(this)" onkeydown="handleSearchKeyDown(event)">
     </div>
 
     <div style="display:flex; align-items:center; gap:8px;">
-      <button class="action-btn" id="btnSyncLive" onclick="forceLiveSync()" title="Consultar las fuentes en vivo ahora">🔄 Actualizar en Vivo</button>
+      <button class="action-btn" id="btnSyncLive" onclick="forceLiveSync()" title="Recargar catálogo oficial">🔄 Actualizar en Vivo</button>
       <button class="action-btn" onclick="openImportModal()">+ Repositorio</button>
     </div>
   </header>
@@ -10878,20 +11116,17 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
     <div class="media-grid" id="mediaGrid"></div>
   </main>
 
-  <!-- Modal Reproductor Híbrido Protegido -->
+  <!-- Modal Reproductor Puro Protegido -->
   <div class="player-modal" id="playerModal">
     <div class="player-content">
       <div class="player-header">
         <div class="player-title" id="playerTitle">Reproduciendo Título</div>
+        <div class="player-servers" id="playerServersList"></div>
         <button class="btn-close-player" onclick="closePlayer()">✕</button>
       </div>
       <div class="video-wrap">
         <video id="videoPlayer" controls autoplay style="display:none; width:100%; height:100%; object-fit:contain;"></video>
-        <iframe id="secureEmbedPlayer" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allowfullscreen style="display:none; width:100%; height:100%; border:none; background:#000;"></iframe>
-      </div>
-      <div class="episodes-section" id="episodesSection" style="display:none;">
-        <div class="episodes-title" id="episodesTitle">Seleccionar Episodio:</div>
-        <div class="episodes-pills" id="episodesPills"></div>
+        <iframe id="pureVideoPlayer" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allowfullscreen referrerpolicy="no-referrer" style="display:none; width:100%; height:100%; border:none; background:#000;"></iframe>
       </div>
       <div class="player-toolbar" id="nativeToolbar" style="display:none;">
         <div class="speed-btns">
@@ -10913,13 +11148,42 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
     </div>
   </div>
 
+  <!-- Modal de Importación de Repositorio -->
+  <div class="import-modal" id="importModal">
+    <div class="import-content">
+      <div style="font-size:1.15rem; font-weight:700; margin-bottom:10px;">Importar Repositorio AegisPlay</div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px;">
+        Selecciona un archivo JSON local (como <code>data/aegisplay_custom_repo.json</code>) o ingresa una URL con la lista de títulos reales.
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:0.8rem; font-weight:600; display:block; margin-bottom:6px;">Archivo JSON Local:</label>
+        <input type="file" id="repoFileInput" accept=".json" onchange="handleFileImport(event)" style="font-size:0.85rem; color:var(--text);">
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:0.8rem; font-weight:600; display:block; margin-bottom:6px;">O pegar URL directa:</label>
+        <input type="text" id="repoUrlInput" placeholder="https://raw.githubusercontent.com/.../repo.json" class="search-input" style="padding:8px 12px;">
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <button class="action-btn" onclick="restoreDefaultCatalog()" style="color:var(--text-muted);">Restaurar Oficial</button>
+        <div style="display:flex; gap:8px;">
+          <button class="action-btn" onclick="closeImportModal()">Cancelar</button>
+          <button class="action-btn primary" onclick="importFromUrlInput()">Importar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const DEFAULT_CATALOG = __CATALOG_JSON__;
     let currentCategory = 'all';
     let currentActiveItem = null;
-    let currentActiveEpisode = 1;
+    let searchTimer = null;
 
     function getCatalog() {
+      // Si la página se abrió con una búsqueda activa, mostrar siempre los resultados de la búsqueda
+      if (DEFAULT_CATALOG.search_query) {
+        return DEFAULT_CATALOG;
+      }
       try {
         const raw = localStorage.getItem('aegisplay_catalog');
         if (!raw) {
@@ -10927,8 +11191,7 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
           return DEFAULT_CATALOG;
         }
         const parsed = JSON.parse(raw);
-        // Migración automática si la versión es anterior a 3.0.0 o contiene items demo
-        const isLegacy = !parsed.version || parsed.version < "3.0.0" || JSON.stringify(parsed).includes("BigBuckBunny");
+        const isLegacy = JSON.stringify(parsed).includes("BigBuckBunny");
         if (isLegacy || !parsed.items || parsed.items.length === 0) {
           localStorage.setItem('aegisplay_catalog', JSON.stringify(DEFAULT_CATALOG));
           return DEFAULT_CATALOG;
@@ -10948,7 +11211,7 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       const btn = document.getElementById('btnSyncLive');
       if (btn) btn.innerText = '🔄 Actualizando...';
       localStorage.removeItem('aegisplay_catalog');
-      window.location.reload();
+      window.location.href = 'aegis://play';
     }
 
     function filterCategory(cat, btn) {
@@ -10958,16 +11221,48 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       renderCatalog();
     }
 
-    function handleSearch(q) {
-      renderCatalog(q);
+    function handleSearchInput(input) {
+      const q = input.value.trim();
+      clearTimeout(searchTimer);
+      if (!q) {
+        if (DEFAULT_CATALOG.search_query) {
+          window.location.href = 'aegis://play';
+        } else {
+          renderCatalog('');
+        }
+        return;
+      }
+      searchTimer = setTimeout(() => {
+        executeRemoteSearch(q);
+      }, 550);
     }
 
-    function renderCatalog(searchQuery = '') {
+    function handleSearchKeyDown(e) {
+      if (e.key === 'Enter') {
+        clearTimeout(searchTimer);
+        const q = e.target.value.trim();
+        if (q) executeRemoteSearch(q);
+      }
+    }
+
+    function executeRemoteSearch(q) {
+      const grid = document.getElementById('mediaGrid');
+      grid.innerHTML = `
+        <div style="grid-column: 1/-1; text-align:center; padding: 4rem 1rem; color: var(--text-muted);">
+          <div style="font-size: 2rem; margin-bottom: 12px;">🔍</div>
+          <div style="font-size: 1.1rem; font-weight:700; color: var(--text); margin-bottom: 6px;">Buscando en vivo en fuentes conectadas...</div>
+          <div>Consultando catálogo completo de JKanime y PoseidonHD para "${q}"</div>
+        </div>
+      `;
+      window.location.href = 'aegis://play?q=' + encodeURIComponent(q);
+    }
+
+    function renderCatalog(localFilter = '') {
       const cat = getCatalog();
       const items = cat.items || [];
       const sources = cat.sources || [];
       const grid = document.getElementById('mediaGrid');
-      const q = searchQuery.toLowerCase().trim();
+      const q = localFilter.toLowerCase().trim();
 
       document.getElementById('countAll').innerText = items.length;
       document.getElementById('countAnime').innerText = items.filter(i => i.type === 'anime').length;
@@ -10978,7 +11273,7 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
 
       if (currentCategory === 'sources') {
         document.getElementById('sectionTitle').innerText = 'Fuentes Oficiales Conectadas';
-        document.getElementById('itemsCountLabel').innerText = sources.length + ' fuentes activas en vivo';
+        document.getElementById('itemsCountLabel').innerText = sources.length + ' fuentes activas';
         sources.forEach(src => {
           const card = document.createElement('div');
           card.className = 'media-card';
@@ -10994,7 +11289,15 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
         return;
       }
 
-      document.getElementById('sectionTitle').innerText = 'Catálogo Oficial en Vivo';
+      if (cat.search_query) {
+        document.getElementById('sectionTitle').innerText = `Resultados en Vivo para: «${cat.search_query}»`;
+        document.getElementById('itemsCountLabel').innerText = `${items.length} títulos encontrados`;
+        const sInput = document.getElementById('searchInput');
+        if (sInput && !sInput.value) sInput.value = cat.search_query;
+      } else {
+        document.getElementById('sectionTitle').innerText = 'Catálogo Oficial en Vivo';
+        document.getElementById('itemsCountLabel').innerText = `${items.length} títulos disponibles`;
+      }
 
       let filtered = items;
       if (currentCategory === 'anime') {
@@ -11006,17 +11309,14 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       if (q) {
         filtered = filtered.filter(i =>
           (i.title && i.title.toLowerCase().includes(q)) ||
-          (i.source && i.source.toLowerCase().includes(q)) ||
-          (i.overview && i.overview.toLowerCase().includes(q))
+          (i.source && i.source.toLowerCase().includes(q))
         );
       }
-
-      document.getElementById('itemsCountLabel').innerText = filtered.length + ' títulos disponibles';
 
       filtered.forEach(item => {
         const card = document.createElement('div');
         card.className = 'media-card';
-        card.onclick = () => openPlayer(item, 1);
+        card.onclick = () => openPlayer(item);
 
         const isAnime = item.type === 'anime';
         const badgeClass = isAnime ? 'badge-anime' : 'badge-movie';
@@ -11044,24 +11344,56 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       });
     }
 
-    function openPlayer(item, epNum = 1, resumeTime = 0) {
+    function openPlayer(item, resumeTime = 0) {
       currentActiveItem = item;
-      currentActiveEpisode = epNum;
 
       const modal = document.getElementById('playerModal');
-      const v = document.getElementById('videoPlayer');
-      const iframe = document.getElementById('secureEmbedPlayer');
-      const toolbar = document.getElementById('nativeToolbar');
       const overviewText = document.getElementById('playerOverviewText');
+      const serversContainer = document.getElementById('playerServersList');
 
       let displayTitle = item.title;
       if (item.episode) displayTitle += ' (' + item.episode + ')';
       document.getElementById('playerTitle').innerText = displayTitle;
       overviewText.innerText = item.overview || '';
 
-      const streamUrl = item.player_url || item.video_url || item.url || '';
-      const isDirect = streamUrl.endsWith('.mp4') || streamUrl.endsWith('.m3u8');
+      serversContainer.innerHTML = '';
+      if (item.servers && item.servers.length > 0) {
+        item.servers.forEach((srv, idx) => {
+          const btn = document.createElement('button');
+          btn.className = 'btn-server' + (idx === 0 ? ' active' : '');
+          btn.innerText = srv.name;
+          btn.onclick = () => {
+            document.querySelectorAll('.btn-server').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            switchServerUrl(srv.url);
+          };
+          serversContainer.appendChild(btn);
+        });
+      }
 
+      // Obtener la URL de reproducción limpia
+      let streamUrl = item.player_url || item.video_url || item.url || '';
+      // Si la URL es la de la página web del episodio (jkanime.net/slug/num/), extraer el pure player embed
+      if (streamUrl.includes('jkanime.net/') && !streamUrl.includes('jkplayer')) {
+        // Fallback a pure player pattern
+        const parts = streamUrl.replace(/\\/$/, '').split('/');
+        const ep = parts[parts.length - 1];
+        if (!isNaN(ep) && item.servers && item.servers.length > 0) {
+          streamUrl = item.servers[0].url;
+        }
+      }
+
+      switchServerUrl(streamUrl, resumeTime);
+      modal.style.display = 'flex';
+      saveWatchHistory(item, 60, 1800);
+    }
+
+    function switchServerUrl(streamUrl, resumeTime = 0) {
+      const v = document.getElementById('videoPlayer');
+      const iframe = document.getElementById('pureVideoPlayer');
+      const toolbar = document.getElementById('nativeToolbar');
+
+      const isDirect = streamUrl.endsWith('.mp4') || streamUrl.endsWith('.m3u8');
       if (isDirect) {
         iframe.style.display = 'none';
         iframe.src = 'about:blank';
@@ -11073,11 +11405,6 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
           if (resumeTime > 0) v.currentTime = resumeTime;
           v.play();
         };
-        v.ontimeupdate = () => {
-          if (v.currentTime > 5 && v.duration > 0) {
-            saveWatchHistory(item, epNum, v.currentTime, v.duration);
-          }
-        };
       } else {
         v.pause();
         v.style.display = 'none';
@@ -11085,16 +11412,13 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
         toolbar.style.display = 'none';
         iframe.style.display = 'block';
         iframe.src = streamUrl;
-        saveWatchHistory(item, epNum, 60, 1800);
       }
-
-      modal.style.display = 'flex';
     }
 
     function closePlayer() {
       const modal = document.getElementById('playerModal');
       const v = document.getElementById('videoPlayer');
-      const iframe = document.getElementById('secureEmbedPlayer');
+      const iframe = document.getElementById('pureVideoPlayer');
       v.pause();
       v.src = '';
       if (iframe) {
@@ -11134,7 +11458,7 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       }
     }
 
-    function saveWatchHistory(item, epNum, currentTime, duration) {
+    function saveWatchHistory(item, currentTime, duration) {
       try {
         let list = JSON.parse(localStorage.getItem('aegisplay_history') || '[]');
         list = list.filter(h => h.id !== item.id);
@@ -11145,9 +11469,6 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
           type: item.type,
           source: item.source,
           player_url: item.player_url,
-          video_url: item.video_url,
-          episode: item.episode,
-          epNum: epNum,
           currentTime: currentTime,
           duration: duration,
           timestamp: Date.now()
@@ -11170,7 +11491,7 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
         const pct = h.duration ? Math.min(100, Math.round((h.currentTime / h.duration) * 100)) : 10;
         const card = document.createElement('div');
         card.className = 'history-card';
-        card.onclick = () => openPlayer(h, h.epNum || 1, h.currentTime || 0);
+        card.onclick = () => openPlayer(h, h.currentTime || 0);
         card.innerHTML = `
           <img src="${h.poster}" class="history-thumb" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1534447677768-be436bb09401?w=500&q=80';">
           <div class="history-info">
@@ -11191,7 +11512,54 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
     }
 
     function openImportModal() {
-      alert('AegisPlay está sincronizado en vivo con JKanime y PoseidonHD sin datos demo. Para añadir repositorios adicionales, coloca la URL en formato JSON.');
+      document.getElementById('importModal').style.display = 'flex';
+    }
+
+    function closeImportModal() {
+      document.getElementById('importModal').style.display = 'none';
+    }
+
+    function handleFileImport(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const parsed = JSON.parse(evt.target.result);
+          if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
+            saveCatalog(parsed);
+            closeImportModal();
+            alert(`¡Repositorio importado con éxito! Se cargaron ${parsed.items.length} títulos.`);
+          } else {
+            alert('El archivo no contiene una lista válida de elementos en el campo "items".');
+          }
+        } catch(err) {
+          alert('Error al leer el archivo JSON: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function importFromUrlInput() {
+      const url = document.getElementById('repoUrlInput').value.trim();
+      if (!url) return;
+      fetch(url)
+        .then(r => r.json())
+        .then(data => {
+          if (data && Array.isArray(data.items)) {
+            saveCatalog(data);
+            closeImportModal();
+            alert(`¡Repositorio importado exitosamente! ${data.items.length} títulos agregados.`);
+          } else {
+            alert('La URL no contiene un formato de catálogo compatible.');
+          }
+        })
+        .catch(err => alert('Error descargando el repositorio: ' + err.message));
+    }
+
+    function restoreDefaultCatalog() {
+      localStorage.removeItem('aegisplay_catalog');
+      window.location.href = 'aegis://play';
     }
 
     document.addEventListener('DOMContentLoaded', () => {

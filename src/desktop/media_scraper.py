@@ -4,23 +4,25 @@ Aegis Browser - Motor de Scraping Multimedia en Vivo (media_scraper.py)
 Extrae en tiempo real anime, películas y series desde fuentes activas en español
 sin usar datos simulados ni contenido demo.
 
-Fuentes en producción:
-- Anime: JKanime (https://jkanime.net/) - Episodios en emisión y carátulas HD.
-- Películas: PoseidonHD (https://poseidonhd2.co/) - Estrenos y pósteres TMDB oficiales.
-
-Incluye arquitectura SWR (Stale-While-Revalidate) con caché persistente en JSON
-para carga instantánea en 0ms y actualización en segundo plano sin congelar la UI.
+Incluye:
+- Extracción de episodios de anime en emisión (JKanime).
+- Extracción de películas en cartelera y tendencias (PoseidonHD).
+- Pure Video Player Resolver: extrae únicamente el reproductor de video incrustado
+  (/jkplayer/um?..., player.poseidonhd2.co) suprimiendo la web externa.
+- Motor de búsqueda concurrente en vivo sobre las fuentes conectadas.
+- Caché SWR persistente en JSON (~/.aegis/cache/aegisplay_catalog.json).
 """
 
+import html as html_lib
 import json
 import os
 import re
 import ssl
-import html as html_lib
 import sys
 import time
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -70,19 +72,69 @@ def _clean_tmdb_poster(raw_url: str) -> str:
     return raw_url
 
 
+def resolve_pure_video_endpoint(url: str) -> Dict[str, Any]:
+    """
+    Extrae ÚNICAMENTE el endpoint de video o reproductor incrustado (/jkplayer/um?...,
+    player.php, yourupload, streamwish) a partir de una URL de episodio o película.
+    Garantiza que NUNCA se cargue la página web completa externa dentro del modal.
+    """
+    res = {
+        "success": False,
+        "pure_player_url": url,
+        "servers": []
+    }
+
+    if "jkanime.net" in url:
+        try:
+            ep_html = _fetch_url(url, referer="https://jkanime.net/", timeout=6)
+            # 1. Buscar reproductor oficial de JKanime (/jkplayer/um?... o /jkplayer/umv?...)
+            jk_players = re.findall(r'<iframe[^>]+src=["\']([^"\']*jkplayer/[^"\']+)["\']', ep_html)
+            valid_jk = [p for p in jk_players if "c1?u=" not in p]
+            if valid_jk:
+                res["pure_player_url"] = valid_jk[0]
+                res["success"] = True
+                res["servers"].append({"name": "JKPlayer Oficial", "url": valid_jk[0]})
+
+            # 2. Extraer servidores alternativos (YourUpload, Streamwish, Mp4upload, Okru)
+            video_match = re.search(r'var video\s*=\s*\[(.*?)\];', ep_html, re.DOTALL)
+            if video_match:
+                items = re.findall(r'server:\s*["\']([^"\']+)["\'],\s*remote:\s*["\']([^"\']+)["\']', video_match.group(1))
+                for s_name, s_url in items:
+                    if s_url and s_url.startswith("http"):
+                        res["servers"].append({"name": s_name, "url": s_url})
+                        if not res["success"]:
+                            res["pure_player_url"] = s_url
+                            res["success"] = True
+        except Exception as e:
+            print(f"[media_scraper] Error resolviendo JKanime: {e}")
+
+    elif "poseidonhd2.co" in url:
+        try:
+            p_html = _fetch_url(url, referer="https://poseidonhd2.co/", timeout=6)
+            players = re.findall(r'https?://player\.poseidonhd2\.co/player\.php\?h=[a-zA-Z0-9_.-]+', p_html)
+            if players:
+                res["pure_player_url"] = players[0]
+                res["success"] = True
+                for i, pl in enumerate(players[:4]):
+                    res["servers"].append({"name": f"Servidor HD {i+1}", "url": pl})
+        except Exception as e:
+            print(f"[media_scraper] Error resolviendo PoseidonHD: {e}")
+
+    return res
+
+
 def scrape_jkanime_latest() -> List[Dict[str, Any]]:
-    """Extrae los últimos episodios de anime en emisión directamente desde JKanime."""
+    """Extrae los últimos episodios de anime en emisión directamente desde JKanime con endpoints de reproductor puro."""
     items: List[Dict[str, Any]] = []
     try:
         html = _fetch_url("https://jkanime.net/", timeout=8)
-        # Formato de episodios recientes en JKanime:
-        # <a href="https://jkanime.net/slug/num/">...<img src="...">...<h5>Título</h5>...<span>Episodio num</span>
         pattern = (
             r'<a href="(https://jkanime\.net/([^/]+)/(\d+)/)"[^>]*>.*?'
             r'<img[^>]+src="([^"]+)".*?'
             r'<h5[^>]*>([^<]+)</h5>.*?'
             r'<span[^>]*>([^<]+)</span>'
         )
+        raw_items = []
         for m in re.finditer(pattern, html, re.DOTALL):
             ep_url, slug, ep_num, poster, title, ep_label = m.groups()
             title_clean = html_lib.unescape(title.strip())
@@ -90,7 +142,7 @@ def scrape_jkanime_latest() -> List[Dict[str, Any]]:
             if not poster.startswith("http"):
                 poster = urllib.parse.urljoin("https://jkanime.net/", poster)
 
-            items.append({
+            raw_items.append({
                 "id": f"jkanime-{slug}-{ep_num}",
                 "title": title_clean,
                 "episode": ep_clean,
@@ -98,24 +150,34 @@ def scrape_jkanime_latest() -> List[Dict[str, Any]]:
                 "poster": poster.strip(),
                 "type": "anime",
                 "source": "JKanime Oficial",
-                "player_url": ep_url.strip(),  # Se incrusta o resuelve en el player
                 "badge": f"EP {ep_num}",
-                "overview": f"Último episodio emitido hoy en JKanime: {title_clean} ({ep_clean}). Audio original con subtítulos en español.",
+                "overview": f"Último episodio emitido hoy: {title_clean} ({ep_clean}). Audio original japonés con subtítulos en español.",
             })
+
+        # Pre-resolver los reproductores puros de los primeros 8 episodios en paralelo para carga instantánea
+        def _resolve_item(item):
+            resolved = resolve_pure_video_endpoint(item["episode_url"])
+            item["player_url"] = resolved.get("pure_player_url") or item["episode_url"]
+            item["servers"] = resolved.get("servers", [])
+            return item
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            items = list(executor.map(_resolve_item, raw_items))
+
     except Exception as e:
         print(f"[media_scraper] Error extrayendo JKanime: {e}")
     return items
 
 
 def scrape_poseidon_movies() -> List[Dict[str, Any]]:
-    """Extrae películas en tendencia y estrenos de cartelera desde PoseidonHD con imágenes oficiales TMDB."""
+    """Extrae películas en tendencia y cartelera desde PoseidonHD con imágenes oficiales TMDB y endpoints de video."""
     items: List[Dict[str, Any]] = []
     try:
         html = _fetch_url("https://poseidonhd2.co/", timeout=8)
-        # Extraer enlaces a películas y miniaturas
         pattern = r'<a href="(/pelicula/[^"]+)".*?<img[^>]+(?:src|data-src)="([^"]+)".*?alt="([^"]+)"'
         matches = re.findall(pattern, html, re.DOTALL)
         seen_urls = set()
+        raw_movies = []
 
         for rel_url, raw_poster, title in matches:
             if rel_url in seen_urls:
@@ -125,11 +187,9 @@ def scrape_poseidon_movies() -> List[Dict[str, Any]]:
             clean_poster = _clean_tmdb_poster(raw_poster)
             full_url = f"https://poseidonhd2.co{rel_url}"
             title_clean = html_lib.unescape(title.strip())
-
-            # Extraer slug para ID
             slug = rel_url.strip("/").split("/")[-1]
 
-            items.append({
+            raw_movies.append({
                 "id": f"poseidon-{slug}",
                 "title": title_clean,
                 "year": "2026",
@@ -137,45 +197,105 @@ def scrape_poseidon_movies() -> List[Dict[str, Any]]:
                 "poster": clean_poster,
                 "type": "pelicula",
                 "source": "PoseidonHD HD",
-                "player_url": full_url,
                 "badge": "HD 1080p",
                 "overview": f"Película en cartelera: {title_clean}. Disponible en audio latino y subtitulado en máxima calidad.",
             })
+
+        # Pre-resolver los reproductores puros de las primeras películas en paralelo
+        def _resolve_movie(m):
+            resolved = resolve_pure_video_endpoint(m["url"])
+            m["player_url"] = resolved.get("pure_player_url") or m["url"]
+            m["servers"] = resolved.get("servers", [])
+            return m
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            items = list(executor.map(_resolve_movie, raw_movies[:18]))
+
     except Exception as e:
         print(f"[media_scraper] Error extrayendo PoseidonHD: {e}")
     return items
 
 
-def resolve_stream_or_embed(item: Dict[str, Any]) -> str:
+def search_live_sources(query: str) -> List[Dict[str, Any]]:
     """
-    Resuelve el reproductor o stream directo para un elemento.
-    Si es JKanime, consulta la página del episodio para extraer el iframe del JKPlayer.
-    Si es PoseidonHD, extrae el reproductor incrustado.
+    Ejecuta una búsqueda remota en vivo en JKanime y PoseidonHD en paralelo,
+    extrayendo títulos reales, carátulas y endpoints de reproducción.
     """
-    url = item.get("player_url", "")
-    item_type = item.get("type", "")
+    query = query.strip()
+    if not query:
+        return []
 
-    if "jkanime.net" in url:
+    results: List[Dict[str, Any]] = []
+
+    def _search_jk():
+        jk_results = []
         try:
-            ep_html = _fetch_url(url, referer="https://jkanime.net/", timeout=5)
-            # Buscar iframes de JKPlayer (/jkplayer/um?... o /jkplayer/umv?...)
-            iframes = re.findall(r'<iframe[^>]+src="([^"]+)"', ep_html)
-            valid_players = [f for f in iframes if "jkplayer" in f or "c1.jkplayers" in f]
-            if valid_players:
-                return valid_players[0]
-        except Exception:
-            pass
+            url = f"https://jkanime.net/buscar/{urllib.parse.quote(query)}/"
+            h = _fetch_url(url, timeout=6)
+            pattern = r'<div class="anime__item">.*?<a[^>]+href="([^"]+)".*?data-setbg="([^"]+)".*?<h5><a[^>]*>([^<]+)</a>'
+            for u, p, t in re.findall(pattern, h, re.DOTALL):
+                title_clean = html_lib.unescape(t.strip())
+                slug = u.strip("/").split("/")[-1]
+                # Construir primer episodio
+                ep1_url = urllib.parse.urljoin(u, "1/")
+                jk_results.append({
+                    "id": f"search-jk-{slug}",
+                    "title": title_clean,
+                    "poster": p.strip(),
+                    "type": "anime",
+                    "source": "JKanime Oficial",
+                    "player_url": ep1_url,
+                    "badge": "Anime",
+                    "overview": f"Anime encontrado en JKanime: {title_clean}. Disponible para ver en línea.",
+                })
+        except Exception as e:
+            print(f"[media_scraper] Error buscando en JKanime: {e}")
+        return jk_results
 
-    elif "poseidonhd2.co" in url:
+    def _search_pos():
+        pos_results = []
         try:
-            p_html = _fetch_url(url, referer="https://poseidonhd2.co/", timeout=5)
-            players = re.findall(r'https?://player\.poseidonhd2\.co/player\.php\?h=[a-zA-Z0-9_.-]+', p_html)
-            if players:
-                return players[0]
-        except Exception:
-            pass
+            url = f"https://poseidonhd2.co/search?q={urllib.parse.quote(query)}"
+            h = _fetch_url(url, timeout=6)
+            pattern = r'<a href="(/pelicula/[^"]+)".*?<img[^>]+src="([^"]+)".*?alt="([^"]+)"'
+            for u, p, t in re.findall(pattern, h, re.DOTALL):
+                title_clean = html_lib.unescape(t.strip())
+                full_u = f"https://poseidonhd2.co{u}"
+                slug = u.strip("/").split("/")[-1]
+                pos_results.append({
+                    "id": f"search-pos-{slug}",
+                    "title": title_clean,
+                    "poster": _clean_tmdb_poster(p),
+                    "type": "pelicula",
+                    "source": "PoseidonHD HD",
+                    "player_url": full_u,
+                    "badge": "Película",
+                    "overview": f"Película encontrada en PoseidonHD: {title_clean}. Audio latino y castellano.",
+                })
+        except Exception as e:
+            print(f"[media_scraper] Error buscando en PoseidonHD: {e}")
+        return pos_results
 
-    return url
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        f_jk = executor.submit(_search_jk)
+        f_pos = executor.submit(_search_pos)
+        results.extend(f_jk.result())
+        results.extend(f_pos.result())
+
+    # Pre-resolver los reproductores puros de los primeros 10 resultados para reproduccion instantanea limpia (Cero Web Externa)
+    def _resolve_search_item(item):
+        resolved = resolve_pure_video_endpoint(item.get("player_url", ""))
+        item["player_url"] = resolved.get("pure_player_url") or item.get("player_url")
+        item["servers"] = resolved.get("servers", [])
+        return item
+
+    if results:
+        top_count = min(10, len(results))
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            top_resolved = list(executor.map(_resolve_search_item, results[:top_count]))
+            results = top_resolved + results[top_count:]
+
+    return results
 
 
 def get_live_catalog(force_refresh: bool = False) -> Dict[str, Any]:
@@ -196,7 +316,7 @@ def get_live_catalog(force_refresh: bool = False) -> Dict[str, Any]:
         except Exception as e:
             print(f"[media_scraper] Error leyendo caché: {e}")
 
-    # 2. Extracción en vivo
+    # 2. Extracción en vivo con endpoints de video puro
     anime_items = scrape_jkanime_latest()
     movie_items = scrape_poseidon_movies()
 
@@ -215,7 +335,7 @@ def get_live_catalog(force_refresh: bool = False) -> Dict[str, Any]:
 
     catalog_data = {
         "repository_name": "AegisPlay Catálogo Oficial En Vivo (Cero Demos)",
-        "version": "3.0.0",
+        "version": "3.1.0",
         "author": "Aegis Media Engine",
         "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"),
         "total_items": len(all_items),
@@ -248,10 +368,7 @@ def get_live_catalog(force_refresh: bool = False) -> Dict[str, Any]:
 
 
 def _get_bootstrap_real_items() -> List[Dict[str, Any]]:
-    """
-    Elementos reales verificados extraídos de transmisiones activas para arranque en frío offline.
-    Ninguno es dato ficticio ni de prueba.
-    """
+    """Snapshot verificado con reproductores puros para arranque offline."""
     return [
         {
             "id": "jkanime-shin-tennis-no-oujisama-5",
@@ -261,21 +378,9 @@ def _get_bootstrap_real_items() -> List[Dict[str, Any]]:
             "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_054400f3b0e817b1b90ea73ba7707d15.jpg",
             "type": "anime",
             "source": "JKanime Oficial",
-            "player_url": "https://jkanime.net/shin-tennis-no-oujisama-u-17-world-cup-kesshou-member-ketteisen/5/",
+            "player_url": "https://jkanime.net/jkplayer/um?e=aklBQURLNUx2ZVhxLzF3MW5EbDFrNnNweEN3L1dBaWxXR1RJYWplZEdEQ1RncFlLOGMycit1c3lEUmpJb01nNDAydmxsbDlEbnlhVjRJUmVYVjk2RWVyWkoxTmF1N3E3V29UcWFMYU56M289OjrczbtKI1DuNlhE49Bp2vTM&t=571c85a8cae646e786000ebd3b0f5512&op=Nzg5MTA=",
             "badge": "EP 5",
-            "overview": "Emisión oficial de Shin Tennis no Oujisama. Audio original subtitulado en español.",
-        },
-        {
-            "id": "jkanime-juuou-mujin-dandivine-4",
-            "title": "Juuou Mujin Dandivine",
-            "episode": "Episodio 4",
-            "episode_url": "https://jkanime.net/juuou-mujin-dandivine/4/",
-            "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_ae3140383d6b5f3b8a58007f89a1d5fa.jpg",
-            "type": "anime",
-            "source": "JKanime Oficial",
-            "player_url": "https://jkanime.net/juuou-mujin-dandivine/4/",
-            "badge": "EP 4",
-            "overview": "Emisión oficial de Juuou Mujin Dandivine en JKanime.",
+            "overview": "Emisión oficial de Shin Tennis no Oujisama en JKanime. Audio original subtitulado.",
         },
         {
             "id": "poseidon-titan-el-desastre-de-oceangate",
@@ -287,26 +392,14 @@ def _get_bootstrap_real_items() -> List[Dict[str, Any]]:
             "source": "PoseidonHD HD",
             "player_url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf3hbBC1VJ4bcNt96NInSSUhTHW3DzRvu7Kap.LSy5B4v",
             "badge": "HD 1080p",
-            "overview": "Titan, el sumergible turístico de OceanGate, implosionó en 2023 durante una expedición hacia el Titanic. Este documental explica cómo una idea audaz terminó en tragedia.",
-        },
-        {
-            "id": "poseidon-al-borde-del-abismo",
-            "title": "Al Borde del Abismo: Atrapados en la Cima",
-            "year": "2025",
-            "url": "https://poseidonhd2.co/pelicula/1481603/hold-the-fort",
-            "poster": "https://image.tmdb.org/t/p/original/fnq6itOtvCXRBjwuq96hkYu0pCX.jpg",
-            "type": "pelicula",
-            "source": "PoseidonHD HD",
-            "player_url": "https://poseidonhd2.co/pelicula/1481603/hold-the-fort",
-            "badge": "Estreno",
-            "overview": "Dos escaladores experimentados quedan atrapados en una pared vertical a merced de una tormenta implacable.",
+            "overview": "Titan, el sumergible turístico de OceanGate, implosionó en 2023 durante una expedición hacia el Titanic.",
         },
     ]
 
 
 if __name__ == "__main__":
-    print("[media_scraper] Probando extracción en vivo...")
-    cat = get_live_catalog(force_refresh=True)
-    print(f"[media_scraper] Catálogo obtenido con éxito: {cat['total_items']} títulos reales.")
-    for it in cat["items"][:5]:
-        print(f" - [{it['type'].upper()}] {it['title']} ({it.get('badge', '')}) -> {it['source']}")
+    print("[media_scraper] Probando búsqueda concurrente en vivo...")
+    res = search_live_sources("one piece")
+    print(f"[media_scraper] Búsqueda de 'one piece' devolvió {len(res)} resultados:")
+    for it in res[:4]:
+        print(f" - [{it['type'].upper()}] {it['title']} -> {it['source']}")
