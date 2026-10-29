@@ -29,12 +29,17 @@
             if (origWidthDesc && origWidthDesc.get) {
                 Object.defineProperty(HTMLVideoElement.prototype, 'videoWidth', {
                     get() {
+                        const stream = this.srcObject;
+                        if (!stream) return 0;
+                        const tracks = stream.getVideoTracks ? stream.getVideoTracks() : [];
+                        if (tracks.length > 0 && tracks[0].readyState === 'ended') return 0;
+
                         const val = origWidthDesc.get.call(this);
                         if (typeof val === 'number' && !isNaN(val) && val > 0) {
                             this._lastAegisWidth = val;
                             return val;
                         }
-                        return this._lastAegisWidth || 1280;
+                        return this._lastAegisWidth || 0;
                     },
                     configurable: true
                 });
@@ -43,12 +48,17 @@
             if (origHeightDesc && origHeightDesc.get) {
                 Object.defineProperty(HTMLVideoElement.prototype, 'videoHeight', {
                     get() {
+                        const stream = this.srcObject;
+                        if (!stream) return 0;
+                        const tracks = stream.getVideoTracks ? stream.getVideoTracks() : [];
+                        if (tracks.length > 0 && tracks[0].readyState === 'ended') return 0;
+
                         const val = origHeightDesc.get.call(this);
                         if (typeof val === 'number' && !isNaN(val) && val > 0) {
                             this._lastAegisHeight = val;
                             return val;
                         }
-                        return this._lastAegisHeight || 720;
+                        return this._lastAegisHeight || 0;
                     },
                     configurable: true
                 });
@@ -122,21 +132,15 @@
         });
     })();
 
-    // 4. Watchdog de Integridad del DOM (Auto-recuperacion en caso de desmontaje anormal)
+    // 4. Watchdog de Integridad del DOM (Redibujado suave sin recargas destructivas)
     (function setupDOMHealthWatchdog() {
-        let wasLoggedIn = false;
         setInterval(() => {
-            const hasAppUI = !!document.querySelector('[class*="guilds_"], [class*="sidebar_"], [class*="chat_"], [class*="channels_"]');
-            if (hasAppUI) {
-                wasLoggedIn = true;
-                return;
-            }
             const appMount = document.getElementById('app-mount');
-            if (wasLoggedIn && appMount && appMount.children.length === 0) {
-                console.warn('[Aegis Watchdog] Discord sufrio vaciado de DOM. Restaurando...');
-                window.location.reload();
+            if (appMount && appMount.children.length === 0) {
+                console.warn('[Aegis Watchdog] Discord sufrio vaciado transitorio de DOM. Emitiendo resize...');
+                window.dispatchEvent(new Event('resize'));
             }
-        }, 1500);
+        }, 2000);
     })();
 
 
@@ -171,6 +175,9 @@ function isAuthOrLogin() {
             const style = document.createElement('style');
             style.id = 'aegis-discord-perf-css';
             style.textContent = `
+                html, body, #app-mount, .app-focused {
+                    background-color: #313338 !important;
+                }
                 *, *::before, *::after {
                     backdrop-filter: none !important;
                     -webkit-backdrop-filter: none !important;
@@ -476,19 +483,22 @@ function isAuthOrLogin() {
                     const old = document.getElementById('aegis-screen-modal');
                     if (old) old.remove();
 
+                    let withAudio = true; // Por defecto transmitir con audio
+
                     const modal = document.createElement('div');
                     modal.id = 'aegis-screen-modal';
                     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
                     modal.innerHTML = `
-                        <div style="background:#2b2d31;border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:24px;width:460px;color:#f2f3f5;box-shadow:0 20px 50px rgba(0,0,0,0.8);">
+                        <div style="background:#2b2d31;border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:24px;width:480px;color:#f2f3f5;box-shadow:0 20px 50px rgba(0,0,0,0.8);">
                             <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
                                 <div style="font-size:22px;">📺</div>
                                 <div style="font-size:17px;font-weight:700;">Transmitir Pantalla (Aegis Shields)</div>
                             </div>
-                            <div style="font-size:13px;color:#949ba4;margin-bottom:18px;">
-                                Selecciona qué origen de video deseas compartir en esta sala de Discord:
+                            <div style="font-size:13px;color:#949ba4;margin-bottom:16px;">
+                                Selecciona el origen de video y la configuración de audio para Discord:
                             </div>
-                            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+
+                            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
                                 <button id="aegis-opt-screen" style="background:#1e1f22;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px 14px;color:#fff;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.15s;">
                                     <span style="font-size:24px;">🖥️</span>
                                     <div>
@@ -499,17 +509,59 @@ function isAuthOrLogin() {
                                 <button id="aegis-opt-window" style="background:#1e1f22;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px 14px;color:#fff;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.15s;">
                                     <span style="font-size:24px;">🪟</span>
                                     <div>
-                                        <div style="font-weight:700;font-size:14px;">Ventana de Aplicacion Activa</div>
+                                        <div style="font-weight:700;font-size:14px;">Ventana de Aplicación Activa</div>
                                         <div style="font-size:12px;color:#949ba4;">Transmite únicamente la ventana activa de primer plano</div>
                                     </div>
                                 </button>
                             </div>
+
+                            <!-- Selector Interactivo de Audio -->
+                            <div style="margin-bottom:20px;padding:12px 14px;background:#1e1f22;border-radius:8px;border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;">
+                                <div style="display:flex;align-items:center;gap:10px;">
+                                    <span id="aegis-audio-icon" style="font-size:20px;">🔊</span>
+                                    <div>
+                                        <div style="font-size:13px;font-weight:700;">Audio de Transmisión</div>
+                                        <div id="aegis-audio-desc" style="font-size:11px;color:#949ba4;">Compartir el audio del sistema / aplicación</div>
+                                    </div>
+                                </div>
+                                <div style="display:flex;background:#111214;border-radius:6px;padding:3px;gap:3px;">
+                                    <button id="aegis-btn-sound" type="button" style="background:#5865F2;color:#fff;border:none;border-radius:4px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;">Con Sonido</button>
+                                    <button id="aegis-btn-mute" type="button" style="background:transparent;color:#949ba4;border:none;border-radius:4px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;">Silenciada</button>
+                                </div>
+                            </div>
+
                             <div style="display:flex;justify-content:flex-end;gap:8px;">
                                 <button id="aegis-opt-cancel" style="background:transparent;border:none;color:#949ba4;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Cancelar</button>
                             </div>
                         </div>
                     `;
                     document.body.appendChild(modal);
+
+                    const bSound = document.getElementById('aegis-btn-sound');
+                    const bMute = document.getElementById('aegis-btn-mute');
+                    const aIcon = document.getElementById('aegis-audio-icon');
+                    const aDesc = document.getElementById('aegis-audio-desc');
+
+                    if (bSound && bMute) {
+                        bSound.onclick = () => {
+                            withAudio = true;
+                            bSound.style.background = '#5865F2';
+                            bSound.style.color = '#fff';
+                            bMute.style.background = 'transparent';
+                            bMute.style.color = '#949ba4';
+                            if (aIcon) aIcon.textContent = '🔊';
+                            if (aDesc) aDesc.textContent = 'Compartir el audio del sistema / aplicación';
+                        };
+                        bMute.onclick = () => {
+                            withAudio = false;
+                            bMute.style.background = '#ed4245';
+                            bMute.style.color = '#fff';
+                            bSound.style.background = 'transparent';
+                            bSound.style.color = '#949ba4';
+                            if (aIcon) aIcon.textContent = '🔇';
+                            if (aDesc) aDesc.textContent = 'Transmisión en silencio (sin capturar audio)';
+                        };
+                    }
 
                     const hoverStyle = (btn) => {
                         btn.onmouseenter = () => btn.style.borderColor = '#5865F2';
@@ -521,8 +573,8 @@ function isAuthOrLogin() {
                     if (bScreen) hoverStyle(bScreen);
                     if (bWin) hoverStyle(bWin);
 
-                    if (bScreen) bScreen.onclick = () => { modal.remove(); resolve({ type: 'screen' }); };
-                    if (bWin) bWin.onclick = () => { modal.remove(); resolve({ type: 'window' }); };
+                    if (bScreen) bScreen.onclick = () => { modal.remove(); resolve({ type: 'screen', withAudio: withAudio }); };
+                    if (bWin) bWin.onclick = () => { modal.remove(); resolve({ type: 'window', withAudio: withAudio }); };
                     if (bCancel) bCancel.onclick = () => { modal.remove(); resolve(null); };
                 });
             }
@@ -541,28 +593,31 @@ function isAuthOrLogin() {
                         height: { ideal: 1080, max: 1080 },
                         frameRate: { ideal: 30, max: 60 }
                     },
-                    audio: constraints.audio || false
+                    audio: choice.withAudio ? (constraints.audio || true) : false
                 };
 
                 const stream = await origGetDisplayMedia(cleanConstraints);
 
-                // Teardown Atómico Seguro: desacoplar pipeline y purgar texturas GPU antes de detener capturador
+                // Si el usuario eligió transmitir silenciada, purgar cualquier pista de audio capturada
+                if (!choice.withAudio) {
+                    stream.getAudioTracks().forEach(t => {
+                        try {
+                            t.enabled = false;
+                            t.stop();
+                            stream.removeTrack(t);
+                        } catch(e) {}
+                    });
+                }
+
+                // Teardown Seguro y Natural: permitir que React desmonte el video a su ritmo normal
                 stream.getVideoTracks().forEach(track => {
                     const origTrackStop = track.stop.bind(track);
                     track.stop = function() {
-                        // 1. Purgar todos los elementos de video asociados para liberar mailboxes Skia
-                        document.querySelectorAll('video').forEach(v => {
-                            if (v.srcObject === stream || v.srcObject === track) {
-                                try {
-                                    v.pause();
-                                    v.srcObject = null;
-                                    v.removeAttribute('src');
-                                    v.load(); // Desecha síncronamente el WebMediaPlayerImpl
-                                } catch(e) {}
-                            }
-                        });
-                        // 2. Ejecutar inmediatamente el stop nativo para mantener sincronizado readyState = 'ended'
-                        try { origTrackStop(); } catch(e) {}
+                        try {
+                            origTrackStop();
+                        } catch(e) {
+                            console.warn('[Aegis] Error deteniendo track de video:', e);
+                        }
                     };
                 });
 

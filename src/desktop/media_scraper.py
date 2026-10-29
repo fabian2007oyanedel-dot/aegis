@@ -75,9 +75,10 @@ def _clean_tmdb_poster(raw_url: str) -> str:
 def resolve_pure_video_endpoint(url: str) -> Dict[str, Any]:
     """
     Extrae ÚNICAMENTE el endpoint de video o reproductor incrustado (/jkplayer/um?...,
-    player.php, yourupload, streamwish) a partir de una URL de episodio o película.
+    Mega, Streamwish, direct stream) a partir de una URL de episodio o película.
     Garantiza que NUNCA se cargue la página web completa externa dentro del modal.
     """
+    import base64
     res = {
         "success": False,
         "pure_player_url": url,
@@ -87,41 +88,73 @@ def resolve_pure_video_endpoint(url: str) -> Dict[str, Any]:
     if "jkanime.net" in url:
         try:
             ep_html = _fetch_url(url, referer="https://jkanime.net/", timeout=6)
-            # 1. Buscar reproductor oficial de JKanime (/jkplayer/um?... o /jkplayer/umv?...)
-            jk_players = re.findall(r'<iframe[^>]+src=["\']([^"\']*jkplayer/[^"\']+)["\']', ep_html)
-            valid_jk = [p for p in jk_players if "c1?u=" not in p]
-            if valid_jk:
-                res["pure_player_url"] = valid_jk[0]
-                res["success"] = True
-                res["servers"].append({"name": "JKPlayer Oficial", "url": valid_jk[0]})
 
-            # 2. Extraer servidores alternativos (YourUpload, Streamwish, Mp4upload, Okru)
-            video_match = re.search(r'var video\s*=\s*\[(.*?)\];', ep_html, re.DOTALL)
-            if video_match:
-                items = re.findall(r'server:\s*["\']([^"\']+)["\'],\s*remote:\s*["\']([^"\']+)["\']', video_match.group(1))
-                for s_name, s_url in items:
-                    if s_url and s_url.startswith("http"):
-                        res["servers"].append({"name": s_name, "url": s_url})
-                        if not res["success"]:
-                            res["pure_player_url"] = s_url
-                            res["success"] = True
+            # 1. Buscar reproductores oficiales de JKanime (/jkplayer/um?... o /jkplayer/umv?...)
+            jk_players = re.findall(r'<iframe[^>]+src=["\']([^"\']*jkplayer/[^"\']+)["\']', ep_html)
+            for p in jk_players:
+                if "c1?u=" not in p:
+                    name = "JKPlayer Oficial" if "um?" in p else "JKPlayer 2"
+                    res["servers"].append({"name": name, "url": p})
+                    if not res["success"]:
+                        res["pure_player_url"] = p
+                        res["success"] = True
+
+            # 2. Extraer y decodificar Base64 de var servers = [...] (Mega, Streamwish, etc.)
+            servers_match = re.search(r'var\s+servers\s*=\s*(\[\{.*?\}\]);', ep_html, re.DOTALL)
+            if servers_match:
+                try:
+                    raw_servers = json.loads(servers_match.group(1))
+                    for s in raw_servers:
+                        s_name = s.get("server", "Servidor")
+                        remote = s.get("remote", "")
+                        if remote:
+                            try:
+                                dec_url = base64.b64decode(remote).decode("utf-8", errors="ignore").strip()
+                                if dec_url.startswith("http"):
+                                    res["servers"].append({"name": s_name, "url": dec_url})
+                            except Exception:
+                                pass
+                except Exception as e:
+                    print(f"[media_scraper] Error decodificando servidores: {e}")
+
+            # 3. Preferir Mega o Streamwish si está disponible para máxima estabilidad
+            for s in res["servers"]:
+                if "mega.nz" in s["url"].lower():
+                    res["pure_player_url"] = s["url"]
+                    res["success"] = True
+                    break
+
         except Exception as e:
             print(f"[media_scraper] Error resolviendo JKanime: {e}")
 
-    elif "poseidonhd2.co" in url:
+    elif "poseidonhd2.co" in url or "player.poseidonhd2.co" in url:
         try:
-            p_html = _fetch_url(url, referer="https://poseidonhd2.co/", timeout=6)
-            players = re.findall(r'https?://player\.poseidonhd2\.co/player\.php\?h=[a-zA-Z0-9_.-]+', p_html)
-            if players:
-                res["pure_player_url"] = players[0]
-                res["success"] = True
-                for i, pl in enumerate(players[:4]):
-                    res["servers"].append({"name": f"Servidor HD {i+1}", "url": pl})
+            player_target = url if "player.php" in url else None
+            if not player_target:
+                p_html = _fetch_url(url, referer="https://poseidonhd2.co/", timeout=6)
+                players = re.findall(r'https?://player\.poseidonhd2\.co/player\.php\?h=[a-zA-Z0-9_.-]+', p_html)
+                if players:
+                    player_target = players[0]
+                    for i, pl in enumerate(players[:4]):
+                        res["servers"].append({"name": f"Servidor HD {i+1}", "url": pl})
+
+            if player_target:
+                # Descargar player.php en Python y extraer el enlace directo de Streamwish
+                # eliminando de raíz la espera de 9 segundos y el banner publicitario intermedio
+                php_html = _fetch_url(player_target, referer="https://poseidonhd2.co/", timeout=6)
+                m_url = re.search(r"var\s+url\s*=\s*['\"](https?://[^'\"]+)['\"]", php_html)
+                if m_url:
+                    clean_embed = m_url.group(1)
+                    res["pure_player_url"] = clean_embed
+                    res["success"] = True
+                    res["servers"].insert(0, {"name": "Streamwish HD Directo", "url": clean_embed})
+                elif not res["success"]:
+                    res["pure_player_url"] = player_target
+                    res["success"] = True
         except Exception as e:
             print(f"[media_scraper] Error resolviendo PoseidonHD: {e}")
 
     return res
-
 
 def scrape_jkanime_latest() -> List[Dict[str, Any]]:
     """Extrae los últimos episodios de anime en emisión directamente desde JKanime con endpoints de reproductor puro."""

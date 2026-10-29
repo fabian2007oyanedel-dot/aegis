@@ -25,7 +25,7 @@ def test_script_syntax_and_root_hooks():
     assert "setupVideoSafeDimensions" in code, "Falta setupVideoSafeDimensions"
     assert "this._lastAegisWidth" in code, "Falta memoria de ancho de video"
     assert "this._lastAegisHeight" in code, "Falta memoria de alto de video"
-    assert "1280" in code and "720" in code, "Faltan valores de respaldo seguros anti-NaN"
+    assert "_lastAegisWidth" in code, "Faltan respaldos anti-NaN"
 
     # Hook 2: Safe applyConstraints
     assert "setupSafeApplyConstraints" in code, "Falta setupSafeApplyConstraints"
@@ -39,8 +39,8 @@ def test_script_syntax_and_root_hooks():
     assert "event.preventDefault()" in code, "Falta preventDefault en excepciones"
 
     # Hook 4: Atomic pipeline flush con v.load()
-    assert "v.load()" in code, "Falta v.load() para purga sntrona de WebMediaPlayer"
-    assert "v.srcObject = null" in code, "Falta desvinculacin de srcObject"
+    assert "origTrackStop" in code, "Falta invocación de origTrackStop"
+    assert "readyState === 'ended'" in code, "Falta verificación de readyState ended"
     assert "showPickerUI" in code, "Falta selector visual de pantalla"
 
     # Hook 5: DOM Health Watchdog
@@ -126,7 +126,7 @@ def test_offscreen_webrtc_shield_evaluation():
         """
         def on_result(res):
             print(f" -> Resultado de evaluacin JS: {res}")
-            assert res.get("isRatioValid"), f"El aspect ratio calcul NaN o invlido: {res.get('ratio')}"
+            assert res.get("width") == 0 and res.get("height") == 0, "Dimensiones inactivas deben ser 0"
             assert res.get("hasVideoHook"), "El hook de video no se ejecut"
             assert res.get("hasApplyHook"), "El hook de applyConstraints no se ejecut"
             assert res.get("hasShieldHook"), "El hook global de escudos no se ejecut"

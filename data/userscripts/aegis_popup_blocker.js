@@ -77,8 +77,33 @@
     };
 
     // 4. Desactivar trampas de clic invisibles y superposiciones falsas de robot
+        // Inyección de CSS cosmético anti-publicidad in-player y apuestas (1XBET, banners flotantes)
+    function injectAntiAdCSS() {
+        if (document.getElementById('aegis-anti-ad-css')) return;
+        const target = document.head || document.documentElement;
+        if (!target) return;
+        const style = document.createElement('style');
+        style.id = 'aegis-anti-ad-css';
+        style.textContent = `
+            #floatingBanner, [id*="banner" i], [class*="banner" i],
+            [href*="1xbet" i], [src*="1xbet" i], a[href*="bet" i],
+            ins[class*="604c"], .jw-banner, .player-banner,
+            div[style*="z-index"][style*="bottom"] a[href*="1xbet"],
+            .ad-container, [id*="adangle"], [class*="adangle"] {
+                display: none !important;
+                visibility: hidden !important;
+                pointer-events: none !important;
+                height: 0 !important;
+                width: 0 !important;
+                opacity: 0 !important;
+            }
+        `;
+        try { target.appendChild(style); } catch(e) {}
+    }
+    injectAntiAdCSS();
+
     function cleanTrapsAndScams() {
-        const badTexts = ['not a robot', 'confirm you are not a robot', 'to access the content', 'allow notifications'];
+        const badTexts = ['not a robot', 'confirm you are not a robot', 'to access the content', 'allow notifications', '1xbet', 'bono 300%', 'primeros 4 depósitos', 'primeros 4 depositos', 'regístrate', 'registrate'];
         document.querySelectorAll('div, dialog, section, a, span').forEach(el => {
             try {
                 // Verificar si contiene texto del scam de robot

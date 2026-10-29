@@ -533,6 +533,9 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 """, encoding="utf-8")
 
         discord_opt_script = scripts_dir / "aegis_discord_optimizer.js"
+        master_opt_file = DATA_DIR / "userscripts" / "aegis_discord_optimizer.js"
+        if master_opt_file.exists():
+            discord_opt_script.write_text(master_opt_file.read_text(encoding="utf-8"), encoding="utf-8")
         cur_opt = discord_opt_script.read_text(encoding="utf-8", errors="ignore") if discord_opt_script.exists() else ""
         if not discord_opt_script.exists() or "setupVideoSafeDimensions" not in cur_opt:
             discord_opt_script.write_text(r"""// ==UserScript==
@@ -5366,10 +5369,12 @@ class AegisSidebarWidget(QFrame):
         btn_d_rel.clicked.connect(self.reload_discord)
         d_ctrl_l.addWidget(btn_d_rel)
 
+        self.d_ctrl = d_ctrl
         l_d.addWidget(d_ctrl)
 
         profile_to_use = self.parent_win.profile if self.parent_win else get_shared_profile()
         self.discord_view = AegisWebView(self.parent_win)
+        self.discord_view.setStyleSheet("background-color: #313338;")
         self.discord_page = AegisWebPage(profile_to_use, self.discord_view, browser_win=self.parent_win)
         self.discord_page.setBackgroundColor(QColor("#313338"))
         self.discord_view.setPage(self.discord_page)
@@ -6043,14 +6048,25 @@ class AegisWebPage(QWebEnginePage):
         self.fullScreenRequested.connect(self.handle_fullscreen_request)
         self.renderProcessTerminated.connect(self.handle_render_crash)
 
+    def acceptNavigationRequest(self, url: QUrl, nav_type: QWebEnginePage.NavigationType, is_main_frame: bool) -> bool:
+        url_str = url.toString()
+        if url_str.startswith("aegis://play"):
+            parsed = urlparse(url_str)
+            params = parse_qs(parsed.query)
+            q = params.get("q", [""])[0]
+            if self.browser_win and hasattr(self.browser_win, "load_aegisplay"):
+                v = self.view()
+                self.browser_win.load_aegisplay(v, query=q)
+            return False  # Cancela delegación a Windows ShellExecute (Cero popup de Microsoft Store)
+        elif url_str.startswith("aegis://"):
+            if self.browser_win and hasattr(self.browser_win, "load_aegisplay"):
+                v = self.view()
+                self.browser_win.load_aegisplay(v)
+            return False
+        return super().acceptNavigationRequest(url, nav_type, is_main_frame)
+
     def handle_render_crash(self, termination_status, exit_code):
         print(f"[Aegis CrashGuard] Proceso de renderizado terminado: status={termination_status}, code={exit_code}")
-        # Auto-recuperación si Discord o un reproductor sufre caída de GPU al cortar WebRTC
-        v = self.view()
-        if v and hasattr(v, "url"):
-            u = v.url().toString().lower()
-            if "discord.com" in u or "aegis://" in u:
-                QTimer.singleShot(250, lambda: v.reload())
 
     def createWindow(self, window_type: QWebEnginePage.WebWindowType) -> QWebEnginePage:
         # 1. Bloquear WebDialog siempre (popups/popunders flotantes)
@@ -7478,6 +7494,17 @@ class AegisBrowserWindow(QMainWindow):
         cur.page().runJavaScript(pip_script, on_pip_result)
 
     def handle_fullscreen_request(self, request):
+        req_origin = request.origin() if hasattr(request, "origin") else QUrl()
+        is_sidebar = False
+        try:
+            if hasattr(self, "sidebar") and self.sidebar.isVisible():
+                if hasattr(self.sidebar, "discord_view") and self.sidebar.discord_view and self.sidebar.discord_view.url() == req_origin:
+                    is_sidebar = True
+                elif "discord.com" in req_origin.toString().lower():
+                    is_sidebar = True
+        except Exception:
+            pass
+
         if request.toggleOn():
             request.accept()
             self._is_web_fullscreen = True
@@ -7485,6 +7512,23 @@ class AegisBrowserWindow(QMainWindow):
             self.tab_header.hide()
             if hasattr(self, "bookmarks_bar"):
                 self.bookmarks_bar.hide()
+
+            if is_sidebar:
+                self._sidebar_fullscreen_active = True
+                if hasattr(self, "web_splitter"):
+                    self.web_splitter.hide()
+                if hasattr(self.sidebar, "d_ctrl"):
+                    self.sidebar.d_ctrl.hide()
+                self.sidebar.setMaximumWidth(16777215)
+                self.sidebar.setMinimumWidth(0)
+            else:
+                self._sidebar_fullscreen_active = False
+                if hasattr(self, "sidebar") and self.sidebar.isVisible():
+                    self._sidebar_was_visible_before_fs = True
+                    self.sidebar.hide()
+                else:
+                    self._sidebar_was_visible_before_fs = False
+
             self.showFullScreen()
         else:
             request.accept()
@@ -7493,6 +7537,20 @@ class AegisBrowserWindow(QMainWindow):
             self.tab_header.show()
             if hasattr(self, "bookmarks_bar") and self.config.get("show_bookmarks_bar", True):
                 self.bookmarks_bar.show()
+
+            if getattr(self, "_sidebar_fullscreen_active", False):
+                if hasattr(self, "web_splitter"):
+                    self.web_splitter.show()
+                if hasattr(self.sidebar, "d_ctrl"):
+                    self.sidebar.d_ctrl.show()
+                self.sidebar.setMaximumWidth(950)
+                self.sidebar.setMinimumWidth(320)
+                self._sidebar_fullscreen_active = False
+            else:
+                if getattr(self, "_sidebar_was_visible_before_fs", False) and hasattr(self, "sidebar"):
+                    self.sidebar.show()
+                    self._sidebar_was_visible_before_fs = False
+
             self.showNormal()
 
     def toggle_fullscreen_manual(self):
@@ -7502,6 +7560,19 @@ class AegisBrowserWindow(QMainWindow):
             self.tab_header.show()
             if hasattr(self, "bookmarks_bar") and self.config.get("show_bookmarks_bar", True):
                 self.bookmarks_bar.show()
+            if getattr(self, "_sidebar_fullscreen_active", False):
+                if hasattr(self, "web_splitter"):
+                    self.web_splitter.show()
+                if hasattr(self.sidebar, "d_ctrl"):
+                    self.sidebar.d_ctrl.show()
+                self.sidebar.setMaximumWidth(950)
+                self.sidebar.setMinimumWidth(320)
+                self._sidebar_fullscreen_active = False
+            else:
+                if getattr(self, "_sidebar_was_visible_before_fs", False) and hasattr(self, "sidebar"):
+                    self.sidebar.show()
+                    self._sidebar_was_visible_before_fs = False
+            self._is_web_fullscreen = False
         else:
             self.showFullScreen()
 
@@ -11249,7 +11320,7 @@ def get_aegisplay_html(theme_class: str = "theme-dark", search_query: str = None
       </div>
       <div class="video-wrap">
         <video id="videoPlayer" controls autoplay style="display:none; width:100%; height:100%; object-fit:contain;"></video>
-        <iframe id="pureVideoPlayer" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allowfullscreen referrerpolicy="no-referrer" style="display:none; width:100%; height:100%; border:none; background:#000;"></iframe>
+        <iframe id="pureVideoPlayer" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" referrerpolicy="no-referrer" style="display:none; width:100%; height:100%; border:none; background:#000;"></iframe>
       </div>
       <div class="player-toolbar" id="nativeToolbar" style="display:none;">
         <div class="speed-btns">
