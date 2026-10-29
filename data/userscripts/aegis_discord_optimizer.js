@@ -14,7 +14,31 @@
 
     if (window.self !== window.top) return;
 
-        // =========================================================================
+    // =========================================================================
+    // INYECCIÓN INCONDICIONAL DE FONDO OSCURO EN FRAME-0 (CERO PANTALLAS BLANCAS)
+    // =========================================================================
+    (function injectFrameZeroDarkBackground() {
+        if (document.getElementById('aegis-discord-frame0-css')) return;
+        const style = document.createElement('style');
+        style.id = 'aegis-discord-frame0-css';
+        style.textContent = 
+            html, body, #app-mount, .app-focused, #root {
+                background-color: #313338 !important;
+                background: #313338 !important;
+            }
+        ;
+        const target = document.head || document.documentElement;
+        if (target) {
+            target.appendChild(style);
+        } else {
+            document.addEventListener('DOMContentLoaded', () => {
+                const t = document.head || document.documentElement;
+                if (t) t.appendChild(style);
+            });
+        }
+    })();
+
+    // =========================================================================
     // AEGIS WEBRTC & DOM ROBUSTNESS SHIELD (ROOT-LEVEL FIX)
     // =========================================================================
 

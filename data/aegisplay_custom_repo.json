@@ -1,337 +1,1024 @@
 {
-  "repository_name": "Catálogo Maestro Comunitario Extendido (24 Títulos Reales)",
-  "version": "3.1.0",
+  "repository_name": "Catálogo Maestro Oficial Comunitario (24 Títulos Reales - Cero Demos)",
+  "version": "3.2.0",
   "author": "Aegis Media Protocol",
-  "description": "Repositorio masivo de prueba con 24 enlaces reales sin datos ficticios para validación de estabilidad.",
+  "description": "Repositorio oficial verificado con 24 títulos reales, reproductores puros directos y servidores múltiples auténticos (0% demos).",
+  "total_items": 24,
   "items": [
     {
-      "id": "rep-a1",
+      "id": "jkanime-mahou-no-shimai-lulutto-lilly-part-2-3",
       "title": "Mahou no Shimai Lulutto Lilly Part 2",
-      "episode": "Episodio 3",
+      "episode": "Ep 5",
+      "episode_url": "https://jkanime.net/mahou-no-shimai-lulutto-lilly-part-2/3/",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_571c85a8cae646e786000ebd3b0f5512.jpg",
       "type": "anime",
       "source": "JKanime Oficial",
       "badge": "EP 3",
-      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_571c85a8cae646e786000ebd3b0f5512.jpg",
+      "overview": "Último episodio emitido hoy: Mahou no Shimai Lulutto Lilly Part 2 (Ep 5). Audio original japonés con subtítulos en español.",
       "player_url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0",
       "servers": [
         {
-          "name": "Mega (Recomendado)",
+          "name": "JKPlayer Oficial",
+          "url": "https://jkanime.net/jkplayer/um?e=REUxLzg5UDdZcFByY2M1Zm9ZWG1SYVdwdWVuTENXSDU0ZnlQekpWT3dSQWk4a2JvL1NSUjFsRVlnTGRsTVJmS1BjR1VFamw3Q3FBdlpGYnQyQXNmeVNETUpCSEdvblJ0cVBaRGlGMkV2TnM9OjotQjyfmb9aGwW7AtwSVO8e&t=571c85a8cae646e786000ebd3b0f5512&op=Nzg5MTA="
+        },
+        {
+          "name": "JKPlayer 2",
+          "url": "https://jkanime.net/jkplayer/umv?e=NndMUGlEQ2lFMkgzNEU0T3BoQXhTdE5waFUvS2pZSGR0UWQrc0JJaWw5RzdVaGVVYm5BcFBRRGJNQ0VvRTVhd1BuL0ZvVXRCZldVTURPdnBTNFA1UUc1N3hWUXJDdlo5T3R2Wk96cHJ5Nlk9Ojqi.G9ldYoPnv3QunEzgNvA&t=571c85a8cae646e786000ebd3b0f5512"
+        },
+        {
+          "name": "Mega",
           "url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0"
         },
         {
-          "name": "Streamwish HD",
+          "name": "Streamwish",
           "url": "https://hgcloud.to/e/3xfqwhjh0z2c"
         },
         {
-          "name": "Vidhide Fast",
+          "name": "Vidhide",
           "url": "https://vidhidevip.com/embed/s4uktgyv6oi6"
         },
         {
-          "name": "VOE Player",
+          "name": "VOE",
           "url": "https://voe.sx/e/askd2t4qeod0"
+        },
+        {
+          "name": "Filemoon",
+          "url": "https://bysekoze.com/e/wogn2x3mxjlr/"
+        },
+        {
+          "name": "Mixdrop",
+          "url": "https://mixdrop.top/e/owwn09q8h9o8n9"
         },
         {
           "name": "Mp4upload",
           "url": "https://www.mp4upload.com/embed-fbcfoy9exuwb.html"
         },
         {
-          "name": "Filemoon",
-          "url": "https://bysekoze.com/e/wogn2x3mxjlr/"
+          "name": "Streamtape",
+          "url": "https://streamtape.com/e/kvDXpdwL1viD3D/maagiiicallsisterlulyylittlpartwss2-03.mp4"
+        },
+        {
+          "name": "Doodstream",
+          "url": "https://dsvplay.com/e/zsciznjyoymo"
+        },
+        {
+          "name": "1Fichier",
+          "url": "https://1fichier.com/?caeir6pq1uywjprguabg"
         }
       ]
     },
     {
-      "id": "rep-a2",
-      "title": "Shin Tennis no Oujisama: U-17 World Cup",
-      "episode": "Episodio 5",
+      "id": "jkanime-shin-tennis-no-oujisama-u-17-world-cup-kesshou-member-ketteisen-5",
+      "title": "Shin Tennis no Oujisama: U-17 World Cup Kesshou Member Ketteisen",
+      "episode": "Ep 4",
+      "episode_url": "https://jkanime.net/shin-tennis-no-oujisama-u-17-world-cup-kesshou-member-ketteisen/5/",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_054400f3b0e817b1b90ea73ba7707d15.jpg",
       "type": "anime",
       "source": "JKanime Oficial",
       "badge": "EP 5",
-      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_054400f3b0e817b1b90ea73ba7707d15.jpg",
-      "player_url": "https://jkanime.net/jkplayer/um?e=WFBtRis3MkRwUC9QU1ZmVHVZdU91Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjpFMXg3Y3lhb2t1T0hSZFdV",
+      "overview": "Último episodio emitido hoy: Shin Tennis no Oujisama: U-17 World Cup Kesshou Member Ketteisen (Ep 4). Audio original japonés con subtítulos en español.",
+      "player_url": "https://mega.nz/embed/SjA1zLYY#tYvo5YHqcHoRJe5jzwrwForysU4fLFqMLOaIDSk6haU",
       "servers": [
         {
           "name": "JKPlayer Oficial",
-          "url": "https://jkanime.net/jkplayer/um?e=WFBtRis3MkRwUC9QU1ZmVHVZdU91Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjpFMXg3Y3lhb2t1T0hSZFdV"
+          "url": "https://jkanime.net/jkplayer/um?e=QmJqNkR2UlpIb0MrdlNiVnExSGUxMzNBVjMxWEcxR00xWUFuN2lHSlNVNEVHQk01YzduS3BpNFlBbXViZUdYdVlBblF6RzZUK09PZ21weS93ekJnakIyTHpCZkhSSUxVTUlJS211WFEwbDUwVzV5QVMrTHlhdWJjRGc4dlUzUmc6Os5TX9IMozrYf8R5Ttgyfns-&t=054400f3b0e817b1b90ea73ba7707d15&op=Nzg5MDg="
         },
         {
-          "name": "Servidor HD Streamwish",
-          "url": "https://hgcloud.to/e/3xfqwhjh0z2c"
+          "name": "JKPlayer 2",
+          "url": "https://jkanime.net/jkplayer/umv?e=ajF0eUUyQWRHNGVGUVIyTU9MMFFFVmZGdDhuUG82YktVSk1rN0gveXJCSmI2SXNoZ0FLb1ZYcmRPdTZBc0g1QkJoNHNjRFdMZE5lcEZ0QlcwcmFaSWlBZDM1RWs2MjJLTlNrVFFxU2d3aUY5OTkzbW8rcmVqendXRWk3OStxUlg6OvXE04JOZGec4vtPuxma.pE-&t=054400f3b0e817b1b90ea73ba7707d15"
         },
         {
-          "name": "Mega Espejo",
-          "url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0"
+          "name": "Mega",
+          "url": "https://mega.nz/embed/SjA1zLYY#tYvo5YHqcHoRJe5jzwrwForysU4fLFqMLOaIDSk6haU"
+        },
+        {
+          "name": "Streamwish",
+          "url": "https://hgcloud.to/e/rz8sjrblubwl"
+        },
+        {
+          "name": "Vidhide",
+          "url": "https://vidhidevip.com/embed/nrmyo4gda9d3"
+        },
+        {
+          "name": "VOE",
+          "url": "https://voe.sx/e/ubjok51rd6cc"
+        },
+        {
+          "name": "Filemoon",
+          "url": "https://bysekoze.com/e/mh5czijir5vz/"
+        },
+        {
+          "name": "Mixdrop",
+          "url": "https://mixdrop.top/e/wllxzdklhnk7md"
+        },
+        {
+          "name": "Mp4upload",
+          "url": "https://www.mp4upload.com/embed-81w5nzq2ll60.html"
+        },
+        {
+          "name": "Streamtape",
+          "url": "https://streamtape.com/e/Q3ZB91ajRAT0YB1/shiiinnnteennisnoujisamau17worldkesshomemberr-05.mp4"
+        },
+        {
+          "name": "Doodstream",
+          "url": "https://dsvplay.com/e/dtmmwmgbe2yo"
+        },
+        {
+          "name": "1Fichier",
+          "url": "https://1fichier.com/?f1e3gqzi87ynt9918s2v"
         }
       ]
     },
     {
-      "id": "rep-a3",
+      "id": "jkanime-juuou-mujin-dandivine-4",
       "title": "Juuou Mujin Dandivine",
-      "episode": "Episodio 4",
-      "type": "anime",
-      "source": "JKanime Oficial",
-      "badge": "EP 4",
+      "episode": "Ep 4",
+      "episode_url": "https://jkanime.net/juuou-mujin-dandivine/4/",
       "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_ae3140383d6b5f3b8a58007f89a1d5fa.jpg",
-      "player_url": "https://jkanime.net/jkplayer/um?e=Zml1dmtMakJ2VG9mTldLNmcyckkvb2NqdW52VkpBNnB4TXF0N29hYnhrcHcrL2Q0TG5DOGFwOU9zT2ZqYit4K3BwN3l1WjhQeCtzeEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojo2bndwTml1VjNnTWt4clpU",
-      "servers": [
-        {
-          "name": "JKPlayer Oficial",
-          "url": "https://jkanime.net/jkplayer/um?e=Zml1dmtMakJ2VG9mTldLNmcyckkvb2NqdW52VkpBNnB4TXF0N29hYnhrcHcrL2Q0TG5DOGFwOU9zT2ZqYit4K3BwN3l1WjhQeCtzeEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojo2bndwTml1VjNnTWt4clpU"
-        },
-        {
-          "name": "Servidor HD Streamwish",
-          "url": "https://hgcloud.to/e/3xfqwhjh0z2c"
-        },
-        {
-          "name": "Mega Espejo",
-          "url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0"
-        }
-      ]
-    },
-    {
-      "id": "rep-a4",
-      "title": "Tantei wa Mou, Shindeiru. Season 2",
-      "episode": "Episodio 4",
       "type": "anime",
       "source": "JKanime Oficial",
       "badge": "EP 4",
-      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_1399716e25f76faae5a81ca6ff447bc9.jpg",
-      "player_url": "https://jkanime.net/jkplayer/um?e=TVJIWk9KcmU1bHdFcmtQVjBXWFNhUGZndEkybjZtUjR3TXF0N29hYnhrcHcrL2Q0TG5DOGFwOU9zT2ZqYit4K3BwN3l1WjhQeCtzeEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojp4T1pUU0RzME54T2xUbFRF",
+      "overview": "Último episodio emitido hoy: Juuou Mujin Dandivine (Ep 4). Audio original japonés con subtítulos en español.",
+      "player_url": "https://mega.nz/embed/bvomyAbK#8IsiLSxaEA6JF-8yedmwWwV3RrAdoUiqCvqHnqGQx4Y",
       "servers": [
         {
           "name": "JKPlayer Oficial",
-          "url": "https://jkanime.net/jkplayer/um?e=TVJIWk9KcmU1bHdFcmtQVjBXWFNhUGZndEkybjZtUjR3TXF0N29hYnhrcHcrL2Q0TG5DOGFwOU9zT2ZqYit4K3BwN3l1WjhQeCtzeEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojp4T1pUU0RzME54T2xUbFRF"
+          "url": "https://jkanime.net/jkplayer/um?e=MjJaT0VLdmVaVk9OZ2ZrZzZGMTVEWGM3bVBucjFaMnE2UVp5dDRQelN1SVBXVXRDdklXY2hSelA4S0tNMVhlMzVyZkhHRlI3SlVGcU43KytVRm1GL1JzdmpGUzZSK3BJcC82VXFJOWo2Uzg9OjpGk3oFaOIyU_NjPWrGr826&t=ae3140383d6b5f3b8a58007f89a1d5fa&op=Nzg5MDY="
         },
         {
-          "name": "Servidor HD Streamwish",
-          "url": "https://hgcloud.to/e/3xfqwhjh0z2c"
+          "name": "JKPlayer 2",
+          "url": "https://jkanime.net/jkplayer/umv?e=K3hPbGJFMnh2Yzc3d2IvRGNUbEZ3TUJZYStOQ2M5bUVNTG1VSjBoZHUveWZsbU5QZ09tVm9OOWVJTnBLS2VIcTlCbXFqQllvVUdnQy9nZUpFZlRYMG9CQVNPVFBiNVFEbVIzZVlTZk9Kc1E9Ojpe36EySUE38pn9vnOw_.Pl&t=ae3140383d6b5f3b8a58007f89a1d5fa"
         },
         {
-          "name": "Mega Espejo",
-          "url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0"
+          "name": "Mega",
+          "url": "https://mega.nz/embed/bvomyAbK#8IsiLSxaEA6JF-8yedmwWwV3RrAdoUiqCvqHnqGQx4Y"
+        },
+        {
+          "name": "Streamwish",
+          "url": "https://hgcloud.to/e/s86mfjt7x9ua"
+        },
+        {
+          "name": "Vidhide",
+          "url": "https://vidhidevip.com/embed/dmim5qekbcir"
+        },
+        {
+          "name": "VOE",
+          "url": "https://voe.sx/e/qw3ssb98knax"
+        },
+        {
+          "name": "Filemoon",
+          "url": "https://bysekoze.com/e/fm1vwtwpetk9/"
+        },
+        {
+          "name": "Mixdrop",
+          "url": "https://mixdrop.top/e/elle31qobm8jx9"
+        },
+        {
+          "name": "Mp4upload",
+          "url": "https://www.mp4upload.com/embed-3rw3aaq8ko5c.html"
+        },
+        {
+          "name": "Streamtape",
+          "url": "https://streamtape.com/e/ZP0rMjMk7WUqV6b/juouuusmuujindandndiviinvsesss-04.mp4"
+        },
+        {
+          "name": "Doodstream",
+          "url": "https://dsvplay.com/e/7wvdx15esgne"
+        },
+        {
+          "name": "1Fichier",
+          "url": "https://1fichier.com/?40equ9anvzv2ow4b1bv8"
         }
       ]
     },
     {
-      "id": "rep-a5",
+      "id": "jkanime-tantei-wa-mou-shindeiru-season-2-4",
+      "title": "Tantei wa Mou, Shindeiru. Season 2",
+      "episode": "Ep 4",
+      "episode_url": "https://jkanime.net/tantei-wa-mou-shindeiru-season-2/4/",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_67c5817deddbf940b40a3a97a9d594a5.jpg",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 4",
+      "overview": "Último episodio emitido hoy: Tantei wa Mou, Shindeiru. Season 2 (Ep 4). Audio original japonés con subtítulos en español.",
+      "player_url": "https://mega.nz/embed/T7pQAYRR#3hSBJVjFx0d9QJTiEll840CqiV4wrFh5pmSqQvFWvBA",
+      "servers": [
+        {
+          "name": "JKPlayer Oficial",
+          "url": "https://jkanime.net/jkplayer/um?e=SkpLNU9DdUMwaDJZZVF0ZkxNQjJ4bTN3SlJlOE0yRjM5dHYyZlFqWDBlVFlVZkFiczI3NDhNVnBsem05K1hJcWdrREpNUnk4cC9tU1QxY0xlczZwL3FpTHdZZGtGdDRaK09iRGVMNVhnclU9OjpNLZet7vXi.er1wuayz1XS&t=67c5817deddbf940b40a3a97a9d594a5&op=Nzg5MDQ="
+        },
+        {
+          "name": "JKPlayer 2",
+          "url": "https://jkanime.net/jkplayer/umv?e=SUlTcEEwM1haSE1hWGFjUFdrTjRxQkNzWndvR3M3bWR2YU83ZmVrME1NQTdUR0FRVFYzcVlZbTlORndmbmQyN1NhbWdNcFRKZkRIWGd1NHJ4Tm04TXhjWW9tcXN1bWFCWWdTMWkvK3AyRk09Ojqgy5wsiOZ1bV8VyfuthsUn&t=67c5817deddbf940b40a3a97a9d594a5"
+        },
+        {
+          "name": "Mega",
+          "url": "https://mega.nz/embed/T7pQAYRR#3hSBJVjFx0d9QJTiEll840CqiV4wrFh5pmSqQvFWvBA"
+        },
+        {
+          "name": "Streamwish",
+          "url": "https://hgcloud.to/e/xdikot0fvij5"
+        },
+        {
+          "name": "Vidhide",
+          "url": "https://vidhidevip.com/embed/on408zed3e30"
+        },
+        {
+          "name": "VOE",
+          "url": "https://voe.sx/e/g2sbufggfvmq"
+        },
+        {
+          "name": "Filemoon",
+          "url": "https://bysekoze.com/e/msnj5pagu0ko/"
+        },
+        {
+          "name": "Mixdrop",
+          "url": "https://mixdrop.top/e/wllx3dx7a1k0r3"
+        },
+        {
+          "name": "Mp4upload",
+          "url": "https://www.mp4upload.com/embed-9ce0asyox7na.html"
+        },
+        {
+          "name": "Streamtape",
+          "url": "https://streamtape.com/e/q8m0p2WPbauzVa0/tannnteiiwaamoushindeiruseasonss2-04.mp4"
+        },
+        {
+          "name": "Doodstream",
+          "url": "https://dsvplay.com/e/f7jaakhx41o9"
+        },
+        {
+          "name": "1Fichier",
+          "url": "https://1fichier.com/?kr3mjecny7rjryz3hu12"
+        }
+      ]
+    },
+    {
+      "id": "jkanime-koupen-chan-82",
       "title": "Koupen-chan",
-      "episode": "Episodio 82",
+      "episode": "Ep 4",
+      "episode_url": "https://jkanime.net/koupen-chan/82/",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_10998f7cce80d9ca6f7cce613fb120d4.jpg",
       "type": "anime",
       "source": "JKanime Oficial",
       "badge": "EP 82",
-      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_f2a4bc0319caea2daefee54ba4ffea53.jpg",
-      "player_url": "https://jkanime.net/jkplayer/um?e=RCtsZ3BQNW9lSk1vOVo3dlFMZ051Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjphMUx4Y3lhb2t1T0hSZFdV",
+      "overview": "Último episodio emitido hoy: Koupen-chan (Ep 4). Audio original japonés con subtítulos en español.",
+      "player_url": "https://mega.nz/embed/72JBxIra#iDf8PbDZ1atRi5iWE1oNl_nPBNewqPxDMYlJ1TPjI0I",
       "servers": [
         {
           "name": "JKPlayer Oficial",
-          "url": "https://jkanime.net/jkplayer/um?e=RCtsZ3BQNW9lSk1vOVo3dlFMZ051Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjphMUx4Y3lhb2t1T0hSZFdV"
+          "url": "https://jkanime.net/jkplayer/um?e=VFBWbFh4MkxOR3Y0M0xmaFJGdkhieDNhcjlCdGhyMzRsM09UOHpJR2plcHREZmpVdVVGWGkyVmxHaVZmNTJ6YXp1Tkh0S25vcWhmeW16Nkc4cmlPYmc9PTo6L6IPNylaX5u87Knp664GcA--&t=10998f7cce80d9ca6f7cce613fb120d4&op=Nzg5MDI="
         },
         {
-          "name": "Servidor HD Streamwish",
-          "url": "https://hgcloud.to/e/3xfqwhjh0z2c"
+          "name": "JKPlayer 2",
+          "url": "https://jkanime.net/jkplayer/umv?e=TjljOHdCeGVHcWdONHpBVWRlaTA1bjNWOWlxSWQxMmdiZFpOcUZTc3daRnhwM3c1eGh2UTExRlVNZjRURzFabzhSMERBOTlOZXBmQXJHaXRQWG5naXc9PTo6L7D31evMBvfibbpgE6h_VA--&t=10998f7cce80d9ca6f7cce613fb120d4"
         },
         {
-          "name": "Mega Espejo",
-          "url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0"
+          "name": "Mega",
+          "url": "https://mega.nz/embed/72JBxIra#iDf8PbDZ1atRi5iWE1oNl_nPBNewqPxDMYlJ1TPjI0I"
+        },
+        {
+          "name": "Streamwish",
+          "url": "https://hgcloud.to/e/7dk9yn838ipa"
+        },
+        {
+          "name": "Vidhide",
+          "url": "https://vidhidevip.com/embed/kxifj2vle174"
+        },
+        {
+          "name": "VOE",
+          "url": "https://voe.sx/e/aaq3tygofgvz"
+        },
+        {
+          "name": "Filemoon",
+          "url": "https://bysekoze.com/e/f6y2pub6wjcx/"
+        },
+        {
+          "name": "Mixdrop",
+          "url": "https://mixdrop.top/e/mkkq79ggao9047"
+        },
+        {
+          "name": "Mp4upload",
+          "url": "https://www.mp4upload.com/embed-wqfdlutruqy7.html"
+        },
+        {
+          "name": "Doodstream",
+          "url": "https://dsvplay.com/e/e3sy6iqdyg4d"
+        },
+        {
+          "name": "1Fichier",
+          "url": "https://1fichier.com/?web2ytie422jg66q20tx"
         }
       ]
     },
     {
-      "id": "rep-a6",
-      "title": "Tsuihou sareta Cheat Fuyo Majutsushi",
-      "episode": "Episodio 4",
+      "id": "jkanime-sora-wa-akai-kawa-no-hotori-17",
+      "title": "Sora wa Akai Kawa no Hotori",
+      "episode": "Ep 3",
+      "episode_url": "https://jkanime.net/sora-wa-akai-kawa-no-hotori/17/",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_289b30e458d220d72e174ace9a019928.jpg",
       "type": "anime",
       "source": "JKanime Oficial",
-      "badge": "EP 4",
-      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_4b4f2711a005a11787269f568a2fd11a.jpg",
-      "player_url": "https://jkanime.net/jkplayer/um?e=WFBtRis3MkRwUC9QU1ZmVHVZdU91Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjpFMXg3Y3lhb2t1T0hSZFdV",
+      "badge": "EP 17",
+      "overview": "Último episodio emitido hoy: Sora wa Akai Kawa no Hotori (Ep 3). Audio original japonés con subtítulos en español.",
+      "player_url": "https://mega.nz/embed/KvwHXLZA#ZBrGAnFw9ji7dkPGIxYcvG8PTQNYwHPSJKgpXYk6gOk",
       "servers": [
         {
           "name": "JKPlayer Oficial",
-          "url": "https://jkanime.net/jkplayer/um?e=WFBtRis3MkRwUC9QU1ZmVHVZdU91Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjpFMXg3Y3lhb2t1T0hSZFdV"
+          "url": "https://jkanime.net/jkplayer/um?e=RisxdFJBM3kySHVNZ0lMNGRPYWNQcWt1WGFITGJxRkUwaUVwOFpsOUE5NzdaYStOM3NNbGw4dDFmWWUwUEw3TTJyWlVTTU1UbVF5eWVja0FNNWpXdEQzNTBza3VRaW1LM09kSXhGa2EzcFE9OjoWErJTbYifTMU2BjGuQOHz&t=289b30e458d220d72e174ace9a019928&op=Nzg5MDA="
         },
         {
-          "name": "Servidor HD Streamwish",
-          "url": "https://hgcloud.to/e/3xfqwhjh0z2c"
+          "name": "JKPlayer 2",
+          "url": "https://jkanime.net/jkplayer/umv?e=RmlDall5ajMwS3B5bDBMVVJVL1ZqbTNIRVNTNTE1bThEZUY0NGdTVGhJazE0S2FXWEZVbk1BcFBsRXZXZFhMYlFwcThMQ0hjWnI5TGozNUxHSGdNbmw0NS9MeWtiQ0FZdklNdTZUZ1VYdEE9OjpafWLzDHNu8MZawrwSZruX&t=289b30e458d220d72e174ace9a019928"
         },
         {
-          "name": "Mega Espejo",
-          "url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0"
+          "name": "Mega",
+          "url": "https://mega.nz/embed/KvwHXLZA#ZBrGAnFw9ji7dkPGIxYcvG8PTQNYwHPSJKgpXYk6gOk"
+        },
+        {
+          "name": "Streamwish",
+          "url": "https://hgcloud.to/e/m1jii5g4vkc8"
+        },
+        {
+          "name": "Vidhide",
+          "url": "https://vidhidevip.com/embed/ml6nakfzu6if"
+        },
+        {
+          "name": "VOE",
+          "url": "https://voe.sx/e/7shbktdqsjwb"
+        },
+        {
+          "name": "Filemoon",
+          "url": "https://bysekoze.com/e/yhvsvlexjj5k/"
+        },
+        {
+          "name": "Mixdrop",
+          "url": "https://mixdrop.top/e/4dd767k6cm1k3d"
+        },
+        {
+          "name": "Mp4upload",
+          "url": "https://www.mp4upload.com/embed-94ua4p2ol77g.html"
+        },
+        {
+          "name": "Streamtape",
+          "url": "https://streamtape.com/e/1Aq2W9emYOce29q/soooraaawaaaakaiikwanohotoriws-17.mp4"
+        },
+        {
+          "name": "Doodstream",
+          "url": "https://dsvplay.com/e/k2jlu8sy4qbc"
+        },
+        {
+          "name": "1Fichier",
+          "url": "https://1fichier.com/?7ncsgf7bn18qmeon52f7"
         }
       ]
     },
     {
-      "id": "rep-a7",
-      "title": "Kanojo no Tomodachi",
-      "episode": "Episodio 3",
+      "id": "jkanime-chitose-kun-wa-ramune-bin-no-naka-part-2-3",
+      "title": "Chitose-kun wa Ramune Bin no Naka Part 2",
+      "episode": "Ep 4",
+      "episode_url": "https://jkanime.net/chitose-kun-wa-ramune-bin-no-naka-part-2/3/",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_fe12a1f956620e7795ac2bf5d6a751da.jpg",
       "type": "anime",
       "source": "JKanime Oficial",
       "badge": "EP 3",
-      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_a31950d2bb2d9fcf1fa414777d853e34.jpg",
-      "player_url": "https://jkanime.net/jkplayer/um?e=U0lrTnNicUlObUZHY0hOUFZtT3l1UHpRb1R2b1RhanJvTFVFb2FZa015Y0FYaXBJa3FxRTFUZ0pwSlJqVUJtVHEramtGWFNQSy9XM0VQWlN0RXBIalJId0pNU1FVekpWYVlUUXdMQUxqaTA9Ojo_jersRihLkOYQ6mmwE_ZX",
+      "overview": "Último episodio emitido hoy: Chitose-kun wa Ramune Bin no Naka Part 2 (Ep 4). Audio original japonés con subtítulos en español.",
+      "player_url": "https://mega.nz/embed/fjYGQZyb#kFvNd4YmuAtT0BKV1EXGqBShODnN37YlgXpEDdOqBpM",
       "servers": [
         {
           "name": "JKPlayer Oficial",
-          "url": "https://jkanime.net/jkplayer/um?e=U0lrTnNicUlObUZHY0hOUFZtT3l1UHpRb1R2b1RhanJvTFVFb2FZa015Y0FYaXBJa3FxRTFUZ0pwSlJqVUJtVHEramtGWFNQSy9XM0VQWlN0RXBIalJId0pNU1FVekpWYVlUUXdMQUxqaTA9Ojo_jersRihLkOYQ6mmwE_ZX"
+          "url": "https://jkanime.net/jkplayer/um?e=M3hnQmFPSWNwSTNVdTlUVjdmdHB0amRGaFhEVkg3U1kvZE5idVl6UUxnWlR2VDFCMmEzSTI1Rldna2JrSkgxcG1FVlZUb3NMT0pCSkphV2E5Y1EyM2FCdGMwTk5oNHRVU1pIYnBRclFMMEE9Ojov58bF3WugWqThWjMUtT.P&t=fe12a1f956620e7795ac2bf5d6a751da&op=Nzg4OTg="
         },
         {
-          "name": "Servidor HD Streamwish",
-          "url": "https://hgcloud.to/e/3xfqwhjh0z2c"
+          "name": "JKPlayer 2",
+          "url": "https://jkanime.net/jkplayer/umv?e=RklUVXNEYi9vd0NvK1JaWHFSU0IreS96Nno1ckRieXVIVXhTbGlpMnJMSVVpZ3NXMUMyR1YvMlZjN1JIakx2Q00zTExDK2VXQjVJVmZXRjU5Z0Q2YlZLYXN0WVVLaC9ud2wwRmNocU5HM009OjqRqHMKNfe.bWK_RTGWkSDd&t=fe12a1f956620e7795ac2bf5d6a751da"
         },
         {
-          "name": "Mega Espejo",
-          "url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0"
+          "name": "Mega",
+          "url": "https://mega.nz/embed/fjYGQZyb#kFvNd4YmuAtT0BKV1EXGqBShODnN37YlgXpEDdOqBpM"
+        },
+        {
+          "name": "Streamwish",
+          "url": "https://hgcloud.to/e/s2jwu02hwegv"
+        },
+        {
+          "name": "Vidhide",
+          "url": "https://vidhidevip.com/embed/gg5o5122dq1x"
+        },
+        {
+          "name": "VOE",
+          "url": "https://voe.sx/e/pfwu1qmryhmh"
+        },
+        {
+          "name": "Filemoon",
+          "url": "https://bysekoze.com/e/q4deip631a7y/"
+        },
+        {
+          "name": "Mixdrop",
+          "url": "https://mixdrop.top/e/3660kjklhrog66"
+        },
+        {
+          "name": "Mp4upload",
+          "url": "https://www.mp4upload.com/embed-q52xl3xsa2nz.html"
+        },
+        {
+          "name": "Streamtape",
+          "url": "https://streamtape.com/e/WglMBlVGbLtb4Yb/chiiitoooseeekunwaaramunebinnakapart2-03.mp4"
+        },
+        {
+          "name": "Doodstream",
+          "url": "https://dsvplay.com/e/xphpoodu1nv1"
+        },
+        {
+          "name": "1Fichier",
+          "url": "https://1fichier.com/?mqr1ucuys2dutzas05l0"
         }
       ]
     },
     {
-      "id": "rep-a8",
-      "title": "One Piece: Egghead",
-      "episode": "Episodio 1120",
-      "type": "anime",
-      "source": "JKanime Oficial",
-      "badge": "EP 1120",
-      "poster": "https://cdn.jkdesa.com/assets/images/animes/image/one-piece.jpg",
-      "player_url": "https://jkanime.net/jkplayer/um?e=Zml1dmtMakJ2VG9mTldLNmcyckkvb2NqdW52VkpBNnB4TXF0N29hYnhrcHcrL2Q0TG5DOGFwOU9zT2ZqYit4K3BwN3l1WjhQeCtzeEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojo2bndwTml1VjNnTWt4clpU",
-      "servers": [
-        {
-          "name": "JKPlayer Oficial",
-          "url": "https://jkanime.net/jkplayer/um?e=Zml1dmtMakJ2VG9mTldLNmcyckkvb2NqdW52VkpBNnB4TXF0N29hYnhrcHcrL2Q0TG5DOGFwOU9zT2ZqYit4K3BwN3l1WjhQeCtzeEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojo2bndwTml1VjNnTWt4clpU"
-        },
-        {
-          "name": "Servidor HD Streamwish",
-          "url": "https://hgcloud.to/e/3xfqwhjh0z2c"
-        },
-        {
-          "name": "Mega Espejo",
-          "url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0"
-        }
-      ]
-    },
-    {
-      "id": "rep-a9",
-      "title": "Bleach: Sennen Kessen-hen",
-      "episode": "Episodio 28",
-      "type": "anime",
-      "source": "JKanime Oficial",
-      "badge": "EP 28",
-      "poster": "https://cdn.jkdesa.com/assets/images/animes/image/bleach-sennen-kessen-hen.jpg",
-      "player_url": "https://jkanime.net/jkplayer/um?e=M2JndFR6VnQyTWhiQzdlb0RxWUQ5UG14WnczcTZoZExUWE5kL3AxcGFYQ3Y2T28xM3FvY2hEalR5K05jU1R1a1ZqYnIrc29QeSt5eEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojp4M1pUeEFqRE4yT2xWbFRF",
-      "servers": [
-        {
-          "name": "JKPlayer Oficial",
-          "url": "https://jkanime.net/jkplayer/um?e=M2JndFR6VnQyTWhiQzdlb0RxWUQ5UG14WnczcTZoZExUWE5kL3AxcGFYQ3Y2T28xM3FvY2hEalR5K05jU1R1a1ZqYnIrc29QeSt5eEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojp4M1pUeEFqRE4yT2xWbFRF"
-        },
-        {
-          "name": "Servidor HD Streamwish",
-          "url": "https://hgcloud.to/e/3xfqwhjh0z2c"
-        },
-        {
-          "name": "Mega Espejo",
-          "url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0"
-        }
-      ]
-    },
-    {
-      "id": "rep-a10",
-      "title": "Dragon Ball Daima",
-      "episode": "Episodio 4",
+      "id": "jkanime-gensou-suikoden-4",
+      "title": "Gensou Suikoden",
+      "episode": "Ep 4",
+      "episode_url": "https://jkanime.net/gensou-suikoden/4/",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_93e971a7684b4ec595e802326c6f0c18.jpg",
       "type": "anime",
       "source": "JKanime Oficial",
       "badge": "EP 4",
-      "poster": "https://cdn.jkdesa.com/assets/images/animes/image/dragon-ball-daima.jpg",
-      "player_url": "https://jkanime.net/jkplayer/um?e=TVJIWk9KcmU1bHdFcmtQVjBXWFNhUGZndEkybjZtUjR3TXF0N29hYnhrcHcrL2Q0TG5DOGFwOU9zT2ZqYit4K3BwN3l1WjhQeCtzeEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojp4T1pUU0RzME54T2xUbFRF",
+      "overview": "Último episodio emitido hoy: Gensou Suikoden (Ep 4). Audio original japonés con subtítulos en español.",
+      "player_url": "https://mega.nz/embed/urBWWQLD#_twpXK0QAHUxoO14u8M4p_r2MCpNmAsdnrGbMJ9-UEE",
       "servers": [
         {
           "name": "JKPlayer Oficial",
-          "url": "https://jkanime.net/jkplayer/um?e=TVJIWk9KcmU1bHdFcmtQVjBXWFNhUGZndEkybjZtUjR3TXF0N29hYnhrcHcrL2Q0TG5DOGFwOU9zT2ZqYit4K3BwN3l1WjhQeCtzeEF0UXkyQVBJVTZkZEE5RFl2Rk1xSU1HZEtKTTdIcm89Ojp4T1pUU0RzME54T2xUbFRF"
+          "url": "https://jkanime.net/jkplayer/um?e=UUFBcmJpM0ovUzIyWE1mWTFNNU5pQkp4eU5FbTQvNTczU1FVRHZwZzErN09aL2pkVTZuaWpSNkVFRW85VEQ5QUhXRzM1R2dKbkJ5Y29xVDJCL3B2L3Q1T2hod3l3VWM4dHlFWk1mNmlwdDg9OjrbUe10X26FDDpX5yvUmaCz&t=93e971a7684b4ec595e802326c6f0c18&op=Nzg4OTY="
         },
         {
-          "name": "Servidor HD Streamwish",
-          "url": "https://hgcloud.to/e/3xfqwhjh0z2c"
+          "name": "JKPlayer 2",
+          "url": "https://jkanime.net/jkplayer/umv?e=YWhmSXRpZGltQ00wRGJvaS9vbmVuMjVwY3VEOWhpTHV2czRIZFc5MnNrT21pNitYRTBmaFcydzVoUlF4MURqdzd0enpVNXQxc1NBY2RoTXBOWDRMUHBQYnhxck5aamMrVkQwNjMxYVhYbXM9Ojr.MyH9Qj4ZrhSCtK_q29QP&t=93e971a7684b4ec595e802326c6f0c18"
         },
         {
-          "name": "Mega Espejo",
-          "url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0"
+          "name": "Mega",
+          "url": "https://mega.nz/embed/urBWWQLD#_twpXK0QAHUxoO14u8M4p_r2MCpNmAsdnrGbMJ9-UEE"
+        },
+        {
+          "name": "Streamwish",
+          "url": "https://hgcloud.to/e/e21x3gsyvxxw"
+        },
+        {
+          "name": "Vidhide",
+          "url": "https://vidhidevip.com/embed/5rma2mg8e6j1"
+        },
+        {
+          "name": "VOE",
+          "url": "https://voe.sx/e/3tppv8k1c5yq"
+        },
+        {
+          "name": "Filemoon",
+          "url": "https://bysekoze.com/e/kqqmeojml08i/"
+        },
+        {
+          "name": "Mixdrop",
+          "url": "https://mixdrop.top/e/7kk01dgwaqxenp"
+        },
+        {
+          "name": "Mp4upload",
+          "url": "https://www.mp4upload.com/embed-f35jhpzuepoa.html"
+        },
+        {
+          "name": "Streamtape",
+          "url": "https://streamtape.com/e/7qbX1Xry9lFAly8/geeennnsouuusuiioikodensvsss-04.mp4"
+        },
+        {
+          "name": "1Fichier",
+          "url": "https://1fichier.com/?ab0p5nvmhiuolqdz2xga"
         }
       ]
     },
     {
-      "id": "rep-a11",
-      "title": "Blue Lock vs. U-20 Japan",
-      "episode": "Episodio 5",
+      "id": "jkanime-tsuihou-sareta-cheat-fuyo-majutsushi-wa-kimama-na-second-life-wo-ouka-suru-ore-wa-buki-dake-ja-naku-arayuru-mono-ni-kyouka-point-wo-fuyo-dekiru-shi-ore-no-ishi-de-itsudemo-kouka-wo-kaijo-dekiru-kedo-nokotta-hitotachi-dai-4",
+      "title": "Tsuihou sareta Cheat Fuyo Majutsushi wa Kimama na Second Life wo Ouka suru. Ore wa Buki dake ja Naku, Arayuru Mono ni \"Kyouka Point\" wo Fuyo Dekiru shi, Ore no Ishi de Itsudemo Kouka wo Kaijo Dekiru kedo, Nokotta Hitotachi Daijoubu?",
+      "episode": "Ep 4",
+      "episode_url": "https://jkanime.net/tsuihou-sareta-cheat-fuyo-majutsushi-wa-kimama-na-second-life-wo-ouka-suru-ore-wa-buki-dake-ja-naku-arayuru-mono-ni-kyouka-point-wo-fuyo-dekiru-shi-ore-no-ishi-de-itsudemo-kouka-wo-kaijo-dekiru-kedo-nokotta-hitotachi-dai/4/",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_4b4f2711a005a11787269f568a2fd11a.jpg",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 4",
+      "overview": "Último episodio emitido hoy: Tsuihou sareta Cheat Fuyo Majutsushi wa Kimama na Second Life wo Ouka suru. Ore wa Buki dake ja Naku, Arayuru Mono ni \"Kyouka Point\" wo Fuyo Dekiru shi, Ore no Ishi de Itsudemo Kouka wo Kaijo Dekiru kedo, Nokotta Hitotachi Daijoubu? (Ep 4). Audio original japonés con subtítulos en español.",
+      "player_url": "https://mega.nz/embed/brpHWYxZ#zFkP1qdvu2vifvOCLuP4H8Wfxvo3YVnjUBuCDPvGnN0",
+      "servers": [
+        {
+          "name": "JKPlayer Oficial",
+          "url": "https://jkanime.net/jkplayer/um?e=a2lnb3JsN01xMnVDUktyZ1d6U3pNL04vUGQ0eDJVTUJSNC9PdVNubktzV1ZwVGszdEVuMlBqMlVyNFBhZ0NUSmMreVlqYVpvZVpTVDJkQ2s4dzdqeHB5KzFMaDVGOUpBME93T1ZndWF3bFJKSW5KQklSeEo5dmU5OWp5VWRRamk6OnUWvlK.yDrdd4JCKCL3BFk-&t=4b4f2711a005a11787269f568a2fd11a&op=Nzg4OTQ="
+        },
+        {
+          "name": "JKPlayer 2",
+          "url": "https://jkanime.net/jkplayer/umv?e=MExFaDdKbi9Jc3R5eTNTUXdpbGEyNlg0S3BHTTh1Wm15cEpWaTE0S3J3Q2pOVVFVUjhidzJnOXJCRUt2OE5tNXpRaHVuZzd0NVEwTVduS28yMEcwb3V3cTlZZXB1VHNuV3VTOGpZR3diUldSVWNvV2hpSkVEREhoRGVMbFB0SGE6OgEWCkqU3pdIkZ9C6JQkHoU-&t=4b4f2711a005a11787269f568a2fd11a"
+        },
+        {
+          "name": "Mega",
+          "url": "https://mega.nz/embed/brpHWYxZ#zFkP1qdvu2vifvOCLuP4H8Wfxvo3YVnjUBuCDPvGnN0"
+        },
+        {
+          "name": "Streamwish",
+          "url": "https://hgcloud.to/e/wcy09xumxmfd"
+        },
+        {
+          "name": "Vidhide",
+          "url": "https://vidhidevip.com/embed/s3hwok2kvekq"
+        },
+        {
+          "name": "VOE",
+          "url": "https://voe.sx/e/dukzhgd70ery"
+        },
+        {
+          "name": "Filemoon",
+          "url": "https://bysekoze.com/e/hjfe83mk43wl/"
+        },
+        {
+          "name": "Mixdrop",
+          "url": "https://mixdrop.top/e/r66dmqdvhv977zv"
+        },
+        {
+          "name": "Mp4upload",
+          "url": "https://www.mp4upload.com/embed-rjaymbf0kfp5.html"
+        },
+        {
+          "name": "Streamtape",
+          "url": "https://streamtape.com/e/a0bRX8WQeYFxkZq/tsuiiihouuusaretaachetafuyomajutsknokootasdaksfuyss-04.mp4"
+        },
+        {
+          "name": "Doodstream",
+          "url": "https://dsvplay.com/e/zhpmxgwutzeh"
+        },
+        {
+          "name": "1Fichier",
+          "url": "https://1fichier.com/?z7no52yq4hj5blzeap1d"
+        }
+      ]
+    },
+    {
+      "id": "jkanime-battle-spirits-re-zekkai-no-kuu-4",
+      "title": "Battle Spirits [Re]: Zekkai no Kuu",
+      "episode": "Ep 4",
+      "episode_url": "https://jkanime.net/battle-spirits-re-zekkai-no-kuu/4/",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_1f27bc6931bb4405d8bbfe36feb6acfd.jpg",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 4",
+      "overview": "Último episodio emitido hoy: Battle Spirits [Re]: Zekkai no Kuu (Ep 4). Audio original japonés con subtítulos en español.",
+      "player_url": "https://mega.nz/embed/fuRgyRyD#lDIqCMc-1RPyX_S9kbtEZgo6FdEA_bW8WTotXx4NPtg",
+      "servers": [
+        {
+          "name": "JKPlayer Oficial",
+          "url": "https://jkanime.net/jkplayer/um?e=OUdQSVRnT3N0dWkyQ2dnYW9VTUM0bmMrM1JwOEhKZXZ2OWdyTzRaZHZJVFJzYTRKZ2xwNTg0Zi9wUHNGTUJCYjFCSHBoL0ZQOTZ1Z3NHbkIyMk56YUVtR1hVUCt1cHNuS252akU5a3U4T1k9Ojq5wvV5DEYnKnXsFWmo7daK&t=1f27bc6931bb4405d8bbfe36feb6acfd&op=Nzg4OTI="
+        },
+        {
+          "name": "JKPlayer 2",
+          "url": "https://jkanime.net/jkplayer/umv?e=V1I1Y3lDSkpvaGdrRzZuc0p1VlFPWVV1Mk82VmpGQ1NXYjI3dWkyTERXVG5ydCtpd29sZWlSblVFMmNpenNobDhGUXFIL3FwSWZpcUhVZWJ4b3I1bVZBUm82Q1B2bEFTK05hVy9SeUJSM2s9Ojo2ST8HdVNH3spTpGdFK87.&t=1f27bc6931bb4405d8bbfe36feb6acfd"
+        },
+        {
+          "name": "Mega",
+          "url": "https://mega.nz/embed/fuRgyRyD#lDIqCMc-1RPyX_S9kbtEZgo6FdEA_bW8WTotXx4NPtg"
+        },
+        {
+          "name": "Streamwish",
+          "url": "https://hgcloud.to/e/b8jmkiixz0ug"
+        },
+        {
+          "name": "Vidhide",
+          "url": "https://vidhidevip.com/embed/ozbkawuygnbw"
+        },
+        {
+          "name": "VOE",
+          "url": "https://voe.sx/e/cecyctxbgiiw"
+        },
+        {
+          "name": "Filemoon",
+          "url": "https://bysekoze.com/e/wps9ocgrli8x/"
+        },
+        {
+          "name": "Mixdrop",
+          "url": "https://mixdrop.top/e/z11dlqrmiwjrq1"
+        },
+        {
+          "name": "Mp4upload",
+          "url": "https://www.mp4upload.com/embed-tngrsshn7wn7.html"
+        },
+        {
+          "name": "Streamtape",
+          "url": "https://streamtape.com/e/Laq41pp3GvSRlPJ/baaattleeespiritssrezeekkainokusss-04.mp4"
+        },
+        {
+          "name": "Doodstream",
+          "url": "https://dsvplay.com/e/b5mz6z97q4bu"
+        },
+        {
+          "name": "1Fichier",
+          "url": "https://1fichier.com/?gq6agv1s0fsjb9w0h7i9"
+        }
+      ]
+    },
+    {
+      "id": "jkanime-bleach-sennen-kessen-hen-kashin-tan-10",
+      "title": "Bleach: Sennen Kessen-hen - Kashin-tan",
+      "episode": "Ep 4",
+      "episode_url": "https://jkanime.net/bleach-sennen-kessen-hen-kashin-tan/10/",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_2a07bb832017a74840045e9c1570abd6.jpg",
+      "type": "anime",
+      "source": "JKanime Oficial",
+      "badge": "EP 10",
+      "overview": "Último episodio emitido hoy: Bleach: Sennen Kessen-hen - Kashin-tan (Ep 4). Audio original japonés con subtítulos en español.",
+      "player_url": "https://mega.nz/embed/UZA3UYqB#2yj5RTGe0RO-CqpEweQOwFdi5kf1IIA41jDbBxgRfm8",
+      "servers": [
+        {
+          "name": "JKPlayer Oficial",
+          "url": "https://jkanime.net/jkplayer/um?e=YjhOUzIyVVdIaHVhSjhRMG90OVFhSnFSNWZtMlJ5Sk5yeEpuVU5zdklKYWp0RTdmVThxSW90MFVJM3J2MHdkSWVyK01EWlRnTmc5Ty9ObjdkSllrRjJseGZwQmdERHFaMXhGdlZWQytGM3c9OjpWJgRX5CJ_ZsUWTCkqKz5l&t=2a07bb832017a74840045e9c1570abd6&op=Nzg4OTA="
+        },
+        {
+          "name": "JKPlayer 2",
+          "url": "https://jkanime.net/jkplayer/umv?e=N2JaNDM0aXVDelVVN3dCQWtPS0ZSUFdiaGlUdnh0YmdyRTBrTUhoMHVyd1RRd0R3TGprbUxnb1dxVXNMbVRFMXFqYXEyRkd4U0RjTThKQm5wa2JaTkRXcmI3VVdyTzR1RHpLajJ1Y1dud1k9OjriO49zidPDcooKIaoCkwTH&t=2a07bb832017a74840045e9c1570abd6"
+        },
+        {
+          "name": "Mega",
+          "url": "https://mega.nz/embed/UZA3UYqB#2yj5RTGe0RO-CqpEweQOwFdi5kf1IIA41jDbBxgRfm8"
+        },
+        {
+          "name": "Streamwish",
+          "url": "https://hgcloud.to/e/4h5ksdg2rydw"
+        },
+        {
+          "name": "Vidhide",
+          "url": "https://vidhidevip.com/embed/bwlbuka4dygj"
+        },
+        {
+          "name": "VOE",
+          "url": "https://voe.sx/e/6eerke0ygm9v"
+        },
+        {
+          "name": "Filemoon",
+          "url": "https://bysekoze.com/e/09p6j378ke3h/"
+        },
+        {
+          "name": "Mixdrop",
+          "url": "https://mixdrop.top/e/r66dwg8gav91lpx"
+        },
+        {
+          "name": "Mp4upload",
+          "url": "https://www.mp4upload.com/embed-3qlu36q6q6jm.html"
+        },
+        {
+          "name": "Streamtape",
+          "url": "https://streamtape.com/e/4w8WZqrdQmHdQz/bleeeeaaachhhseennsnehensskashintensss-10.mp4"
+        },
+        {
+          "name": "Doodstream",
+          "url": "https://dsvplay.com/e/ezbr6hgqqa8s"
+        },
+        {
+          "name": "1Fichier",
+          "url": "https://1fichier.com/?hry0gx9ocid4u408baik"
+        }
+      ]
+    },
+    {
+      "id": "jkanime-tensei-goblin-dakedo-shitsumon-aru-5",
+      "title": "Tensei Goblin dakedo Shitsumon Aru?",
+      "episode": "Ep 4",
+      "episode_url": "https://jkanime.net/tensei-goblin-dakedo-shitsumon-aru/5/",
+      "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_d65004108858bc7198828603df8def3e.jpg",
       "type": "anime",
       "source": "JKanime Oficial",
       "badge": "EP 5",
-      "poster": "https://cdn.jkdesa.com/assets/images/animes/image/blue-lock-vs-u-20-japan.jpg",
-      "player_url": "https://jkanime.net/jkplayer/um?e=WFBtRis3MkRwUC9QU1ZmVHVZdU91Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjpFMXg3Y3lhb2t1T0hSZFdV",
+      "overview": "Último episodio emitido hoy: Tensei Goblin dakedo Shitsumon Aru? (Ep 4). Audio original japonés con subtítulos en español.",
+      "player_url": "https://mega.nz/embed/4AZxRBDC#Qscz5F4EGLN2G_3pv_2NN2ewe5GdTB5rCtT0MG07RwY",
       "servers": [
         {
           "name": "JKPlayer Oficial",
-          "url": "https://jkanime.net/jkplayer/um?e=WFBtRis3MkRwUC9QU1ZmVHVZdU91Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjpFMXg3Y3lhb2t1T0hSZFdV"
+          "url": "https://jkanime.net/jkplayer/um?e=WWZNNGdldEZyVmI4LzVjWDh2d2lnbUNFeklmY0NPZFJhd2lMaUlFNkd6TzcrYUx1Nm1GUFpPTklaT29rQVVFK25SM3lRd0l4YnM5bDk0b1ZybHNtRzFlNGwxZzBLSHQzTEVTU2YvQzJoVHc9OjqY_Ck6U.kb8tO0Y3WHNy2d&t=d65004108858bc7198828603df8def3e&op=Nzg4ODg="
         },
         {
-          "name": "Servidor HD Streamwish",
-          "url": "https://hgcloud.to/e/3xfqwhjh0z2c"
+          "name": "JKPlayer 2",
+          "url": "https://jkanime.net/jkplayer/umv?e=djJENDRaSm5rb283eFp5RmFMWktwVmpqNlhidlYxNXNwU2p2aDI0SGJVT0ZYT0pXNENOR1dwRXA2MnBmakZPYndCYjh3T3krZERJa3ZTeTBtUEVVa1ZIanA5QW9jWC9RZzNFdm04SWFoSEE9Ojq4sE45liC83ZzFkWgzsBzy&t=d65004108858bc7198828603df8def3e"
         },
         {
-          "name": "Mega Espejo",
-          "url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0"
+          "name": "Mega",
+          "url": "https://mega.nz/embed/4AZxRBDC#Qscz5F4EGLN2G_3pv_2NN2ewe5GdTB5rCtT0MG07RwY"
+        },
+        {
+          "name": "Streamwish",
+          "url": "https://hgcloud.to/e/ho3j1aogr0cr"
+        },
+        {
+          "name": "Vidhide",
+          "url": "https://vidhidevip.com/embed/v778igcpdvqh"
+        },
+        {
+          "name": "VOE",
+          "url": "https://voe.sx/e/to4wvlbb8rsg"
+        },
+        {
+          "name": "Filemoon",
+          "url": "https://bysekoze.com/e/06li3bqqacqx/"
+        },
+        {
+          "name": "Mp4upload",
+          "url": "https://www.mp4upload.com/embed-n10vl7efuxa5.html"
+        },
+        {
+          "name": "Streamtape",
+          "url": "https://streamtape.com/e/G2Y3gRQ9GjT1rz8/teeennnseiigooblinndakedooshitsumonarusss-05.mp4"
+        },
+        {
+          "name": "Doodstream",
+          "url": "https://dsvplay.com/e/vow57508y60u"
+        },
+        {
+          "name": "1Fichier",
+          "url": "https://1fichier.com/?16oxc580o95hrj3yhnme"
         }
       ]
     },
     {
-      "id": "rep-a12",
-      "title": "Ranma 1/2 (2024)",
-      "episode": "Episodio 5",
-      "type": "anime",
-      "source": "JKanime Oficial",
-      "badge": "EP 5",
-      "poster": "https://cdn.jkdesa.com/assets/images/animes/image/ranma-12-2024.jpg",
-      "player_url": "https://jkanime.net/jkplayer/um?e=RCtsZ3BQNW9lSk1vOVo3dlFMZ051Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjphMUx4Y3lhb2t1T0hSZFdV",
-      "servers": [
-        {
-          "name": "JKPlayer Oficial",
-          "url": "https://jkanime.net/jkplayer/um?e=RCtsZ3BQNW9lSk1vOVo3dlFMZ051Zk1rWjgybm1nU1Z5SE9YTXJvOG9FSE11eFRqUjRzRjV3VnpzSmlHUnN5U3R2NW11Zk5qTXJ5NXR3dm5xRzRrc2c9OjphMUx4Y3lhb2t1T0hSZFdV"
-        },
-        {
-          "name": "Servidor HD Streamwish",
-          "url": "https://hgcloud.to/e/3xfqwhjh0z2c"
-        },
-        {
-          "name": "Mega Espejo",
-          "url": "https://mega.nz/embed/7qoBAbzS#DWr9-P2AYDgsiLDVvxJgmHqo5NRlRWPdpKac5dfV2Q0"
-        }
-      ]
-    },
-    {
-      "id": "rep-m1",
-      "title": "Titan: El desastre de OceanGate",
-      "year": "2024",
+      "id": "poseidon-verity-la-sombra-de-un-engano",
+      "title": "Doctora X 1x6",
+      "year": "2026",
+      "url": "https://poseidonhd2.co/pelicula/1283515/verity-la-sombra-de-un-engano",
+      "poster": "https://image.tmdb.org/t/p/original/cKetrF2dAnQ0AMV5i4BMOs41I5P.jpg",
       "type": "pelicula",
       "source": "PoseidonHD HD",
       "badge": "HD 1080p",
-      "poster": "https://image.tmdb.org/t/p/original/9xTBAMbuADcxvwcAB4hiSDPVv9x.jpg",
-      "player_url": "https://doodstream.com/e/vij2qrk26a68",
+      "overview": "Película en cartelera: Doctora X 1x6. Disponible en audio latino y subtitulado en máxima calidad.",
+      "player_url": "https://streamwish.to/e/8n3hjjn3vshf",
       "servers": [
         {
-          "name": "Streamwish Directo (0s wait)",
-          "url": "https://doodstream.com/e/vij2qrk26a68"
+          "name": "Streamwish HD Directo",
+          "url": "https://streamwish.to/e/8n3hjjn3vshf"
         },
         {
-          "name": "Servidor Alternativo HD",
-          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf3hbBC1VJ4bcNt96NInSSUhTHW3DzRvu7Kap.LSy5B4v"
+          "name": "Servidor HD 1",
+          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j6nHGBxvQWqr9h.ir9p_2PjymX9Yx2lrqnr4evafaPYN"
+        },
+        {
+          "name": "Servidor HD 2",
+          "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0J.SBNFv77MXhkbVCi.TC6Ds1aCPYmmSzZrse1KNjqMO"
+        },
+        {
+          "name": "Servidor HD 3",
+          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH._ynntvu5eJMFUypEktFT4-"
+        },
+        {
+          "name": "Servidor HD 4",
+          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtfxSom6oA4JGi4oufyvgLi9H7Zrf2L0CmMN_jZgWV64UL"
         }
       ]
     },
     {
-      "id": "rep-m2",
+      "id": "poseidon-hold-the-fort",
       "title": "Al Borde del Abismo: Atrapados en la Cima",
-      "year": "2025",
+      "year": "2026",
+      "url": "https://poseidonhd2.co/pelicula/1481603/hold-the-fort",
+      "poster": "https://image.tmdb.org/t/p/original/fnq6itOtvCXRBjwuq96hkYu0pCX.jpg",
       "type": "pelicula",
       "source": "PoseidonHD HD",
-      "badge": "Estreno",
-      "poster": "https://image.tmdb.org/t/p/original/fnq6itOtvCXRBjwuq96hkYu0pCX.jpg",
+      "badge": "HD 1080p",
+      "overview": "Película en cartelera: Al Borde del Abismo: Atrapados en la Cima. Disponible en audio latino y subtitulado en máxima calidad.",
+      "player_url": "https://streamwish.to/e/v1njhl65nkzj",
+      "servers": [
+        {
+          "name": "Streamwish HD Directo",
+          "url": "https://streamwish.to/e/v1njhl65nkzj"
+        },
+        {
+          "name": "Servidor HD 1",
+          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5jyVFtwI4J.ZpyvAL2Xovqo22WUGSohNJzKoFMLuhlSm5"
+        },
+        {
+          "name": "Servidor HD 2",
+          "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0Kf6CxdanrF15D.NjZ0b.oKKvD57XeR2WCfEpNTvaZpa"
+        },
+        {
+          "name": "Servidor HD 3",
+          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH2GlPckrZUTkEv_T8cnWPG0-"
+        },
+        {
+          "name": "Servidor HD 4",
+          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtfx_ol.GDUqMEsdIheFzhSXGY1qlXPBUZlDQc.FFXP_kf"
+        }
+      ]
+    },
+    {
+      "id": "poseidon-oro-sin-ley",
+      "title": "La isla olvidada",
+      "year": "2026",
+      "url": "https://poseidonhd2.co/pelicula/1433583/oro-sin-ley",
+      "poster": "https://image.tmdb.org/t/p/original/8i5iZV50CoEtmDCFM7RSxCkpE8h.jpg",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "overview": "Película en cartelera: La isla olvidada. Disponible en audio latino y subtitulado en máxima calidad.",
+      "player_url": "https://streamwish.to/e/xzccfi9mxrep",
+      "servers": [
+        {
+          "name": "Streamwish HD Directo",
+          "url": "https://streamwish.to/e/xzccfi9mxrep"
+        },
+        {
+          "name": "Servidor HD 1",
+          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j3pXAoUpWGj8NbfhI9prrLriCd8r_VM7X3UZF2XcE3lt"
+        },
+        {
+          "name": "Servidor HD 2",
+          "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0BNA89g8OHXq9WqoJzrfaj79FSWUOXxUE6igFBRykFGn"
+        },
+        {
+          "name": "Servidor HD 3",
+          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH1FW9TNcKJ0sKawWzjTkPNM-"
+        },
+        {
+          "name": "Servidor HD 4",
+          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf1K13OiJHo39DmauXsIiG8hWaeS1FXaBoTPlLHbY0hQc"
+        }
+      ]
+    },
+    {
+      "id": "poseidon-contra-el-huracan",
+      "title": "Velocidad y Deseo",
+      "year": "2026",
+      "url": "https://poseidonhd2.co/pelicula/1780005/contra-el-huracan",
+      "poster": "https://image.tmdb.org/t/p/original/lFaMt4I8LiQAGW9Rb5gfGFXbvOY.jpg",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "overview": "Película en cartelera: Velocidad y Deseo. Disponible en audio latino y subtitulado en máxima calidad.",
+      "player_url": "https://streamwish.to/e/a7gccg5wd3xa",
+      "servers": [
+        {
+          "name": "Streamwish HD Directo",
+          "url": "https://streamwish.to/e/a7gccg5wd3xa"
+        },
+        {
+          "name": "Servidor HD 1",
+          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5jz7h_r2WwM3LzM12Av2VF8Qmeanqu1RJR6DNRCO.eN1F"
+        },
+        {
+          "name": "Servidor HD 2",
+          "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0BZ24v193ndRfQJEyjxc5ydlNy9JBzcMT_qJMvJiPFyc"
+        },
+        {
+          "name": "Servidor HD 3",
+          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6THxVtKq_ZrNjLmEmxkvswHJE-"
+        },
+        {
+          "name": "Servidor HD 4",
+          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf3A.ieqs8xtNdO0rSTBH9qv96tYVGUbrxAZt2fXOdx1j"
+        }
+      ]
+    },
+    {
+      "id": "poseidon-ali-g-who-iz-i",
+      "title": "Mallorca confidencial",
+      "year": "2026",
+      "url": "https://poseidonhd2.co/pelicula/1727734/ali-g-who-iz-i",
+      "poster": "https://image.tmdb.org/t/p/original/mgsw0NVOn5VX9rA6An8ijwUFX7q.jpg",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "overview": "Película en cartelera: Mallorca confidencial. Disponible en audio latino y subtitulado en máxima calidad.",
+      "player_url": "https://streamwish.to/e/ni8cy9udwns0",
+      "servers": [
+        {
+          "name": "Streamwish HD Directo",
+          "url": "https://streamwish.to/e/ni8cy9udwns0"
+        },
+        {
+          "name": "Servidor HD 1",
+          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j3.Guq5TZGehBsXse0v_sZz7.KCdVAq8CZko04K.rIbr"
+        },
+        {
+          "name": "Servidor HD 2",
+          "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0FwQRIZJ8y.3LFQ6nTgi5mTbaOUAok_Mj1sGphAgsK_."
+        },
+        {
+          "name": "Servidor HD 3",
+          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH2m5aC5kZGrWP4BwEKqncIY-"
+        },
+        {
+          "name": "Servidor HD 4",
+          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf74aIdZM3Hh1irF7d11qfooOh4Jnv7K_J7uIr3lFCwo2"
+        }
+      ]
+    },
+    {
+      "id": "poseidon-la-guerra-de-los-ultimos",
+      "title": "Wicker",
+      "year": "2026",
+      "url": "https://poseidonhd2.co/pelicula/1384216/la-guerra-de-los-ultimos",
+      "poster": "https://image.tmdb.org/t/p/original/flipeYd0sa4y4kpIc7Pn59JeBIj.jpg",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "overview": "Película en cartelera: Wicker. Disponible en audio latino y subtitulado en máxima calidad.",
+      "player_url": "https://streamwish.to/e/1tu8zyfvo3w7",
+      "servers": [
+        {
+          "name": "Streamwish HD Directo",
+          "url": "https://streamwish.to/e/1tu8zyfvo3w7"
+        },
+        {
+          "name": "Servidor HD 1",
+          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j9oF66l5paORiQEzh2xMq6d7fthEI12wMliOe3OF2pGZ"
+        },
+        {
+          "name": "Servidor HD 2",
+          "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0DU.DptUmOFSzeeqU4NKjN9HibjiSMQYci2ECLP1Apny"
+        },
+        {
+          "name": "Servidor HD 3",
+          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH6mmDCMI5jbkHucwdL4lWTE-"
+        },
+        {
+          "name": "Servidor HD 4",
+          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf_4xfI8OVPh1piWI_cg2SWT1dtJPvQys5Zr4UZoMU9Hp"
+        }
+      ]
+    },
+    {
+      "id": "poseidon-sensatez-y-sentimiento",
+      "title": "Puedes verlo todo",
+      "year": "2026",
+      "url": "https://poseidonhd2.co/pelicula/1503762/sensatez-y-sentimiento",
+      "poster": "https://image.tmdb.org/t/p/original/eCaURARzBdiHw8gKSeUznHPygev.jpg",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "overview": "Película en cartelera: Puedes verlo todo. Disponible en audio latino y subtitulado en máxima calidad.",
+      "player_url": "https://streamwish.to/e/ujctwmz7tdn3",
+      "servers": [
+        {
+          "name": "Streamwish HD Directo",
+          "url": "https://streamwish.to/e/ujctwmz7tdn3"
+        },
+        {
+          "name": "Servidor HD 1",
+          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5jydx0joUVic2z7gTkpt12mFnhLQZxPvm3UV6nkgSD1Ot"
+        },
+        {
+          "name": "Servidor HD 2",
+          "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0Hwu3DMt_F2cWSFt.AU5zB48gFLhLg5VbNyTxdOl9msZ"
+        },
+        {
+          "name": "Servidor HD 3",
+          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6THyXqhNn8n5gJ4Uvh_IjyMOY-"
+        },
+        {
+          "name": "Servidor HD 4",
+          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf0hcyBedgSztxuyaU52NTX_cZZOE2s30zsyUCfGzeUuH"
+        }
+      ]
+    },
+    {
+      "id": "poseidon-la-vida-es",
+      "title": "Viva",
+      "year": "2026",
+      "url": "https://poseidonhd2.co/pelicula/1529400/la-vida-es",
+      "poster": "https://image.tmdb.org/t/p/original/vMFkStVuCTecf6nkCvfOIS03bZS.jpg",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "overview": "Película en cartelera: Viva. Disponible en audio latino y subtitulado en máxima calidad.",
+      "player_url": "https://streamwish.to/e/b1778trcfz87",
+      "servers": [
+        {
+          "name": "Streamwish HD Directo",
+          "url": "https://streamwish.to/e/b1778trcfz87"
+        },
+        {
+          "name": "Servidor HD 1",
+          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j76MfFmgUcJOZ4TDS1YnRUYxT5dCsJppawFjcvQ2iCcz"
+        },
+        {
+          "name": "Servidor HD 2",
+          "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0OaPvbg4xUUI3y99uUwVzq5CXIFPbtg0GEawEBYIdFnc"
+        },
+        {
+          "name": "Servidor HD 3",
+          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6THwlqYE9Aq7b.gnttZ1dQLBo-"
+        },
+        {
+          "name": "Servidor HD 4",
+          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf73WpfjYHFfTYGPGAMag9OywGiZYgkQeSFlK.6ie_j4J"
+        }
+      ]
+    },
+    {
+      "id": "poseidon-titan-el-desastre-de-oceangate",
+      "title": "Implosion: The Titanic Sub Disaster",
+      "year": "2026",
+      "url": "https://poseidonhd2.co/pelicula/1426306/titan-el-desastre-de-oceangate",
+      "poster": "https://image.tmdb.org/t/p/original/9xTBAMbuADcxvwcAB4hiSDPVv9x.jpg",
+      "type": "pelicula",
+      "source": "PoseidonHD HD",
+      "badge": "HD 1080p",
+      "overview": "Película en cartelera: Implosion: The Titanic Sub Disaster. Disponible en audio latino y subtitulado en máxima calidad.",
       "player_url": "https://streamwish.to/e/j9mhzoph4rqn",
       "servers": [
         {
@@ -339,212 +1026,122 @@
           "url": "https://streamwish.to/e/j9mhzoph4rqn"
         },
         {
-          "name": "Servidor Espejo 1",
+          "name": "Servidor HD 1",
           "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j73WrtOBsRi2JXghvmfDj86m5MCTrGj3BosJpZARnrvn"
         },
         {
-          "name": "Servidor Espejo 2",
-          "url": "https://hgcloud.to/e/j9mhzoph4rqn"
-        }
-      ]
-    },
-    {
-      "id": "rep-m3",
-      "title": "La Isla Olvidada",
-      "year": "2024",
-      "type": "pelicula",
-      "source": "PoseidonHD HD",
-      "badge": "HD 1080p",
-      "poster": "https://image.tmdb.org/t/p/original/8i5iZV50CoEtmDCFM7RSxCkpE8h.jpg",
-      "player_url": "https://vidhidepro.com/v/s21ymokc4oda",
-      "servers": [
-        {
-          "name": "Streamwish Directo (0s wait)",
-          "url": "https://vidhidepro.com/v/s21ymokc4oda"
-        },
-        {
-          "name": "Servidor Alternativo HD",
+          "name": "Servidor HD 2",
           "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0DiELtAPBiyvGj58Wnn6yXuKyFOmTrnkoAqJ87wG7SXe"
-        }
-      ]
-    },
-    {
-      "id": "rep-m4",
-      "title": "Velocidad y Deseo",
-      "year": "2025",
-      "type": "pelicula",
-      "source": "PoseidonHD HD",
-      "badge": "HD 1080p",
-      "poster": "https://image.tmdb.org/t/p/original/lFaMt4I8LiQAGW9Rb5gfGFXbvOY.jpg",
-      "player_url": "https://voe.sx/e/34borv6tkutv",
-      "servers": [
-        {
-          "name": "Streamwish Directo (0s wait)",
-          "url": "https://voe.sx/e/34borv6tkutv"
         },
         {
-          "name": "Servidor Alternativo HD",
-          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH4C1ocCmQgHNjxLZmwqoc4A-"
-        }
-      ]
-    },
-    {
-      "id": "rep-m5",
-      "title": "Mallorca Confidencial",
-      "year": "2024",
-      "type": "pelicula",
-      "source": "PoseidonHD HD",
-      "badge": "HD 1080p",
-      "poster": "https://image.tmdb.org/t/p/original/mgsw0NVOn5VX9rA6An8ijwUFX7q.jpg",
-      "player_url": "https://doodstream.com/e/euqntgmzzzg1",
-      "servers": [
-        {
-          "name": "Streamwish Directo (0s wait)",
-          "url": "https://doodstream.com/e/euqntgmzzzg1"
+          "name": "Servidor HD 3",
+          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH_v7kaVanEqZ0RR0rmr3Fco-"
         },
         {
-          "name": "Servidor Alternativo HD",
-          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf4fbNO1DQmbWjhkpLO3bcHNBowZvi8ulqeOZl9w0GQcs"
-        }
-      ]
-    },
-    {
-      "id": "rep-m6",
-      "title": "Wicker",
-      "year": "2025",
-      "type": "pelicula",
-      "source": "PoseidonHD HD",
-      "badge": "HD 1080p",
-      "poster": "https://image.tmdb.org/t/p/original/flipeYd0sa4y4kpIc7Pn59JeBIj.jpg",
-      "player_url": "https://streamwish.to/e/2ru25mjts4g1",
-      "servers": [
-        {
-          "name": "Streamwish Directo (0s wait)",
-          "url": "https://streamwish.to/e/2ru25mjts4g1"
-        },
-        {
-          "name": "Servidor Alternativo HD",
-          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j_KzaDG59z94RJgSSBgfewueMXQb_z5F9A8YSmmQWVav"
-        }
-      ]
-    },
-    {
-      "id": "rep-m7",
-      "title": "Doctora X: Especial",
-      "year": "2024",
-      "type": "pelicula",
-      "source": "PoseidonHD HD",
-      "badge": "HD 1080p",
-      "poster": "https://image.tmdb.org/t/p/original/cKetrF2dAnQ0AMV5i4BMOs41I5P.jpg",
-      "player_url": "https://vidhidepro.com/v/52r319dh1gzs",
-      "servers": [
-        {
-          "name": "Streamwish Directo (0s wait)",
-          "url": "https://vidhidepro.com/v/52r319dh1gzs"
-        },
-        {
-          "name": "Servidor Alternativo HD",
-          "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0I8t.Ca.mRgKHwyeaBlUTzYxcHysEQj7whyzl5q82VJs"
-        }
-      ]
-    },
-    {
-      "id": "rep-m8",
-      "title": "Gladiador II",
-      "year": "2024",
-      "type": "pelicula",
-      "source": "PoseidonHD HD",
-      "badge": "Estreno 4K",
-      "poster": "https://image.tmdb.org/t/p/original/2cxhvwyEwRlysAmRHbtKN0AZqll.jpg",
-      "player_url": "https://doodstream.com/d/vij2qrk26a68",
-      "servers": [
-        {
-          "name": "Streamwish Directo (0s wait)",
-          "url": "https://doodstream.com/d/vij2qrk26a68"
-        },
-        {
-          "name": "Servidor Alternativo HD",
-          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtfyEwxV2z8a5wCGPofPbeSRo9HM82SqlkAuxMfHiFMdWt"
-        }
-      ]
-    },
-    {
-      "id": "rep-m9",
-      "title": "Deadpool & Wolverine",
-      "year": "2024",
-      "type": "pelicula",
-      "source": "PoseidonHD HD",
-      "badge": "HD 4K",
-      "poster": "https://image.tmdb.org/t/p/original/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg",
-      "player_url": "https://doodstream.com/e/vij2qrk26a68",
-      "servers": [
-        {
-          "name": "Streamwish Directo (0s wait)",
-          "url": "https://doodstream.com/e/vij2qrk26a68"
-        },
-        {
-          "name": "Servidor Alternativo HD",
+          "name": "Servidor HD 4",
           "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf3hbBC1VJ4bcNt96NInSSUhTHW3DzRvu7Kap.LSy5B4v"
         }
       ]
     },
     {
-      "id": "rep-m10",
-      "title": "Duna: Parte Dos",
-      "year": "2024",
+      "id": "poseidon-el-ases",
+      "title": "EB",
+      "year": "2026",
+      "url": "https://poseidonhd2.co/pelicula/1484913/el-ases",
+      "poster": "https://image.tmdb.org/t/p/original/2WP3AFHdceval0tsvndxENylzxu.jpg",
       "type": "pelicula",
       "source": "PoseidonHD HD",
       "badge": "HD 1080p",
-      "poster": "https://image.tmdb.org/t/p/original/czembW0Rk1Ke7lCJGzyAiIHSmqH.jpg",
-      "player_url": "https://streamwish.to/e/j9mhzoph4rqn",
+      "overview": "Película en cartelera: EB. Disponible en audio latino y subtitulado en máxima calidad.",
+      "player_url": "https://streamwish.to/e/a1y836htjm8y",
       "servers": [
         {
-          "name": "Streamwish Directo (0s wait)",
-          "url": "https://streamwish.to/e/j9mhzoph4rqn"
+          "name": "Streamwish HD Directo",
+          "url": "https://streamwish.to/e/a1y836htjm8y"
         },
         {
-          "name": "Servidor Alternativo HD",
-          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j73WrtOBsRi2JXghvmfDj86m5MCTrGj3BosJpZARnrvn"
+          "name": "Servidor HD 1",
+          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5jwySb_RHRotvW4Hhf7GPLlyfCOAURB8m4i.r5Y.Enaww"
+        },
+        {
+          "name": "Servidor HD 2",
+          "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0HKcG.lkb5nzXuMISwDl34sIYfXmtJeZ4wuJFiAOb3Jn"
+        },
+        {
+          "name": "Servidor HD 3",
+          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH6fdvwy.OILYsu0BA1AsmYQ-"
+        },
+        {
+          "name": "Servidor HD 4",
+          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf.WKKNeaa0jgc5qIecxR1BEunKj00OCFxzWC8.WPeAU0"
         }
       ]
     },
     {
-      "id": "rep-m11",
-      "title": "Alien: Romulus",
-      "year": "2024",
+      "id": "poseidon-magallanes",
+      "title": "Hot Wheels ¡A correr!: El ataque del T-Rex",
+      "year": "2026",
+      "url": "https://poseidonhd2.co/pelicula/975335/magallanes",
+      "poster": "https://image.tmdb.org/t/p/original/hfakoze8Q5F1YszFsOY5V1XMyBr.jpg",
       "type": "pelicula",
       "source": "PoseidonHD HD",
       "badge": "HD 1080p",
-      "poster": "https://image.tmdb.org/t/p/original/b33nnKl12vfwh49rNkCUsARBEsc.jpg",
-      "player_url": "https://vidhidepro.com/v/s21ymokc4oda",
+      "overview": "Película en cartelera: Hot Wheels ¡A correr!: El ataque del T-Rex. Disponible en audio latino y subtitulado en máxima calidad.",
+      "player_url": "https://streamwish.to/e/mk6imjoy24og",
       "servers": [
         {
-          "name": "Streamwish Directo (0s wait)",
-          "url": "https://vidhidepro.com/v/s21ymokc4oda"
+          "name": "Streamwish HD Directo",
+          "url": "https://streamwish.to/e/mk6imjoy24og"
         },
         {
-          "name": "Servidor Alternativo HD",
-          "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0DiELtAPBiyvGj58Wnn6yXuKyFOmTrnkoAqJ87wG7SXe"
+          "name": "Servidor HD 1",
+          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j17yejqhIJBOgTbZbVK3LoL6r_J5Zab3WpR.Pl5kfBdv"
+        },
+        {
+          "name": "Servidor HD 2",
+          "url": "https://player.poseidonhd2.co/player.php?h=Nt6DnBaJ_hOcjWbELk7u0BFb1hcqnbnCWsyKmk1FmHusKE7Jutl568U48d0m9gNq"
+        },
+        {
+          "name": "Servidor HD 3",
+          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH1lr3h7XdGiUT.HbmRtf6yw-"
+        },
+        {
+          "name": "Servidor HD 4",
+          "url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf86p5fcXTuvwXLnux63VrtiodiKwGiEixgWfCYWsQp7E"
         }
       ]
     },
     {
-      "id": "rep-m12",
-      "title": "Intensamente 2",
-      "year": "2024",
+      "id": "poseidon-los-olvidados-cicatrices",
+      "title": "Frankenstein: Legacy",
+      "year": "2026",
+      "url": "https://poseidonhd2.co/pelicula/974927/los-olvidados-cicatrices",
+      "poster": "https://image.tmdb.org/t/p/original/8fDdT9eVDMBfq6MnHhlreAEsfnd.jpg",
       "type": "pelicula",
       "source": "PoseidonHD HD",
-      "badge": "HD Latino",
-      "poster": "https://image.tmdb.org/t/p/original/vpnVM9B6NMmQpWeZvzLvDESb2QY.jpg",
-      "player_url": "https://voe.sx/e/34borv6tkutv",
+      "badge": "HD 1080p",
+      "overview": "Película en cartelera: Frankenstein: Legacy. Disponible en audio latino y subtitulado en máxima calidad.",
+      "player_url": "https://streamwish.to/e/tsy3l9e0lb7r",
       "servers": [
         {
-          "name": "Streamwish Directo (0s wait)",
-          "url": "https://voe.sx/e/34borv6tkutv"
+          "name": "Streamwish HD Directo",
+          "url": "https://streamwish.to/e/tsy3l9e0lb7r"
         },
         {
-          "name": "Servidor Alternativo HD",
-          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH4C1ocCmQgHNjxLZmwqoc4A-"
+          "name": "Servidor HD 1",
+          "url": "https://player.poseidonhd2.co/player.php?h=rxPRsRSX4IlkyS1F21W5j8xVXahtro4aSPT_5Pl1OQkMPBJKGtN64wV.X6PjRK15"
+        },
+        {
+          "name": "Servidor HD 2",
+          "url": "https://player.poseidonhd2.co/player.php?h=L_S5.I9TT8gF_oMzWJhf_YBT_bYbi2_xCh9zcUIB75.8kIAkAOJcwOBmILMf1ZYi"
+        },
+        {
+          "name": "Servidor HD 3",
+          "url": "https://player.poseidonhd2.co/player.php?h=3HIdfUNk1x9FKqhEuaYLNiIG.N80p7e2Cke.Pl7n7SmIMtCNEMc8f2TqNfjDRBQe"
+        },
+        {
+          "name": "Servidor HD 4",
+          "url": "https://player.poseidonhd2.co/player.php?h=fXuMjvaiA4iZ_F_4aa6TH1qZydADzgz0QpaQIqgzNJQ-"
         }
       ]
     }

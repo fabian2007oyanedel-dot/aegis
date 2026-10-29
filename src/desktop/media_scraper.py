@@ -401,7 +401,7 @@ def get_live_catalog(force_refresh: bool = False) -> Dict[str, Any]:
 
 
 def _get_bootstrap_real_items() -> List[Dict[str, Any]]:
-    """Snapshot verificado con reproductores puros para arranque offline."""
+    """Snapshot verificado con reproductores puros y servidores múltiples para arranque offline."""
     return [
         {
             "id": "jkanime-shin-tennis-no-oujisama-5",
@@ -411,9 +411,14 @@ def _get_bootstrap_real_items() -> List[Dict[str, Any]]:
             "poster": "https://cdn.jkdesa.com/assets/images/animes/video/image/jkvideo_054400f3b0e817b1b90ea73ba7707d15.jpg",
             "type": "anime",
             "source": "JKanime Oficial",
-            "player_url": "https://jkanime.net/jkplayer/um?e=aklBQURLNUx2ZVhxLzF3MW5EbDFrNnNweEN3L1dBaWxXR1RJYWplZEdEQ1RncFlLOGMycit1c3lEUmpJb01nNDAydmxsbDlEbnlhVjRJUmVYVjk2RWVyWkoxTmF1N3E3V29UcWFMYU56M289OjrczbtKI1DuNlhE49Bp2vTM&t=571c85a8cae646e786000ebd3b0f5512&op=Nzg5MTA=",
+            "player_url": "https://mega.nz/embed/SjA1zLYY#tYvo5YHqcHoRJe5jzwr",
             "badge": "EP 5",
             "overview": "Emisión oficial de Shin Tennis no Oujisama en JKanime. Audio original subtitulado.",
+            "servers": [
+                {"name": "Mega (Recomendado)", "url": "https://mega.nz/embed/SjA1zLYY#tYvo5YHqcHoRJe5jzwr"},
+                {"name": "Streamwish HD", "url": "https://streamwish.to/e/v1njhl65nkzj"},
+                {"name": "Vidhide Fast", "url": "https://vidhidevip.com/embed/s4uktgyv6oi6"}
+            ]
         },
         {
             "id": "poseidon-titan-el-desastre-de-oceangate",
@@ -423,9 +428,13 @@ def _get_bootstrap_real_items() -> List[Dict[str, Any]]:
             "poster": "https://image.tmdb.org/t/p/original/9xTBAMbuADcxvwcAB4hiSDPVv9x.jpg",
             "type": "pelicula",
             "source": "PoseidonHD HD",
-            "player_url": "https://player.poseidonhd2.co/player.php?h=b4V4QCQH04mLSy2ukvmtf3hbBC1VJ4bcNt96NInSSUhTHW3DzRvu7Kap.LSy5B4v",
+            "player_url": "https://streamwish.to/e/j9mhzoph4rqn",
             "badge": "HD 1080p",
             "overview": "Titan, el sumergible turístico de OceanGate, implosionó en 2023 durante una expedición hacia el Titanic.",
+            "servers": [
+                {"name": "Streamwish HD Directo", "url": "https://streamwish.to/e/j9mhzoph4rqn"},
+                {"name": "Servidor Espejo HD", "url": "https://hgcloud.to/e/j9mhzoph4rqn"}
+            ]
         },
     ]
 

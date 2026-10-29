@@ -554,7 +554,31 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 
     if (window.self !== window.top) return;
 
-        // =========================================================================
+    // =========================================================================
+    // INYECCIÓN INCONDICIONAL DE FONDO OSCURO EN FRAME-0 (CERO PANTALLAS BLANCAS)
+    // =========================================================================
+    (function injectFrameZeroDarkBackground() {
+        if (document.getElementById('aegis-discord-frame0-css')) return;
+        const style = document.createElement('style');
+        style.id = 'aegis-discord-frame0-css';
+        style.textContent = 
+            html, body, #app-mount, .app-focused, #root {
+                background-color: #313338 !important;
+                background: #313338 !important;
+            }
+        ;
+        const target = document.head || document.documentElement;
+        if (target) {
+            target.appendChild(style);
+        } else {
+            document.addEventListener('DOMContentLoaded', () => {
+                const t = document.head || document.documentElement;
+                if (t) t.appendChild(style);
+            });
+        }
+    })();
+
+    // =========================================================================
     // AEGIS WEBRTC & DOM ROBUSTNESS SHIELD (ROOT-LEVEL FIX)
     // =========================================================================
 
@@ -569,12 +593,17 @@ def ensure_builtin_userscripts(scripts_dir: Path):
             if (origWidthDesc && origWidthDesc.get) {
                 Object.defineProperty(HTMLVideoElement.prototype, 'videoWidth', {
                     get() {
+                        const stream = this.srcObject;
+                        if (!stream) return 0;
+                        const tracks = stream.getVideoTracks ? stream.getVideoTracks() : [];
+                        if (tracks.length > 0 && tracks[0].readyState === 'ended') return 0;
+
                         const val = origWidthDesc.get.call(this);
                         if (typeof val === 'number' && !isNaN(val) && val > 0) {
                             this._lastAegisWidth = val;
                             return val;
                         }
-                        return this._lastAegisWidth || 1280;
+                        return this._lastAegisWidth || 0;
                     },
                     configurable: true
                 });
@@ -583,12 +612,17 @@ def ensure_builtin_userscripts(scripts_dir: Path):
             if (origHeightDesc && origHeightDesc.get) {
                 Object.defineProperty(HTMLVideoElement.prototype, 'videoHeight', {
                     get() {
+                        const stream = this.srcObject;
+                        if (!stream) return 0;
+                        const tracks = stream.getVideoTracks ? stream.getVideoTracks() : [];
+                        if (tracks.length > 0 && tracks[0].readyState === 'ended') return 0;
+
                         const val = origHeightDesc.get.call(this);
                         if (typeof val === 'number' && !isNaN(val) && val > 0) {
                             this._lastAegisHeight = val;
                             return val;
                         }
-                        return this._lastAegisHeight || 720;
+                        return this._lastAegisHeight || 0;
                     },
                     configurable: true
                 });
@@ -662,21 +696,15 @@ def ensure_builtin_userscripts(scripts_dir: Path):
         });
     })();
 
-    // 4. Watchdog de Integridad del DOM (Auto-recuperacion en caso de desmontaje anormal)
+    // 4. Watchdog de Integridad del DOM (Redibujado suave sin recargas destructivas)
     (function setupDOMHealthWatchdog() {
-        let wasLoggedIn = false;
         setInterval(() => {
-            const hasAppUI = !!document.querySelector('[class*="guilds_"], [class*="sidebar_"], [class*="chat_"], [class*="channels_"]');
-            if (hasAppUI) {
-                wasLoggedIn = true;
-                return;
-            }
             const appMount = document.getElementById('app-mount');
-            if (wasLoggedIn && appMount && appMount.children.length === 0) {
-                console.warn('[Aegis Watchdog] Discord sufrio vaciado de DOM. Restaurando...');
-                window.location.reload();
+            if (appMount && appMount.children.length === 0) {
+                console.warn('[Aegis Watchdog] Discord sufrio vaciado transitorio de DOM. Emitiendo resize...');
+                window.dispatchEvent(new Event('resize'));
             }
-        }, 1500);
+        }, 2000);
     })();
 
 
@@ -711,6 +739,9 @@ function isAuthOrLogin() {
             const style = document.createElement('style');
             style.id = 'aegis-discord-perf-css';
             style.textContent = `
+                html, body, #app-mount, .app-focused {
+                    background-color: #313338 !important;
+                }
                 *, *::before, *::after {
                     backdrop-filter: none !important;
                     -webkit-backdrop-filter: none !important;
@@ -1016,19 +1047,22 @@ function isAuthOrLogin() {
                     const old = document.getElementById('aegis-screen-modal');
                     if (old) old.remove();
 
+                    let withAudio = true; // Por defecto transmitir con audio
+
                     const modal = document.createElement('div');
                     modal.id = 'aegis-screen-modal';
                     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
                     modal.innerHTML = `
-                        <div style="background:#2b2d31;border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:24px;width:460px;color:#f2f3f5;box-shadow:0 20px 50px rgba(0,0,0,0.8);">
+                        <div style="background:#2b2d31;border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:24px;width:480px;color:#f2f3f5;box-shadow:0 20px 50px rgba(0,0,0,0.8);">
                             <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
                                 <div style="font-size:22px;">📺</div>
                                 <div style="font-size:17px;font-weight:700;">Transmitir Pantalla (Aegis Shields)</div>
                             </div>
-                            <div style="font-size:13px;color:#949ba4;margin-bottom:18px;">
-                                Selecciona qué origen de video deseas compartir en esta sala de Discord:
+                            <div style="font-size:13px;color:#949ba4;margin-bottom:16px;">
+                                Selecciona el origen de video y la configuración de audio para Discord:
                             </div>
-                            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+
+                            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
                                 <button id="aegis-opt-screen" style="background:#1e1f22;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px 14px;color:#fff;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.15s;">
                                     <span style="font-size:24px;">🖥️</span>
                                     <div>
@@ -1039,17 +1073,59 @@ function isAuthOrLogin() {
                                 <button id="aegis-opt-window" style="background:#1e1f22;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px 14px;color:#fff;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.15s;">
                                     <span style="font-size:24px;">🪟</span>
                                     <div>
-                                        <div style="font-weight:700;font-size:14px;">Ventana de Aplicacion Activa</div>
+                                        <div style="font-weight:700;font-size:14px;">Ventana de Aplicación Activa</div>
                                         <div style="font-size:12px;color:#949ba4;">Transmite únicamente la ventana activa de primer plano</div>
                                     </div>
                                 </button>
                             </div>
+
+                            <!-- Selector Interactivo de Audio -->
+                            <div style="margin-bottom:20px;padding:12px 14px;background:#1e1f22;border-radius:8px;border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;">
+                                <div style="display:flex;align-items:center;gap:10px;">
+                                    <span id="aegis-audio-icon" style="font-size:20px;">🔊</span>
+                                    <div>
+                                        <div style="font-size:13px;font-weight:700;">Audio de Transmisión</div>
+                                        <div id="aegis-audio-desc" style="font-size:11px;color:#949ba4;">Compartir el audio del sistema / aplicación</div>
+                                    </div>
+                                </div>
+                                <div style="display:flex;background:#111214;border-radius:6px;padding:3px;gap:3px;">
+                                    <button id="aegis-btn-sound" type="button" style="background:#5865F2;color:#fff;border:none;border-radius:4px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;">Con Sonido</button>
+                                    <button id="aegis-btn-mute" type="button" style="background:transparent;color:#949ba4;border:none;border-radius:4px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;">Silenciada</button>
+                                </div>
+                            </div>
+
                             <div style="display:flex;justify-content:flex-end;gap:8px;">
                                 <button id="aegis-opt-cancel" style="background:transparent;border:none;color:#949ba4;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Cancelar</button>
                             </div>
                         </div>
                     `;
                     document.body.appendChild(modal);
+
+                    const bSound = document.getElementById('aegis-btn-sound');
+                    const bMute = document.getElementById('aegis-btn-mute');
+                    const aIcon = document.getElementById('aegis-audio-icon');
+                    const aDesc = document.getElementById('aegis-audio-desc');
+
+                    if (bSound && bMute) {
+                        bSound.onclick = () => {
+                            withAudio = true;
+                            bSound.style.background = '#5865F2';
+                            bSound.style.color = '#fff';
+                            bMute.style.background = 'transparent';
+                            bMute.style.color = '#949ba4';
+                            if (aIcon) aIcon.textContent = '🔊';
+                            if (aDesc) aDesc.textContent = 'Compartir el audio del sistema / aplicación';
+                        };
+                        bMute.onclick = () => {
+                            withAudio = false;
+                            bMute.style.background = '#ed4245';
+                            bMute.style.color = '#fff';
+                            bSound.style.background = 'transparent';
+                            bSound.style.color = '#949ba4';
+                            if (aIcon) aIcon.textContent = '🔇';
+                            if (aDesc) aDesc.textContent = 'Transmisión en silencio (sin capturar audio)';
+                        };
+                    }
 
                     const hoverStyle = (btn) => {
                         btn.onmouseenter = () => btn.style.borderColor = '#5865F2';
@@ -1061,8 +1137,8 @@ function isAuthOrLogin() {
                     if (bScreen) hoverStyle(bScreen);
                     if (bWin) hoverStyle(bWin);
 
-                    if (bScreen) bScreen.onclick = () => { modal.remove(); resolve({ type: 'screen' }); };
-                    if (bWin) bWin.onclick = () => { modal.remove(); resolve({ type: 'window' }); };
+                    if (bScreen) bScreen.onclick = () => { modal.remove(); resolve({ type: 'screen', withAudio: withAudio }); };
+                    if (bWin) bWin.onclick = () => { modal.remove(); resolve({ type: 'window', withAudio: withAudio }); };
                     if (bCancel) bCancel.onclick = () => { modal.remove(); resolve(null); };
                 });
             }
@@ -1081,28 +1157,31 @@ function isAuthOrLogin() {
                         height: { ideal: 1080, max: 1080 },
                         frameRate: { ideal: 30, max: 60 }
                     },
-                    audio: constraints.audio || false
+                    audio: choice.withAudio ? (constraints.audio || true) : false
                 };
 
                 const stream = await origGetDisplayMedia(cleanConstraints);
 
-                // Teardown Atómico Seguro: desacoplar pipeline y purgar texturas GPU antes de detener capturador
+                // Si el usuario eligió transmitir silenciada, purgar cualquier pista de audio capturada
+                if (!choice.withAudio) {
+                    stream.getAudioTracks().forEach(t => {
+                        try {
+                            t.enabled = false;
+                            t.stop();
+                            stream.removeTrack(t);
+                        } catch(e) {}
+                    });
+                }
+
+                // Teardown Seguro y Natural: permitir que React desmonte el video a su ritmo normal
                 stream.getVideoTracks().forEach(track => {
                     const origTrackStop = track.stop.bind(track);
                     track.stop = function() {
-                        // 1. Purgar todos los elementos de video asociados para liberar mailboxes Skia
-                        document.querySelectorAll('video').forEach(v => {
-                            if (v.srcObject === stream || v.srcObject === track) {
-                                try {
-                                    v.pause();
-                                    v.srcObject = null;
-                                    v.removeAttribute('src');
-                                    v.load(); // Desecha síncronamente el WebMediaPlayerImpl
-                                } catch(e) {}
-                            }
-                        });
-                        // 2. Ejecutar inmediatamente el stop nativo para mantener sincronizado readyState = 'ended'
-                        try { origTrackStop(); } catch(e) {}
+                        try {
+                            origTrackStop();
+                        } catch(e) {
+                            console.warn('[Aegis] Error deteniendo track de video:', e);
+                        }
                     };
                 });
 
@@ -6056,12 +6135,12 @@ class AegisWebPage(QWebEnginePage):
             q = params.get("q", [""])[0]
             if self.browser_win and hasattr(self.browser_win, "load_aegisplay"):
                 v = self.view()
-                self.browser_win.load_aegisplay(v, query=q)
+                QTimer.singleShot(0, lambda: self.browser_win.load_aegisplay(v, query=q))
             return False  # Cancela delegación a Windows ShellExecute (Cero popup de Microsoft Store)
         elif url_str.startswith("aegis://"):
             if self.browser_win and hasattr(self.browser_win, "load_aegisplay"):
                 v = self.view()
-                self.browser_win.load_aegisplay(v)
+                QTimer.singleShot(0, lambda: self.browser_win.load_aegisplay(v))
             return False
         return super().acceptNavigationRequest(url, nav_type, is_main_frame)
 
@@ -7578,10 +7657,29 @@ class AegisBrowserWindow(QMainWindow):
 
     def keyPressEvent(self, event):
         if getattr(self, "_is_web_fullscreen", False) and event.key() == Qt.Key.Key_Escape:
-            cur = self.current_view()
-            if cur and cur.page():
-                cur.page().action(QWebEnginePage.WebAction.ExitFullScreen).trigger()
-            return
+            if getattr(self, "_sidebar_fullscreen_active", False):
+                d_view = getattr(self.sidebar, "discord_view", None)
+                if d_view and d_view.page():
+                    d_view.page().action(QWebEnginePage.WebAction.ExitFullScreen).trigger()
+                if hasattr(self, "web_splitter"):
+                    self.web_splitter.show()
+                if hasattr(self.sidebar, "d_ctrl"):
+                    self.sidebar.d_ctrl.show()
+                self.sidebar.setMaximumWidth(950)
+                self.sidebar.setMinimumWidth(320)
+                self._sidebar_fullscreen_active = False
+                self._is_web_fullscreen = False
+                self.toolbar.show()
+                self.tab_header.show()
+                if hasattr(self, "bookmarks_bar") and self.config.get("show_bookmarks_bar", True):
+                    self.bookmarks_bar.show()
+                self.showNormal()
+                return
+            else:
+                cur = self.current_view()
+                if cur and cur.page():
+                    cur.page().action(QWebEnginePage.WebAction.ExitFullScreen).trigger()
+                return
         super().keyPressEvent(event)
 
     def toggle_media_popup(self):
@@ -11320,7 +11418,7 @@ def get_aegisplay_html(theme_class: str = "theme-dark", search_query: str = None
       </div>
       <div class="video-wrap">
         <video id="videoPlayer" controls autoplay style="display:none; width:100%; height:100%; object-fit:contain;"></video>
-        <iframe id="pureVideoPlayer" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" referrerpolicy="no-referrer" style="display:none; width:100%; height:100%; border:none; background:#000;"></iframe>
+        <iframe id="pureVideoPlayer" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" referrerpolicy="no-referrer" style="display:none; width:100%; height:100%; border:none; background:#000;"></iframe>
       </div>
       <div class="player-toolbar" id="nativeToolbar" style="display:none;">
         <div class="speed-btns">
@@ -11426,9 +11524,8 @@ def get_aegisplay_html(theme_class: str = "theme-dark", search_query: str = None
         }
         return;
       }
-      searchTimer = setTimeout(() => {
-        executeRemoteSearch(q);
-      }, 550);
+      // Filtrado instantáneo a 0ms en el DOM local (cero recargas molestas al escribir)
+      renderCatalog(q);
     }
 
     function handleSearchKeyDown(e) {
@@ -11538,8 +11635,12 @@ def get_aegisplay_html(theme_class: str = "theme-dark", search_query: str = None
       });
     }
 
+    let serverFailoverTimer = null;
+    let currentServerIndex = 0;
+
     function openPlayer(item, resumeTime = 0) {
       currentActiveItem = item;
+      clearTimeout(serverFailoverTimer);
 
       const modal = document.getElementById('playerModal');
       const overviewText = document.getElementById('playerOverviewText');
@@ -11557,32 +11658,29 @@ def get_aegisplay_html(theme_class: str = "theme-dark", search_query: str = None
           btn.className = 'btn-server' + (idx === 0 ? ' active' : '');
           btn.innerText = srv.name;
           btn.onclick = () => {
+            clearTimeout(serverFailoverTimer);
             document.querySelectorAll('.btn-server').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            switchServerUrl(srv.url);
+            switchServerUrl(srv.url, 0, idx);
           };
           serversContainer.appendChild(btn);
         });
       }
 
-      // Obtener la URL de reproducción limpia
-      let streamUrl = item.player_url || item.video_url || item.url || '';
-      // Si la URL es la de la página web del episodio (jkanime.net/slug/num/), extraer el pure player embed
-      if (streamUrl.includes('jkanime.net/') && !streamUrl.includes('jkplayer')) {
-        // Fallback a pure player pattern
-        const parts = streamUrl.replace(/\\/$/, '').split('/');
-        const ep = parts[parts.length - 1];
-        if (!isNaN(ep) && item.servers && item.servers.length > 0) {
-          streamUrl = item.servers[0].url;
-        }
-      }
+      // Priorizar SIEMPRE el primer servidor estructurado disponible (Mega / Streamwish)
+      let streamUrl = (item.servers && item.servers.length > 0)
+        ? item.servers[0].url
+        : (item.player_url || item.video_url || item.url || '');
 
-      switchServerUrl(streamUrl, resumeTime);
+      switchServerUrl(streamUrl, resumeTime, 0);
       modal.style.display = 'flex';
       saveWatchHistory(item, 60, 1800);
     }
 
-    function switchServerUrl(streamUrl, resumeTime = 0) {
+    function switchServerUrl(streamUrl, resumeTime = 0, srvIndex = 0) {
+      clearTimeout(serverFailoverTimer);
+      currentServerIndex = srvIndex;
+
       const v = document.getElementById('videoPlayer');
       const iframe = document.getElementById('pureVideoPlayer');
       const toolbar = document.getElementById('nativeToolbar');
@@ -11606,10 +11704,28 @@ def get_aegisplay_html(theme_class: str = "theme-dark", search_query: str = None
         toolbar.style.display = 'none';
         iframe.style.display = 'block';
         iframe.src = streamUrl;
+
+        // Auto-failover inteligente: si hay servidores alternativos y el iframe no responde en 4.5s
+        if (currentActiveItem && currentActiveItem.servers && currentActiveItem.servers.length > 1) {
+          serverFailoverTimer = setTimeout(() => {
+            if (currentServerIndex < currentActiveItem.servers.length - 1) {
+              const nextIdx = currentServerIndex + 1;
+              const nextSrv = currentActiveItem.servers[nextIdx];
+              console.log('[AegisPlay Auto-Failover] Conmutando automáticamente a:', nextSrv.name);
+              const btns = document.querySelectorAll('.btn-server');
+              if (btns && btns[nextIdx]) {
+                btns.forEach(b => b.classList.remove('active'));
+                btns[nextIdx].classList.add('active');
+              }
+              switchServerUrl(nextSrv.url, resumeTime, nextIdx);
+            }
+          }, 4500);
+        }
       }
     }
 
     function closePlayer() {
+      clearTimeout(serverFailoverTimer);
       const modal = document.getElementById('playerModal');
       const v = document.getElementById('videoPlayer');
       const iframe = document.getElementById('pureVideoPlayer');
