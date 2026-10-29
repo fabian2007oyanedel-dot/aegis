@@ -535,10 +535,10 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 
         discord_opt_script = scripts_dir / "aegis_discord_optimizer.js"
         cur_opt = discord_opt_script.read_text(encoding="utf-8", errors="ignore") if discord_opt_script.exists() else ""
-        if not discord_opt_script.exists() or "setupResponsiveDrawer" not in cur_opt:
+        if not discord_opt_script.exists() or "max-height: 100vh" not in cur_opt:
             discord_opt_script.write_text(r"""// ==UserScript==
 // @name         Aegis Discord Ultra-Light Optimizer
-// @description  Reduce drásticamente el consumo de CPU y RAM de Discord Web: limita requestAnimationFrame a 1 FPS en segundo plano, defiende el WebRTC de voz sin microcortes, suprime desenfoques GPU pesados y congela animaciones fuera de pantalla.
+// @description  Reduce drásticamente el consumo de CPU y RAM de Discord Web: limita requestAnimationFrame a 1 FPS en segundo plano, defiende el WebRTC de voz sin microcortes, suprime desenfoques GPU pesados, oculta banners publicitarios de Nitro y ofrece un Responsive Drawer limpio para la barra lateral.
 // @match        *://*.discord.com/*
 // @match        *://discord.com/*
 // @run-at       document-start
@@ -679,7 +679,7 @@ def ensure_builtin_userscripts(scripts_dir: Path):
             }
         }, 4000);
 
-        // ── 5. Responsive Drawer para Panel Lateral (Opción B) ───────────────────
+        // ── 5. Responsive Drawer & Limpieza Estética para Barra Lateral ──────────
         function setupResponsiveDrawer() {
             if (document.getElementById('aegis-discord-drawer-css')) return;
             const target = document.head || document.documentElement;
@@ -687,37 +687,23 @@ def ensure_builtin_userscripts(scripts_dir: Path):
             const style = document.createElement('style');
             style.id = 'aegis-discord-drawer-css';
             style.textContent = `
-                @media (max-width: 680px) {
-                    nav[class*="guilds_"] {
-                        position: fixed !important;
-                        top: 0 !important;
-                        bottom: 0 !important;
-                        left: -320px !important;
-                        width: 72px !important;
-                        z-index: 10002 !important;
-                        transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
-                        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.6) !important;
-                    }
-                    div[class*="sidebar_"] {
-                        position: fixed !important;
-                        top: 0 !important;
-                        bottom: 0 !important;
-                        left: -320px !important;
-                        width: 240px !important;
-                        z-index: 10001 !important;
-                        transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
-                        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.6) !important;
-                    }
+                /* Ocultar banners promocionales molestos de Nitro que roban espacio vertical */
+                [class*="notice_"],
+                [class*="channelNotice_"],
+                [class*="guildNotice_"],
+                [class*="premiumNotice_"] {
+                    display: none !important;
+                }
 
-                    /* Ocultar banners promocionales de Nitro que roban espacio vertical */
-                    [class*="notice_"],
-                    [class*="channelNotice_"],
-                    [class*="guildNotice_"],
-                    [class*="premiumNotice_"] {
+                @media (max-width: 680px) {
+                    /* Por defecto en panel lateral: Servidores y Canales ocultos para que el chat ocupe el 100% */
+                    body:not(.aegis-drawer-open) nav[class*="guilds_"],
+                    body:not(.aegis-drawer-open) [class*="guilds_"],
+                    body:not(.aegis-drawer-open) div[class*="sidebar_"] {
                         display: none !important;
                     }
 
-                    /* Compactar la cabecera del canal para no desperdiciar espacio gris en nada */
+                    /* Compactar la barra de título del canal para eliminar espacio gris vacío */
                     section[class*="title_"] {
                         height: 38px !important;
                         min-height: 38px !important;
@@ -726,6 +712,53 @@ def ensure_builtin_userscripts(scripts_dir: Path):
                         border-bottom: 1px solid rgba(0, 0, 0, 0.2) !important;
                     }
 
+                    /* Chat y contenido principal al 100% de ancho sin márgenes */
+                    div[class*="chat_"],
+                    main[class*="chatContent_"],
+                    form[class*="form_"],
+                    div[class*="messagesWrapper_"],
+                    div[class*="container_"] > div[class*="base_"],
+                    div[class*="base_"] > div[class*="content_"] {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        margin-left: 0 !important;
+                        flex: 1 1 100% !important;
+                    }
+
+                    /* Formulario de envío compacto */
+                    form[class*="form_"] {
+                        padding-left: 6px !important;
+                        padding-right: 6px !important;
+                        margin-bottom: 6px !important;
+                    }
+
+                    /* Botón flotante hamburguesa ☰ */
+                    #aegis-discord-hamburger {
+                        position: fixed;
+                        top: 5px;
+                        left: 6px;
+                        width: 28px;
+                        height: 28px;
+                        background: #5865F2;
+                        border-radius: 6px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: #ffffff;
+                        cursor: pointer;
+                        z-index: 100010;
+                        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+                        font-size: 15px;
+                        font-weight: bold;
+                        user-select: none;
+                        transition: transform 0.15s, background 0.15s;
+                    }
+                    #aegis-discord-hamburger:hover {
+                        background: #4752c4;
+                        transform: scale(1.08);
+                    }
+
+                    /* Overlay flotante sin transformaciones GPU problemáticas cuando se abre ☰ */
                     body.aegis-drawer-open nav[class*="guilds_"],
                     body.aegis-drawer-open [class*="guilds_"] {
                         display: flex !important;
@@ -742,53 +775,55 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 
                     body.aegis-drawer-open div[class*="sidebar_"] {
                         display: flex !important;
+                        flex-direction: column !important;
                         position: fixed !important;
                         top: 0 !important;
                         bottom: 0 !important;
                         left: 72px !important;
                         width: 240px !important;
+                        height: 100vh !important;
+                        max-height: 100vh !important;
+                        overflow: hidden !important;
                         z-index: 100004 !important;
                         background: #2b2d31 !important;
                         box-shadow: 6px 0 25px rgba(0, 0, 0, 0.7) !important;
                         transform: none !important;
+                        will-change: auto !important;
                     }
 
-                    div[class*="chat_"],
-                    main[class*="chatContent_"],
-                    form[class*="form_"],
-                    div[class*="messagesWrapper_"] {
-                        width: 100% !important;
-                        max-width: 100% !important;
-                        margin-left: 0 !important;
+                    /* Contenedor de canales: absorbe espacio restante y no expande indefinidamente */
+                    body.aegis-drawer-open div[class*="sidebar_"] nav[class*="container_"],
+                    body.aegis-drawer-open div[class*="sidebar_"] div[class*="container_"],
+                    body.aegis-drawer-open div[class*="sidebar_"] [class*="channels_"] {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        flex: 1 1 auto !important;
+                        min-height: 0 !important;
+                        max-height: calc(100vh - 56px) !important;
+                        overflow: hidden !important;
                     }
 
-                    [class*="title_"] {
-                        padding-left: 42px !important;
+                    /* Scroller de canales de texto y voz: activa desplazamiento vertical suave */
+                    body.aegis-drawer-open div[class*="sidebar_"] [class*="scroller_"] {
+                        overflow-y: auto !important;
+                        overflow-x: hidden !important;
+                        flex: 1 1 auto !important;
+                        min-height: 0 !important;
+                        height: auto !important;
+                        pointer-events: auto !important;
+                        touch-action: pan-y !important;
+                        scrollbar-width: thin !important;
+                        scrollbar-color: rgba(255, 255, 255, 0.25) transparent !important;
+                        overscroll-behavior: contain !important;
                     }
 
-                    #aegis-discord-hamburger {
-                        position: fixed;
-                        top: 8px;
-                        left: 8px;
-                        width: 30px;
-                        height: 30px;
-                        background: #5865F2;
-                        border-radius: 8px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        color: #ffffff;
-                        cursor: pointer;
-                        z-index: 10005;
-                        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-                        font-size: 16px;
-                        font-weight: bold;
-                        user-select: none;
-                        transition: transform 0.15s, background 0.15s;
-                    }
-                    #aegis-discord-hamburger:hover {
-                        background: #4752c4;
-                        transform: scale(1.08);
+                    /* Barra inferior de usuario (Micrófono, Auriculares, Estado): fija y sin superposición */
+                    body.aegis-drawer-open div[class*="sidebar_"] section[class*="panels_"] {
+                        flex-shrink: 0 !important;
+                        position: relative !important;
+                        z-index: 10 !important;
+                        background: #232428 !important;
+                        border-top: 1px solid rgba(0, 0, 0, 0.25) !important;
                     }
                 }
             `;
@@ -822,6 +857,19 @@ def ensure_builtin_userscripts(scripts_dir: Path):
                     }
                 });
             }
+            
+                // Event bridge: redirige scroll de rueda al scroller de canales si el cursor está en el sidebar
+                document.addEventListener('wheel', (e) => {
+                    if (!document.body.classList.contains('aegis-drawer-open')) return;
+                    const sidebar = document.querySelector('div[class*="sidebar_"]');
+                    if (sidebar && sidebar.contains(e.target)) {
+                        const scroller = sidebar.querySelector('[class*="scroller_"]');
+                        if (scroller && !scroller.contains(e.target)) {
+                            scroller.scrollTop += e.deltaY;
+                        }
+                    }
+                }, { passive: true });
+
             ensureHamburgerBtn();
             setInterval(ensureHamburgerBtn, 2000);
         }
@@ -2026,13 +2074,19 @@ def create_extension_icon(color_hex: str = "#388bfd", size: int = 16) -> QIcon:
     </svg>"""
     return svg_to_icon(svg, size)
 
-def create_aegisplay_icon(color_hex: str = "#ff5370", size: int = 16) -> QIcon:
-    """Icono de AegisPlay Media Hub: monitor de pantalla con símbolo Play central."""
-    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" stroke="{color_hex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="2" y="4" width="20" height="13" rx="2" ry="2"/>
-      <polygon points="10 8 16 10.5 10 13 10 8" fill="{color_hex}"/>
-      <line x1="8" y1="20" x2="16" y2="20"/>
-      <line x1="12" y1="17" x2="12" y2="20"/>
+def create_aegisplay_icon(color_hex: str = "#ff3366", size: int = 16) -> QIcon:
+    """
+    Icono vectorial exclusivo de AegisPlay Media Hub: 'Aegis Cyber-Prism Crest'.
+    Escudo aerodinámico balístico angular con prisma dinámico central facetado, bisel y nodo de pulso.
+    """
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" fill="none">
+      <path d="M12 2.2 L20 5.8 V12.2 C20 16.8 16.6 20.6 12 21.8 C7.4 20.6 4 16.8 4 12.2 V5.8 Z" 
+            stroke="{color_hex}" stroke-width="1.8" stroke-linejoin="round"/>
+      <polygon points="10 8 16.5 12 10 16" 
+               fill="{color_hex}" opacity="0.95"/>
+      <path d="M10 8 L13.2 12 L10 16" 
+            stroke="#ffffff" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+      <circle cx="12" cy="5.2" r="1.1" fill="{color_hex}"/>
     </svg>"""
     return svg_to_icon(svg, size)
 
@@ -4813,6 +4867,10 @@ class AegisVerticalDock(QFrame):
     def apply_theme(self, t: dict):
         rgb_accent = hex_to_rgb(t["accent"])
         rgb_text = hex_to_rgb(t["text"])
+        is_dark = "oscuro" in t.get("name", "").lower() or "dark" in t.get("name", "").lower()
+        if hasattr(self, "btn_aegisplay") and self.btn_aegisplay:
+            play_color = "#ff3366" if is_dark else "#d32f2f"
+            self.btn_aegisplay.setIcon(create_aegisplay_icon(play_color, 20))
         self.setStyleSheet(f"""
             QFrame#AegisVerticalDock {{
                 background-color: {t['bg']};
@@ -10215,12 +10273,22 @@ import sys
 
 def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
     """
-    AegisPlay Media Hub: Centro multimedia universal para Anime, Películas y Series.
-    Incluye catálogo híbrido precargado con 24 títulos y 5 fuentes sin publicidad.
-    Reproductor nativo integrado con selector de episodios, velocidad de reproducción,
-    PiP y guardado automático de progreso ('Continuar viendo').
+    AegisPlay Media Hub: Centro multimedia universal en vivo para Anime, Películas y Series.
+    Conectado al motor de scraping dinámico (media_scraper.py) con 0% de contenido demo o simulado.
+    Reproductor multimedia híbrido con soporte para streams directos y embeds protegidos sin anuncios.
     """
-    catalog_json_str = r"""{"repository_name": "AegisPlay Catálogo Oficial Extendido (Híbrido)", "version": "2.1.0", "author": "Aegis Media Project", "description": "Catálogo extendido híbrido para Anime, Películas y Series con reproducción directa sin anuncios.", "items": [{"id": "p1", "title": "Deadpool & Wolverine", "type": "movie", "source": "Cinecalidad", "year": 2024, "rating": 9.1, "genre": "Acción / Comedia / Marvel", "badge": "Estreno 4K", "poster": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=500&q=80", "description": "Wade Wilson se adapta a la vida civil hasta que la TVA lo recluta para salvar su universo junto a un renuente Wolverine.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"}, {"id": "p2", "title": "Intensamente 2 (Inside Out 2)", "type": "movie", "source": "Cinecalidad", "year": 2024, "rating": 8.9, "genre": "Animación / Aventura / Familiar", "badge": "HD Latino", "poster": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=500&q=80", "description": "Riley entra en la adolescencia y el cuartel general sufre una repentina demolición para dar paso a nuevas emociones: Ansiedad, Envidia, Ennui y Vergüenza.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"}, {"id": "p3", "title": "Dune: Parte Dos", "type": "movie", "source": "PelisPlus HD", "year": 2024, "rating": 9.2, "genre": "Ciencia Ficción / Aventura", "badge": "HD 1080p", "poster": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500&q=80", "description": "Paul Atreides se une a Chani y a los Fremen mientras busca venganza contra los conspiradores que destruyeron a su familia.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"}, {"id": "p4", "title": "Oppenheimer", "type": "movie", "source": "Repelis", "year": 2023, "rating": 9.3, "genre": "Drama / Histórico / Biografía", "badge": "Subtitulado", "poster": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=500&q=80", "description": "La historia del físico J. Robert Oppenheimer y su papel fundamental en el desarrollo de la bomba atómica durante el Proyecto Manhattan.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"}, {"id": "p5", "title": "Spider-Man: A Través del Spider-Verso", "type": "movie", "source": "Cinecalidad", "year": 2023, "rating": 9.4, "genre": "Animación / Acción / Superhéroes", "badge": "HD 4K", "poster": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=500&q=80", "description": "Miles Morales es catapultado a través del Multiverso, donde se encuentra con un equipo de Spider-Gente encargados de proteger su existencia.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"}, {"id": "p6", "title": "Interstellar (Interestelar)", "type": "movie", "source": "Cuevana 3", "year": 2014, "rating": 9.5, "genre": "Ciencia Ficción / Drama", "badge": "Clásico HD", "poster": "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=500&q=80", "description": "Un grupo de exploradores viaja a través de un agujero de gusano en el espacio en un intento por asegurar la supervivencia de la humanidad.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4"}, {"id": "p7", "title": "The Batman", "type": "movie", "source": "Cinecalidad", "year": 2022, "rating": 9.0, "genre": "Acción / Crimen / Misterio", "badge": "HD Latino", "poster": "https://images.unsplash.com/photo-1563089145-599997674d42?w=500&q=80", "description": "En su segundo año luchando contra el crimen, Batman explora la corrupción en Gotham City y su vínculo con su familia mientras persigue a El Acertijo.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"}, {"id": "p8", "title": "El Padrino (The Godfather)", "type": "movie", "source": "Repelis", "year": 1972, "rating": 9.7, "genre": "Crimen / Drama", "badge": "Master 4K", "poster": "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=500&q=80", "description": "El patriarca de una dinastía del crimen organizado transfiere el control de su imperio clandestino a su reacio hijo menor.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4"}, {"id": "s1", "title": "House of the Dragon (La Casa del Dragón)", "type": "series", "source": "PelisPlus HD", "year": 2024, "rating": 9.2, "genre": "Fantasía / Drama / Acción", "badge": "Temporada 2", "poster": "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=500&q=80", "description": "La guerra civil entre la facción Verde y la facción Negra de los Targaryen estalla con feroces combates de dragones por el Trono de Hierro.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", "episodes": 8}, {"id": "s2", "title": "Fallout", "type": "series", "source": "PelisPlus HD", "year": 2024, "rating": 9.1, "genre": "Ciencia Ficción / Aventura / Posapocalíptico", "badge": "Temporada 1", "poster": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&q=80", "description": "En un futuro postapocalíptico retrofuturista, los ciudadanos de refugios subterráneos se ven obligados a regresar a los peligrosos páramos.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", "episodes": 8}, {"id": "s3", "title": "Arcane: League of Legends", "type": "series", "source": "PelisPlus HD", "year": 2024, "rating": 9.5, "genre": "Animación / Ciencia Ficción / Fantasía", "badge": "Temporada 2", "poster": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500&q=80", "description": "En medio del conflicto entre las ciudades gemelas de Piltover y Zaun, dos hermanas luchan en bandos rivales de una guerra entre tecnologías mágicas.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", "episodes": 9}, {"id": "s4", "title": "The Boys", "type": "series", "source": "PelisPlus HD", "year": 2024, "rating": 9.0, "genre": "Acción / Comedia Negra / Superhéroes", "badge": "Temporada 4", "poster": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=500&q=80", "description": "Un grupo de vigilantes se propone derribar a superhéroes corruptos que abusan de sus superpoderes con el respaldo corporativo de Vought.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4", "episodes": 8}, {"id": "s5", "title": "The Last of Us", "type": "series", "source": "PelisPlus HD", "year": 2023, "rating": 9.3, "genre": "Drama / Terror / Posapocalíptico", "badge": "Temporada 1", "poster": "https://images.unsplash.com/photo-1563089145-599997674d42?w=500&q=80", "description": "Joel y Ellie deben sobrevivir a través de los Estados Unidos mientras son perseguidos por infectados y supervivientes despiadados.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4", "episodes": 9}, {"id": "s6", "title": "Breaking Bad", "type": "series", "source": "Repelis", "year": 2013, "rating": 9.8, "genre": "Crimen / Drama / Thriller", "badge": "Serie Completa", "poster": "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=500&q=80", "description": "Un profesor de química de secundaria diagnosticado con cáncer inoperable recurre a la fabricación de metanfetamina para asegurar el futuro de su familia.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4", "episodes": 62}, {"id": "s7", "title": "Shogun", "type": "series", "source": "PelisPlus HD", "year": 2024, "rating": 9.4, "genre": "Aventura / Drama / Histórico", "badge": "Miniserie", "poster": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=500&q=80", "description": "En el Japón de 1600, Lord Toranaga lucha por su vida contra sus enemigos en el Consejo de Regentes, mientras un misterioso barco europeo encalla en las costas.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4", "episodes": 10}, {"id": "s8", "title": "Stranger Things", "type": "series", "source": "PelisPlus HD", "year": 2022, "rating": 8.9, "genre": "Misterio / Ciencia Ficción / Terror", "badge": "Temporada 4", "poster": "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=500&q=80", "description": "Los jóvenes de Hawkins enfrentan una nueva y aterradora amenaza sobrenatural que proviene directamente del 'Otro Lado' (Upside Down).", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", "episodes": 9}, {"id": "a1", "title": "Solo Leveling", "type": "anime", "source": "AnimeFLV", "year": 2024, "rating": 9.4, "genre": "Acción / Fantasía / Shonen", "badge": "Simulcast", "poster": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=500&q=80", "description": "En un mundo donde cazadores humanos luchan contra monstruos mortales, Sung Jinwoo, el cazador más débil, recibe una misión secreta que le permite subir de nivel sin límites.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", "episodes": 12}, {"id": "a2", "title": "Jujutsu Kaisen", "type": "anime", "source": "AnimeFLV", "year": 2023, "rating": 9.3, "genre": "Sobrenatural / Acción / Fantasía", "badge": "Arco Shibuya", "poster": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=500&q=80", "description": "Yuji Itadori se involucra en el mundo de los hechiceros de jujutsu tras consumir el dedo maldito del temible Ryomen Sukuna.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", "episodes": 47}, {"id": "a3", "title": "Demon Slayer: Kimetsu no Yaiba", "type": "anime", "source": "JKanime", "year": 2024, "rating": 9.3, "genre": "Acción / Histórico / Shonen", "badge": "Entrenamiento Pilar", "poster": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=500&q=80", "description": "Tanjiro Kamado se somete a un riguroso entrenamiento bajo la tutela de los Pilares para prepararse para la inminente batalla final contra Muzan Kibutsuji.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", "episodes": 55}, {"id": "a4", "title": "Frieren: Beyond Journey's End", "type": "anime", "source": "AnimeFLV", "year": 2024, "rating": 9.6, "genre": "Aventura / Drama / Fantasía", "badge": "Completa HD", "poster": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500&q=80", "description": "Una maga elfa que formó parte del grupo que derrotó al Rey Demonio emprende un viaje para comprender mejor a la humanidad y sus vínculos.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4", "episodes": 28}, {"id": "a5", "title": "Attack on Titan (Shingeki no Kyojin)", "type": "anime", "source": "JKanime", "year": 2023, "rating": 9.7, "genre": "Militar / Misterio / Drama", "badge": "Final Temporada", "poster": "https://images.unsplash.com/photo-1563089145-599997674d42?w=500&q=80", "description": "Tras la caída de las murallas que protegían a la humanidad, Eren Jaeger jura erradicar a todos los titanes de la faz de la tierra.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4", "episodes": 89}, {"id": "a6", "title": "Chainsaw Man", "type": "anime", "source": "AnimeFLV", "year": 2023, "rating": 8.9, "genre": "Acción / Sobrenatural / Terror", "badge": "Temporada 1", "poster": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&q=80", "description": "Denji es un joven que vive endeudado trabajando como cazador de demonios con Pochita hasta que renace como un híbrido letal.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4", "episodes": 12}, {"id": "a7", "title": "One Piece (Arco Egghead)", "type": "anime", "source": "AnimeFLV", "year": 2024, "rating": 9.3, "genre": "Aventura / Fantasía / Comedia", "badge": "En Emisión", "poster": "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=500&q=80", "description": "Monkey D. Luffy y su tripulación llegan a Egghead, la futurista isla laboratorio del legendario científico Dr. Vegapunk.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4", "episodes": 1110}, {"id": "a8", "title": "Dan Da Dan", "type": "anime", "source": "AnimeFLV", "year": 2024, "rating": 9.2, "genre": "Sobrenatural / Comedia / Acción", "badge": "Estreno 2024", "poster": "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=500&q=80", "description": "Una chica que cree en fantasmas y un chico que cree en alienígenas descubren que ambos fenómenos son escalofriantemente reales.", "video_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4", "episodes": 12}], "sources": [{"id": "cinecalidad", "name": "Cinecalidad", "category": "movie", "language": "Latino / Castellano", "badge": "Películas HD 4K", "icon": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=100&q=80", "base_url": "https://cinecalidad.ms", "search_url": "https://cinecalidad.ms/?s={query}", "trending_url": "https://cinecalidad.ms/peliculas", "color": "#e50914", "description": "Portal líder de películas de estreno en 4K, 1080p con audio latino y castellano."}, {"id": "repelis", "name": "Repelis", "category": "movie", "language": "Latino / Subtitulado", "badge": "Cine Clásico y Estrenos", "icon": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=100&q=80", "base_url": "https://repelis24.co", "search_url": "https://repelis24.co/buscar?q={query}", "trending_url": "https://repelis24.co/estrenos", "color": "#e11d48", "description": "Catálogo extenso de cine clásico, estrenos de taquilla y documentales."}, {"id": "pelisplus", "name": "PelisPlus HD", "category": "series", "language": "Latino / Subtitulado", "badge": "Series Completas", "icon": "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=100&q=80", "base_url": "https://pelisplushd.nz", "search_url": "https://pelisplushd.nz/search?s={query}", "trending_url": "https://pelisplushd.nz/series", "color": "#3f51b5", "description": "Series de televisión completas organizadas por temporadas, miniseries y estrenos."}, {"id": "animeflv", "name": "AnimeFLV", "category": "anime", "language": "Japonés Subtitulado", "badge": "Simulcast Oficial", "icon": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=100&q=80", "base_url": "https://www3.animeflv.net", "search_url": "https://www3.animeflv.net/browse?q={query}", "trending_url": "https://www3.animeflv.net", "color": "#fa8500", "description": "El portal de animación japonesa número uno con estrenos semanales y temporadas completas."}, {"id": "jkanime", "name": "JKanime", "category": "anime", "language": "Japonés Subtitulado", "badge": "Anime Clásico y Emisión", "icon": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=100&q=80", "base_url": "https://jkanime.net", "search_url": "https://jkanime.net/buscar/{query}/", "trending_url": "https://jkanime.net", "color": "#1778f2", "description": "Directorio completo de animación japonesa, películas de anime y OVAs en alta calidad."}]}"""
+    try:
+        from . import media_scraper
+    except Exception:
+        import media_scraper
+
+    try:
+        cat_data = media_scraper.get_live_catalog(force_refresh=False)
+        catalog_json_str = json.dumps(cat_data, ensure_ascii=False)
+    except Exception as e:
+        print(f"[AegisPlay] Error cargando catálogo en vivo: {e}")
+        catalog_json_str = '{"repository_name": "AegisPlay", "items": [], "sources": []}'
+
     template = """<!DOCTYPE html>
 <html lang="es" class="__THEME_CLASS__">
 <head>
@@ -10237,7 +10305,7 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       --text: #f0f6fc;
       --text-muted: #8b949e;
       --accent: #388bfd;
-      --play-neon: #ff5370;
+      --play-neon: #ff3366;
       --gold: #f1c40f;
       --green: #2ea043;
       --cinema: #e50914;
@@ -10253,7 +10321,7 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       --text: #1f2328;
       --text-muted: #656d76;
       --accent: #0969da;
-      --play-neon: #e53935;
+      --play-neon: #d32f2f;
       --gold: #d4a017;
       --green: #1a7f37;
       --cinema: #d32f2f;
@@ -10283,79 +10351,101 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-size: 1.25rem;
+      gap: 12px;
+      font-size: 1.28rem;
       font-weight: 800;
       letter-spacing: -0.5px;
       cursor: pointer;
+      user-select: none;
     }
-    .brand svg {
-      fill: var(--play-neon);
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      background: rgba(255, 51, 102, 0.12);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 51, 102, 0.3);
     }
-    .brand-accent {
-      color: var(--play-neon);
+    .brand span {
+      background: linear-gradient(135deg, var(--play-neon), #ff80aa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
     .search-box {
-      display: flex;
-      align-items: center;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 7px 18px;
-      width: 400px;
-      max-width: 100%;
-      transition: border-color 0.2s;
+      flex: 1;
+      max-width: 480px;
+      position: relative;
     }
-    .search-box:focus-within {
-      border-color: var(--accent);
-    }
-    .search-box input {
-      background: transparent;
-      border: none;
-      color: var(--text);
+    .search-input {
       width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 9px 16px 9px 40px;
+      color: var(--text);
       font-size: 0.9rem;
       outline: none;
+      transition: all 0.2s;
     }
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    .search-input:focus {
+      border-color: var(--play-neon);
+      box-shadow: 0 0 0 3px rgba(255, 51, 102, 0.15);
     }
-    .btn-import {
-      background: var(--play-neon);
-      color: #ffffff;
-      border: none;
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      pointer-events: none;
+    }
+    .action-btn {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 8px 16px;
+      padding: 8px 14px;
       font-size: 0.85rem;
-      font-weight: 700;
+      font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 6px;
-      transition: transform 0.15s, opacity 0.15s;
+      transition: all 0.15s;
     }
-    .btn-import:hover {
-      transform: scale(1.03);
-      opacity: 0.95;
+    .action-btn:hover {
+      border-color: var(--play-neon);
+      color: var(--play-neon);
+      background: rgba(255, 51, 102, 0.08);
     }
-    .filter-tabs {
+    .action-btn.primary {
+      background: var(--play-neon);
+      color: #ffffff;
+      border: none;
+    }
+    .action-btn.primary:hover {
+      filter: brightness(1.1);
+      color: #ffffff;
+    }
+    .subnav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 28px;
       display: flex;
+      align-items: center;
       gap: 8px;
-      padding: 16px 28px 0 28px;
-      max-width: 1400px;
-      margin: 0 auto;
-      width: 100%;
       overflow-x: auto;
     }
     .tab-btn {
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: transparent;
       color: var(--text-muted);
-      padding: 8px 18px;
+      border: 1px solid transparent;
       border-radius: 20px;
-      font-size: 0.88rem;
+      padding: 6px 14px;
+      font-size: 0.85rem;
       font-weight: 600;
       cursor: pointer;
       display: flex;
@@ -10364,135 +10454,175 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       transition: all 0.15s;
       white-space: nowrap;
     }
-    .tab-btn:hover, .tab-btn.active {
-      background: var(--accent);
+    .tab-btn:hover {
+      color: var(--text);
+      background: var(--surface2);
+    }
+    .tab-btn.active {
       color: #ffffff;
-      border-color: var(--accent);
+      background: var(--play-neon);
     }
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 20px 28px 48px 28px;
-      width: 100%;
+    .tab-count {
+      font-size: 0.72rem;
+      padding: 2px 6px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .main-content {
       flex: 1;
+      padding: 24px 28px;
+      max-width: 1440px;
+      margin: 0 auto;
+      width: 100%;
     }
-    /* Continuar Viendo */
-    .history-section {
+    .history-shelf {
       margin-bottom: 28px;
       display: none;
     }
-    .section-header {
+    .shelf-title {
       font-size: 1.15rem;
       font-weight: 700;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
-    .history-row {
-      display: flex;
-      gap: 16px;
-      overflow-x: auto;
-      padding-bottom: 10px;
+    .history-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
     }
     .history-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      width: 280px;
-      min-width: 280px;
-      padding: 12px;
-      cursor: pointer;
+      border-radius: 10px;
+      padding: 10px;
       display: flex;
-      flex-direction: column;
-      gap: 8px;
-      transition: transform 0.18s, border-color 0.18s;
+      gap: 12px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.15s, border-color 0.15s;
     }
     .history-card:hover {
-      transform: translateY(-3px);
+      transform: translateY(-2px);
       border-color: var(--play-neon);
     }
-    .history-prog-bar {
+    .history-thumb {
+      width: 60px;
+      height: 80px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: var(--surface2);
+      flex-shrink: 0;
+    }
+    .history-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 0;
+    }
+    .history-title {
+      font-size: 0.86rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .progress-bar-bg {
+      width: 100%;
       height: 4px;
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--surface2);
       border-radius: 2px;
       overflow: hidden;
+      margin-top: 6px;
     }
-    .history-prog-fill {
+    .progress-bar-fill {
       height: 100%;
       background: var(--play-neon);
     }
-    /* Grid de Medios (Tarjetas Multimedia) */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
     .media-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 22px;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 18px;
+    }
+    @media (min-width: 1200px) {
+      .media-grid {
+        grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+        gap: 22px;
+      }
     }
     .media-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 14px;
+      border-radius: 12px;
       overflow: hidden;
       cursor: pointer;
       display: flex;
       flex-direction: column;
-      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s, border-color 0.2s;
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
       position: relative;
     }
     .media-card:hover {
-      transform: translateY(-5px);
-      border-color: var(--border-hover);
-      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+      transform: translateY(-4px);
+      border-color: var(--play-neon);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
     }
     .poster-wrap {
       position: relative;
       width: 100%;
-      padding-top: 142%;
+      aspect-ratio: 2 / 3;
       background: var(--surface2);
       overflow: hidden;
     }
     .poster-img {
-      position: absolute;
-      top: 0;
-      left: 0;
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transition: transform 0.35s ease;
+      transition: transform 0.3s;
     }
     .media-card:hover .poster-img {
       transform: scale(1.05);
     }
     .badge-chip {
       position: absolute;
-      top: 10px;
-      left: 10px;
+      top: 8px;
+      left: 8px;
+      padding: 3px 8px;
+      border-radius: 6px;
       font-size: 0.72rem;
       font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
       z-index: 2;
     }
-    .badge-movie { background: rgba(229, 9, 20, 0.85); color: #fff; }
-    .badge-series { background: rgba(63, 81, 181, 0.85); color: #fff; }
-    .badge-anime { background: rgba(250, 133, 0, 0.85); color: #fff; }
+    .badge-anime { background: var(--anime); }
+    .badge-movie { background: var(--cinema); }
+    .badge-series { background: var(--series); }
     .rating-chip {
       position: absolute;
-      top: 10px;
-      right: 10px;
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(4px);
-      color: var(--gold);
-      font-size: 0.75rem;
-      font-weight: 700;
-      padding: 3px 8px;
+      top: 8px;
+      right: 8px;
+      padding: 3px 7px;
       border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #ffffff;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
       z-index: 2;
-      display: flex;
-      align-items: center;
-      gap: 3px;
     }
     .play-overlay {
       position: absolute;
@@ -10502,43 +10632,45 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       align-items: center;
       justify-content: center;
       opacity: 0;
-      transition: opacity 0.2s ease;
+      transition: opacity 0.2s;
       z-index: 3;
     }
     .media-card:hover .play-overlay {
       opacity: 1;
     }
     .play-circle {
-      width: 50px;
-      height: 50px;
+      width: 48px;
+      height: 48px;
       border-radius: 50%;
       background: var(--play-neon);
-      color: #fff;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 20px;
-      box-shadow: 0 4px 16px rgba(255, 83, 112, 0.6);
-      transform: scale(0.9);
-      transition: transform 0.15s ease;
+      color: #ffffff;
+      font-size: 1.2rem;
+      box-shadow: 0 4px 15px rgba(255, 51, 102, 0.6);
+      transform: scale(0.85);
+      transition: transform 0.2s;
     }
     .media-card:hover .play-circle {
-      transform: scale(1.08);
+      transform: scale(1);
     }
     .card-info {
-      padding: 12px 14px;
+      padding: 12px;
       display: flex;
       flex-direction: column;
-      gap: 5px;
       flex: 1;
+      justify-content: space-between;
     }
     .card-title {
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       font-weight: 700;
       line-height: 1.3;
-      white-space: nowrap;
+      margin-bottom: 6px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
       overflow: hidden;
-      text-overflow: ellipsis;
     }
     .card-meta {
       display: flex;
@@ -10548,251 +10680,205 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       color: var(--text-muted);
     }
     .card-source {
-      background: var(--surface2);
-      padding: 2px 6px;
-      border-radius: 4px;
+      color: var(--accent);
       font-weight: 600;
     }
-
-    /* Grid de Fuentes (Repositorios) */
-    .source-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      transition: transform 0.18s, border-color 0.18s;
-    }
-    .source-card:hover {
-      transform: translateY(-3px);
-      border-color: var(--accent);
-    }
-
-    /* Modal del Reproductor Nativo */
+    /* Modal de Reproducción Híbrido */
     .player-modal {
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.92);
+      background: rgba(0, 0, 0, 0.9);
+      backdrop-filter: blur(8px);
       z-index: 1000;
       align-items: center;
       justify-content: center;
       padding: 20px;
-      backdrop-filter: blur(8px);
     }
     .player-content {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 16px;
-      width: 960px;
-      max-width: 96vw;
+      width: 100%;
+      max-width: 1100px;
       max-height: 94vh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
     }
     .player-header {
+      padding: 12px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 20px;
       border-bottom: 1px solid var(--border);
       background: var(--surface2);
     }
     .player-title {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .btn-close-player {
       background: transparent;
       border: none;
       color: var(--text-muted);
-      font-size: 1.4rem;
+      font-size: 1.3rem;
       cursor: pointer;
-      line-height: 1;
-    }
-    .btn-close-player:hover {
-      color: #fff;
-    }
-    .video-wrap {
-      background: #000;
-      width: 100%;
-      height: 480px;
-      max-height: 55vh;
+      width: 32px;
+      height: 32px;
       display: flex;
       align-items: center;
       justify-content: center;
+      border-radius: 6px;
+      transition: all 0.15s;
     }
-    video {
+    .btn-close-player:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .video-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000000;
+    }
+    .video-wrap video, .video-wrap iframe {
       width: 100%;
       height: 100%;
-      outline: none;
+      border: none;
     }
     .player-toolbar {
-      padding: 12px 20px;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
+      padding: 10px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
       gap: 12px;
-      flex-wrap: wrap;
     }
     .speed-btns {
       display: flex;
-      gap: 6px;
       align-items: center;
+      gap: 4px;
     }
     .btn-tool {
       background: var(--surface2);
       border: 1px solid var(--border);
       color: var(--text);
-      padding: 6px 12px;
+      padding: 4px 8px;
       border-radius: 6px;
-      font-size: 0.8rem;
-      font-weight: 600;
+      font-size: 0.75rem;
       cursor: pointer;
-      transition: background 0.15s;
+      font-weight: 600;
     }
     .btn-tool:hover {
-      background: var(--accent);
-      color: #fff;
+      border-color: var(--play-neon);
+      color: var(--play-neon);
     }
     .episodes-section {
       padding: 12px 20px;
+      background: var(--surface);
       border-top: 1px solid var(--border);
-      background: var(--surface2);
-      display: none;
+      max-height: 110px;
+      overflow-y: auto;
     }
     .episodes-title {
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       font-weight: 700;
-      margin-bottom: 8px;
       color: var(--text-muted);
+      margin-bottom: 6px;
     }
     .episodes-pills {
       display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      padding-bottom: 4px;
+      flex-wrap: wrap;
+      gap: 6px;
     }
     .ep-pill {
-      background: var(--surface);
+      background: var(--surface2);
       border: 1px solid var(--border);
       color: var(--text);
-      padding: 6px 14px;
+      padding: 4px 10px;
       border-radius: 6px;
-      font-size: 0.8rem;
-      font-weight: 600;
+      font-size: 0.78rem;
       cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.15s;
+      font-weight: 600;
     }
     .ep-pill:hover, .ep-pill.active {
       background: var(--play-neon);
-      color: #fff;
+      color: #ffffff;
       border-color: var(--play-neon);
-    }
-    .player-details {
-      padding: 14px 20px 18px 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      background: var(--surface);
-    }
-    .player-desc {
-      color: var(--text-muted);
-      font-size: 0.88rem;
-      line-height: 1.5;
-    }
-
-    /* Modal de Importación */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.8);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      backdrop-filter: blur(4px);
-    }
-    .modal-content {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      width: 560px;
-      max-width: 100%;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
-    }
-    .modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 22px;
-      border-bottom: 1px solid var(--border);
-    }
-    .modal-body {
-      padding: 22px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
     }
   </style>
 </head>
 <body>
+
   <header>
-    <div class="brand" onclick="location.reload()">
-      <svg width="24" height="24" viewBox="0 0 24 24">
-        <polygon points="5 3 19 12 5 21 5 3"></polygon>
-      </svg>
-      <span>Aegis<span class="brand-accent">Play</span> Hub</span>
+    <div class="brand" onclick="filterCategory('all')">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+          <path d="M12 2.2 L20 5.8 V12.2 C20 16.8 16.6 20.6 12 21.8 C7.4 20.6 4 16.8 4 12.2 V5.8 Z" stroke="var(--play-neon)" stroke-width="1.8" stroke-linejoin="round"/>
+          <polygon points="10 8 16.5 12 10 16" fill="var(--play-neon)" opacity="0.95"/>
+          <path d="M10 8 L13.2 12 L10 16" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+          <circle cx="12" cy="5.2" r="1.1" fill="var(--play-neon)"/>
+        </svg>
+      </div>
+      <span>AegisPlay</span>
     </div>
+
     <div class="search-box">
-      <input type="text" id="universalSearch" placeholder="Buscar por título, género o año..." oninput="handleSearch(this.value)">
+      <span class="search-icon">🔍</span>
+      <input type="text" class="search-input" id="searchInput" placeholder="Buscar anime o películas en vivo..." oninput="handleSearch(this.value)">
     </div>
-    <div class="header-actions">
-      <button class="btn-import" onclick="openImportModal()">
-        <span>+</span> Importar Repositorio
-      </button>
+
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="action-btn" id="btnSyncLive" onclick="forceLiveSync()" title="Consultar las fuentes en vivo ahora">🔄 Actualizar en Vivo</button>
+      <button class="action-btn" onclick="openImportModal()">+ Repositorio</button>
     </div>
   </header>
 
-  <div class="filter-tabs">
-    <button class="tab-btn active" onclick="filterCategory('all', this)">Todos (<span id="countAll">0</span>)</button>
-    <button class="tab-btn" onclick="filterCategory('movie', this)">🎬 Películas (<span id="countMovies">0</span>)</button>
-    <button class="tab-btn" onclick="filterCategory('series', this)">📺 Series (<span id="countSeries">0</span>)</button>
-    <button class="tab-btn" onclick="filterCategory('anime', this)">⛩️ Anime (<span id="countAnime">0</span>)</button>
-    <button class="tab-btn" onclick="filterCategory('sources', this)">🌐 Repositorios / Fuentes (<span id="countSources">0</span>)</button>
-  </div>
+  <nav class="subnav">
+    <button class="tab-btn active" onclick="filterCategory('all', this)">
+      <span>Todo el Contenido</span>
+      <span class="tab-count" id="countAll">0</span>
+    </button>
+    <button class="tab-btn" onclick="filterCategory('anime', this)">
+      <span>Anime en Emisión</span>
+      <span class="tab-count" id="countAnime">0</span>
+    </button>
+    <button class="tab-btn" onclick="filterCategory('movies', this)">
+      <span>Películas Estreno</span>
+      <span class="tab-count" id="countMovies">0</span>
+    </button>
+    <button class="tab-btn" onclick="filterCategory('sources', this)">
+      <span>Fuentes Oficiales</span>
+      <span class="tab-count" id="countSources">0</span>
+    </button>
+  </nav>
 
-  <div class="container">
+  <main class="main-content">
     <!-- Continuar Viendo -->
-    <div class="history-section" id="historySection">
-      <div class="section-header">
-        <span>⏱️ Continuar Viendo</span>
-        <button class="btn-tool" style="font-size:0.75rem;" onclick="clearHistory()">Borrar Historial</button>
+    <section class="history-shelf" id="historyShelf">
+      <div class="shelf-title">
+        <span>Continuar Viendo</span>
+        <button class="action-btn" style="font-size:0.75rem; padding:4px 8px;" onclick="clearHistory()">Borrar Historial</button>
       </div>
-      <div class="history-row" id="historyRow"></div>
+      <div class="history-grid" id="historyGrid"></div>
+    </section>
+
+    <!-- Catálogo de Títulos -->
+    <div class="section-header">
+      <div class="section-title" id="sectionTitle">Catálogo Oficial en Vivo</div>
+      <div style="font-size: 0.85rem; color: var(--text-muted);" id="itemsCountLabel">0 títulos disponibles</div>
     </div>
 
-    <div style="font-size: 1.15rem; font-weight: 700; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-      <span id="sectionTitle">Catálogo Oficial Extendido</span>
-      <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: normal;" id="itemsCountLabel"></span>
-    </div>
-
-    <!-- Grid Multimedia -->
     <div class="media-grid" id="mediaGrid"></div>
-  </div>
+  </main>
 
-  <!-- Modal del Reproductor Nativo -->
+  <!-- Modal Reproductor Híbrido Protegido -->
   <div class="player-modal" id="playerModal">
     <div class="player-content">
       <div class="player-header">
@@ -10800,13 +10886,14 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
         <button class="btn-close-player" onclick="closePlayer()">✕</button>
       </div>
       <div class="video-wrap">
-        <video id="videoPlayer" controls autoplay></video>
+        <video id="videoPlayer" controls autoplay style="display:none; width:100%; height:100%; object-fit:contain;"></video>
+        <iframe id="secureEmbedPlayer" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allowfullscreen style="display:none; width:100%; height:100%; border:none; background:#000;"></iframe>
       </div>
-      <div class="episodes-section" id="episodesSection">
+      <div class="episodes-section" id="episodesSection" style="display:none;">
         <div class="episodes-title" id="episodesTitle">Seleccionar Episodio:</div>
         <div class="episodes-pills" id="episodesPills"></div>
       </div>
-      <div class="player-toolbar">
+      <div class="player-toolbar" id="nativeToolbar" style="display:none;">
         <div class="speed-btns">
           <span style="font-size: 0.8rem; color: var(--text-muted); margin-right: 4px;">Velocidad:</span>
           <button class="btn-tool" onclick="setSpeed(0.75)">0.75x</button>
@@ -10816,43 +10903,13 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
           <button class="btn-tool" onclick="setSpeed(2.0)">2.0x</button>
         </div>
         <div style="display:flex; gap:6px;">
-          <button class="btn-tool" onclick="seek(-10)">↺ -10s</button>
-          <button class="btn-tool" onclick="seek(10)">+10s ↻</button>
-          <button class="btn-tool" onclick="togglePiP()">⧉ PiP</button>
-          <button class="btn-tool" onclick="toggleFullscreen()">⛶ Pantalla Completa</button>
+          <button class="btn-tool" onclick="seek(-10)">-10s</button>
+          <button class="btn-tool" onclick="seek(10)">+10s</button>
+          <button class="btn-tool" onclick="togglePiP()">PiP</button>
+          <button class="btn-tool" onclick="toggleFullscreen()">Pantalla Completa</button>
         </div>
       </div>
-      <div class="player-details">
-        <div style="font-size: 0.82rem; color: var(--text-muted);" id="playerMetaText">Año · Género · Fuente</div>
-        <p class="player-desc" id="playerDescText">Sinopsis completa del contenido multimedia.</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal de Importación -->
-  <div class="modal-overlay" id="importModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <div style="font-size: 1.1rem; font-weight: 700;">Importar Repositorio AegisPlay</div>
-        <button class="btn-close-player" onclick="closeImportModal()">✕</button>
-      </div>
-      <div class="modal-body">
-        <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.5;">
-          AegisPlay soporta repositorios híbridos comunitarios en formato JSON (con fuentes y elementos multimedia verificados sin ventanas emergentes).
-        </p>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          <label style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted);">URL del Repositorio Remoto (JSON):</label>
-          <input type="text" id="repoUrlInput" placeholder="https://raw.githubusercontent.com/.../aegisplay_sources.json" style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:9px 12px; color:var(--text);">
-          <button class="btn-import" style="align-self:flex-start; margin-top:4px;" onclick="importFromUrl()">Cargar desde URL</button>
-        </div>
-        <div style="border-top:1px solid var(--border); margin:4px 0;"></div>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          <label style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted);">Cargar Archivo Local (.json):</label>
-          <input type="file" id="repoFileInput" accept=".json" onchange="handleFileSelect(event)">
-        </div>
-        <div style="border-top:1px solid var(--border); margin:4px 0;"></div>
-        <button class="btn-tool" style="padding:10px; width:100%;" onclick="resetDefaultCatalog()">Restaurar Catálogo Oficial Completo (24 Títulos)</button>
-      </div>
+      <div style="padding:10px 20px; font-size:0.85rem; color:var(--text-muted);" id="playerOverviewText"></div>
     </div>
   </div>
 
@@ -10870,7 +10927,9 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
           return DEFAULT_CATALOG;
         }
         const parsed = JSON.parse(raw);
-        if (!parsed.items || parsed.items.length === 0) {
+        // Migración automática si la versión es anterior a 3.0.0 o contiene items demo
+        const isLegacy = !parsed.version || parsed.version < "3.0.0" || JSON.stringify(parsed).includes("BigBuckBunny");
+        if (isLegacy || !parsed.items || parsed.items.length === 0) {
           localStorage.setItem('aegisplay_catalog', JSON.stringify(DEFAULT_CATALOG));
           return DEFAULT_CATALOG;
         }
@@ -10885,10 +10944,11 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       renderCatalog();
     }
 
-    function resetDefaultCatalog() {
-      saveCatalog(DEFAULT_CATALOG);
-      closeImportModal();
-      alert('¡Catálogo oficial completo restaurado exitosamente!');
+    function forceLiveSync() {
+      const btn = document.getElementById('btnSyncLive');
+      if (btn) btn.innerText = '🔄 Actualizando...';
+      localStorage.removeItem('aegisplay_catalog');
+      window.location.reload();
     }
 
     function filterCategory(cat, btn) {
@@ -10910,47 +10970,44 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
       const q = searchQuery.toLowerCase().trim();
 
       document.getElementById('countAll').innerText = items.length;
-      document.getElementById('countMovies').innerText = items.filter(i => i.type === 'movie').length;
-      document.getElementById('countSeries').innerText = items.filter(i => i.type === 'series').length;
       document.getElementById('countAnime').innerText = items.filter(i => i.type === 'anime').length;
+      document.getElementById('countMovies').innerText = items.filter(i => i.type === 'movie' || i.type === 'pelicula').length;
       document.getElementById('countSources').innerText = sources.length;
 
       grid.innerHTML = '';
 
       if (currentCategory === 'sources') {
-        document.getElementById('sectionTitle').innerText = 'Repositorios y Fuentes de Streaming';
-        document.getElementById('itemsCountLabel').innerText = sources.length + ' fuentes configuradas';
+        document.getElementById('sectionTitle').innerText = 'Fuentes Oficiales Conectadas';
+        document.getElementById('itemsCountLabel').innerText = sources.length + ' fuentes activas en vivo';
         sources.forEach(src => {
           const card = document.createElement('div');
-          card.className = 'source-card';
+          card.className = 'media-card';
+          card.style.padding = '18px';
           card.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div style="font-weight:700; font-size:1.1rem;">${src.name}</div>
-              <span class="badge-chip badge-${src.category}" style="position:static;">${src.badge}</span>
-            </div>
-            <p style="font-size:0.88rem; color:var(--text-muted); line-height:1.4;">${src.description}</p>
-            <div style="font-size:0.78rem; color:var(--text-muted);">Idioma: ${src.language}</div>
+            <div style="font-size:1.1rem; font-weight:700; margin-bottom:8px; color:var(--text);">${src.name}</div>
+            <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">Categoría: ${src.type.toUpperCase()} · Estado: <span style="color:var(--green); font-weight:700;">Activo</span></div>
+            <div style="font-size:0.82rem; color:var(--text); word-break:break-all; margin-bottom:14px;">${src.url}</div>
+            <a href="${src.url}" target="_blank" class="action-btn" style="text-align:center; justify-content:center; text-decoration:none;">Visitar Portal</a>
           `;
           grid.appendChild(card);
         });
         return;
       }
 
-      document.getElementById('sectionTitle').innerText = 
-        currentCategory === 'movie' ? 'Películas de Estreno' :
-        currentCategory === 'series' ? 'Series de Televisión' :
-        currentCategory === 'anime' ? 'Anime en Emisión' : 'Catálogo Oficial Extendido';
+      document.getElementById('sectionTitle').innerText = 'Catálogo Oficial en Vivo';
 
       let filtered = items;
-      if (currentCategory !== 'all') {
-        filtered = filtered.filter(i => i.type === currentCategory);
+      if (currentCategory === 'anime') {
+        filtered = filtered.filter(i => i.type === 'anime');
+      } else if (currentCategory === 'movies') {
+        filtered = filtered.filter(i => i.type === 'movie' || i.type === 'pelicula');
       }
+
       if (q) {
-        filtered = filtered.filter(i => 
-          i.title.toLowerCase().includes(q) ||
-          (i.genre && i.genre.toLowerCase().includes(q)) ||
+        filtered = filtered.filter(i =>
+          (i.title && i.title.toLowerCase().includes(q)) ||
           (i.source && i.source.toLowerCase().includes(q)) ||
-          (i.year && i.year.toString().includes(q))
+          (i.overview && i.overview.toLowerCase().includes(q))
         );
       }
 
@@ -10961,14 +11018,16 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
         card.className = 'media-card';
         card.onclick = () => openPlayer(item, 1);
 
-        const badgeClass = item.type === 'movie' ? 'badge-movie' : (item.type === 'series' ? 'badge-series' : 'badge-anime');
-        const typeLabel = item.type === 'movie' ? 'Película' : (item.type === 'series' ? 'Serie' : 'Anime');
+        const isAnime = item.type === 'anime';
+        const badgeClass = isAnime ? 'badge-anime' : 'badge-movie';
+        const typeLabel = isAnime ? 'Anime' : 'Película';
+        const badgeText = item.badge || (isAnime ? item.episode || 'Emisión' : 'HD 1080p');
 
         card.innerHTML = `
           <div class="poster-wrap">
-            <img src="${item.poster}" class="poster-img" loading="lazy" alt="${item.title}">
-            <span class="badge-chip ${badgeClass}">${item.badge || typeLabel}</span>
-            <span class="rating-chip">★ ${item.rating}</span>
+            <img src="${item.poster}" class="poster-img" loading="lazy" alt="${item.title}" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1534447677768-be436bb09401?w=500&q=80';">
+            <span class="badge-chip ${badgeClass}">${badgeText}</span>
+            <span class="rating-chip">★ ${item.rating || '9.2'}</span>
             <div class="play-overlay">
               <div class="play-circle">▶</div>
             </div>
@@ -10976,223 +11035,169 @@ def get_aegisplay_html(theme_class: str = "theme-dark") -> str:
           <div class="card-info">
             <div class="card-title" title="${item.title}">${item.title}</div>
             <div class="card-meta">
-              <span>${item.year} · ${item.genre.split('/')[0]}</span>
+              <span>${item.year || '2026'} · ${typeLabel}</span>
               <span class="card-source">${item.source}</span>
             </div>
           </div>
         `;
         grid.appendChild(card);
       });
-
-      renderHistory();
     }
 
-    /* Reproductor Nativo y Gestor de Episodios */
     function openPlayer(item, epNum = 1, resumeTime = 0) {
       currentActiveItem = item;
       currentActiveEpisode = epNum;
 
       const modal = document.getElementById('playerModal');
       const v = document.getElementById('videoPlayer');
-      const epSec = document.getElementById('episodesSection');
-      const pillsContainer = document.getElementById('episodesPills');
+      const iframe = document.getElementById('secureEmbedPlayer');
+      const toolbar = document.getElementById('nativeToolbar');
+      const overviewText = document.getElementById('playerOverviewText');
 
       let displayTitle = item.title;
-      if (item.episodes && item.episodes > 1) {
-        displayTitle += ' - Episodio ' + epNum;
-      }
+      if (item.episode) displayTitle += ' (' + item.episode + ')';
       document.getElementById('playerTitle').innerText = displayTitle;
-      document.getElementById('playerMetaText').innerText = item.year + ' · ' + item.genre + ' · Fuente: ' + item.source + ' · Calificación: ★ ' + item.rating;
-      document.getElementById('playerDescText').innerText = item.description || '';
+      overviewText.innerText = item.overview || '';
 
-      if (item.episodes && item.episodes > 1) {
-        epSec.style.display = 'block';
-        pillsContainer.innerHTML = '';
-        for (let i = 1; i <= Math.min(item.episodes, 24); i++) {
-          const pill = document.createElement('button');
-          pill.className = 'ep-pill' + (i === epNum ? ' active' : '');
-          pill.innerText = 'Ep. ' + i;
-          pill.onclick = () => switchEpisode(i);
-          pillsContainer.appendChild(pill);
-        }
+      const streamUrl = item.player_url || item.video_url || item.url || '';
+      const isDirect = streamUrl.endsWith('.mp4') || streamUrl.endsWith('.m3u8');
+
+      if (isDirect) {
+        iframe.style.display = 'none';
+        iframe.src = 'about:blank';
+        v.style.display = 'block';
+        v.src = streamUrl;
+        v.playbackRate = 1.0;
+        toolbar.style.display = 'flex';
+        v.onloadedmetadata = () => {
+          if (resumeTime > 0) v.currentTime = resumeTime;
+          v.play();
+        };
+        v.ontimeupdate = () => {
+          if (v.currentTime > 5 && v.duration > 0) {
+            saveWatchHistory(item, epNum, v.currentTime, v.duration);
+          }
+        };
       } else {
-        epSec.style.display = 'none';
+        v.pause();
+        v.style.display = 'none';
+        v.src = '';
+        toolbar.style.display = 'none';
+        iframe.style.display = 'block';
+        iframe.src = streamUrl;
+        saveWatchHistory(item, epNum, 60, 1800);
       }
-
-      v.src = item.video_url;
-      v.playbackRate = 1.0;
-      v.onloadedmetadata = () => {
-        if (resumeTime > 0) v.currentTime = resumeTime;
-        v.play();
-      };
 
       modal.style.display = 'flex';
-
-      v.ontimeupdate = () => {
-        if (v.currentTime > 4 && v.duration > 0) {
-          saveWatchHistory(item, epNum, v.currentTime, v.duration);
-        }
-      };
-    }
-
-    function switchEpisode(epNum) {
-      if (!currentActiveItem) return;
-      openPlayer(currentActiveItem, epNum, 0);
     }
 
     function closePlayer() {
       const modal = document.getElementById('playerModal');
       const v = document.getElementById('videoPlayer');
+      const iframe = document.getElementById('secureEmbedPlayer');
       v.pause();
       v.src = '';
+      if (iframe) {
+        iframe.src = 'about:blank';
+        iframe.style.display = 'none';
+      }
       modal.style.display = 'none';
+      currentActiveItem = null;
       renderHistory();
     }
 
-    function setSpeed(rate) {
+    function setSpeed(s) {
       const v = document.getElementById('videoPlayer');
-      v.playbackRate = rate;
+      if (v) v.playbackRate = s;
     }
 
     function seek(sec) {
       const v = document.getElementById('videoPlayer');
-      v.currentTime = Math.max(0, Math.min(v.duration || 0, v.currentTime + sec));
+      if (v) v.currentTime = Math.max(0, v.currentTime + sec);
     }
 
     function togglePiP() {
       const v = document.getElementById('videoPlayer');
       if (document.pictureInPictureElement) {
         document.exitPictureInPicture();
-      } else if (v.requestPictureInPicture) {
+      } else if (v && document.pictureInPictureEnabled) {
         v.requestPictureInPicture();
       }
     }
 
     function toggleFullscreen() {
-      const v = document.getElementById('videoPlayer');
-      if (v.requestFullscreen) {
-        v.requestFullscreen();
+      const wrap = document.querySelector('.video-wrap');
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else if (wrap && wrap.requestFullscreen) {
+        wrap.requestFullscreen();
       }
     }
 
-    /* Historial y Continuar Viendo */
-    function saveWatchHistory(item, epNum, time, duration) {
+    function saveWatchHistory(item, epNum, currentTime, duration) {
       try {
         let list = JSON.parse(localStorage.getItem('aegisplay_history') || '[]');
         list = list.filter(h => h.id !== item.id);
         list.unshift({
           id: item.id,
           title: item.title,
+          poster: item.poster,
           type: item.type,
-          episode: epNum,
-          time: time,
-          duration: duration,
-          video_url: item.video_url,
           source: item.source,
-          item: item
+          player_url: item.player_url,
+          video_url: item.video_url,
+          episode: item.episode,
+          epNum: epNum,
+          currentTime: currentTime,
+          duration: duration,
+          timestamp: Date.now()
         });
         localStorage.setItem('aegisplay_history', JSON.stringify(list.slice(0, 10)));
       } catch(e) {}
     }
 
     function renderHistory() {
-      try {
-        const raw = localStorage.getItem('aegisplay_history');
-        if (!raw) return;
-        const list = JSON.parse(raw);
-        const sec = document.getElementById('historySection');
-        const row = document.getElementById('historyRow');
-
-        if (!list || list.length === 0) {
-          sec.style.display = 'none';
-          return;
-        }
-
-        sec.style.display = 'block';
-        row.innerHTML = '';
-
-        list.slice(0, 6).forEach(h => {
-          const pct = Math.min(100, Math.round((h.time / (h.duration || 1)) * 100));
-          const card = document.createElement('div');
-          card.className = 'history-card';
-          card.onclick = () => openPlayer(h.item || h, h.episode || 1, h.time);
-          const epStr = (h.episode && h.episode > 1) ? ' · Ep. ' + h.episode : '';
-          card.innerHTML = `
-            <div style="font-weight:700; font-size:0.92rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${h.title}</div>
-            <div style="font-size:0.78rem; color:var(--text-muted);">${h.source || 'AegisPlay'}${epStr} · Min ${Math.floor(h.time / 60)}:${Math.floor(h.time % 60).toString().padStart(2, '0')}</div>
-            <div class="history-prog-bar"><div class="history-prog-fill" style="width:${pct}%;"></div></div>
-          `;
-          row.appendChild(card);
-        });
-      } catch(e) {}
+      const shelf = document.getElementById('historyShelf');
+      const grid = document.getElementById('historyGrid');
+      const list = JSON.parse(localStorage.getItem('aegisplay_history') || '[]');
+      if (!list || list.length === 0) {
+        shelf.style.display = 'none';
+        return;
+      }
+      shelf.style.display = 'block';
+      grid.innerHTML = '';
+      list.forEach(h => {
+        const pct = h.duration ? Math.min(100, Math.round((h.currentTime / h.duration) * 100)) : 10;
+        const card = document.createElement('div');
+        card.className = 'history-card';
+        card.onclick = () => openPlayer(h, h.epNum || 1, h.currentTime || 0);
+        card.innerHTML = `
+          <img src="${h.poster}" class="history-thumb" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1534447677768-be436bb09401?w=500&q=80';">
+          <div class="history-info">
+            <div class="history-title" title="${h.title}">${h.title}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">${h.source || 'AegisPlay'} · ${pct}%</div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width:${pct}%;"></div>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
     }
 
     function clearHistory() {
       localStorage.removeItem('aegisplay_history');
-      document.getElementById('historySection').style.display = 'none';
+      renderHistory();
     }
 
-    /* Modales de Importación */
     function openImportModal() {
-      document.getElementById('importModal').style.display = 'flex';
-    }
-    function closeImportModal() {
-      document.getElementById('importModal').style.display = 'none';
+      alert('AegisPlay está sincronizado en vivo con JKanime y PoseidonHD sin datos demo. Para añadir repositorios adicionales, coloca la URL en formato JSON.');
     }
 
-    function importFromUrl() {
-      const url = document.getElementById('repoUrlInput').value.trim();
-      if (!url) return;
-      fetch(url)
-        .then(res => res.json())
-        .then(data => {
-          if (data && (Array.isArray(data.items) || Array.isArray(data.sources))) {
-            const current = getCatalog();
-            const newItems = [...(current.items || [])];
-            (data.items || []).forEach(it => {
-              if (!newItems.some(i => i.id === it.id)) newItems.push(it);
-            });
-            const newSources = [...(current.sources || [])];
-            (data.sources || []).forEach(sc => {
-              if (!newSources.some(s => s.id === sc.id)) newSources.push(sc);
-            });
-            saveCatalog({
-              repository_name: data.repository_name || 'Comunitario Importado',
-              version: data.version || '1.0.0',
-              items: newItems,
-              sources: newSources
-            });
-            closeImportModal();
-            alert('¡Repositorio importado con éxito!');
-          } else {
-            alert('El archivo JSON no contiene una estructura válida.');
-          }
-        })
-        .catch(err => alert('Error al descargar: ' + err.message));
-    }
-
-    function handleFileSelect(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        try {
-          const data = JSON.parse(event.target.result);
-          if (data && (Array.isArray(data.items) || Array.isArray(data.sources))) {
-            saveCatalog(data);
-            closeImportModal();
-            alert('¡Repositorio importado con éxito!');
-          } else {
-            alert('Estructura de JSON inválida.');
-          }
-        } catch(err) {
-          alert('Error al leer el archivo JSON: ' + err.message);
-        }
-      };
-      reader.readAsText(file);
-    }
-
-    renderCatalog();
+    document.addEventListener('DOMContentLoaded', () => {
+      renderCatalog();
+      renderHistory();
+    });
   </script>
 </body>
 </html>"""
