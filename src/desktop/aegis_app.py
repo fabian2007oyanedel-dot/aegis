@@ -4499,7 +4499,7 @@ class AegisVerticalDock(QFrame):
         self.btn_aegisplay.setToolTip("AegisPlay Media Hub (Anime, Películas y Series)")
         self.btn_aegisplay.setFixedSize(38, 38)
         self.btn_aegisplay.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_aegisplay.clicked.connect(lambda: self.browser_win.toggle_side_panel("aegisplay"))
+        self.btn_aegisplay.clicked.connect(lambda: self.browser_win.open_internal_page("aegis://play"))
         layout.addWidget(self.btn_aegisplay)
         self.buttons["aegisplay"] = self.btn_aegisplay
         self.btn_aniplay = self.btn_aegisplay
@@ -7235,6 +7235,8 @@ class AegisBrowserWindow(QMainWindow):
         is_same = getattr(self, "_current_side_tool", None) == tool_name
         if self.sidebar.isVisible() and is_same:
             self.sidebar.hide()
+            if hasattr(self, "sidebar_splitter"):
+                self.sidebar_splitter.setSizes([0, 1400])
             self._current_side_tool = None
             if hasattr(self, "vertical_dock"):
                 self.vertical_dock.set_active_tool(None)
@@ -7262,6 +7264,8 @@ class AegisBrowserWindow(QMainWindow):
         """Compatibilidad para alternar el panel lateral con Ctrl+B o botón superior."""
         if force_hide or self.sidebar.isVisible():
             self.sidebar.hide()
+            if hasattr(self, "sidebar_splitter"):
+                self.sidebar_splitter.setSizes([0, 1400])
             self._current_side_tool = None
             if hasattr(self, "vertical_dock"):
                 self.vertical_dock.set_active_tool(None)
@@ -8153,16 +8157,16 @@ class AegisBrowserWindow(QMainWindow):
         self.sidebar.setMinimumWidth(320)
         self.sidebar.setMaximumWidth(950)
         self.sidebar_splitter.addWidget(self.sidebar)
-        if not self.config.get("show_sidebar", False):
-            self.sidebar.hide()
+        self.sidebar.hide()  # Siempre inicia colapsado/oculto en el arranque limpio
+        self._current_side_tool = None
 
         # 3. Contenedor de páginas web y DevTools acoplado
         self.sidebar_splitter.addWidget(self.web_splitter)
         self.sidebar_splitter.setStretchFactor(0, 0)
         self.sidebar_splitter.setStretchFactor(1, 1)
 
-        saved_sidebar_w = self.config.get("sidebar_width", 450)
-        self.sidebar_splitter.setSizes([saved_sidebar_w, 1400])
+        # En el inicio, la página web ocupa todo el ancho (sidebar = 0)
+        self.sidebar_splitter.setSizes([0, 1400])
         self.sidebar_splitter.splitterMoved.connect(self._on_sidebar_resized)
 
         splitter_layout.addWidget(self.sidebar_splitter, 1)
@@ -8716,8 +8720,8 @@ class AegisBrowserWindow(QMainWindow):
             self.load_history(view)
         elif url_str == "aegis://extensions":
             self.load_extensions(view)
-        elif url_str == "aegis://aniplay":
-            self.load_aniplay(view)
+        elif url_str in ("aegis://play", "aegis://aegisplay", "aegis://aniplay"):
+            self.load_aegisplay(view)
 
     def load_settings(self, view: QWebEngineView):
         idx = self.views.index(view) if view in self.views else -1
@@ -8918,17 +8922,20 @@ class AegisBrowserWindow(QMainWindow):
             return None
         return btn
 
-    def load_aniplay(self, view: QWebEngineView):
+    def load_aegisplay(self, view: QWebEngineView):
         idx = self.views.index(view) if view in self.views else -1
         t = THEMES.get(self.current_theme_name, THEMES["Oscuro"])
         if idx != -1:
-            self.tab_bar.setTabIcon(idx, create_aniplay_icon(t["accent"], 14))
-            self.tab_bar.setTabText(idx, "AniPlay Anime Hub")
-        view._aegis_virtual_url = "aegis://aniplay"
-        html = get_aniplay_html(t["ntp_class"])
-        view.setHtml(html, QUrl("aegis://aniplay"))
+            self.tab_bar.setTabIcon(idx, create_aegisplay_icon(t["accent"], 14))
+            self.tab_bar.setTabText(idx, "AegisPlay Media Hub")
+        view._aegis_virtual_url = "aegis://play"
+        html = get_aegisplay_html(t["ntp_class"])
+        view.setHtml(html, QUrl("aegis://play"))
         if view == self.current_view():
-            self.url_bar.setText("aegis://aniplay")
+            self.url_bar.setText("aegis://play")
+
+    def load_aniplay(self, view: QWebEngineView):
+        self.load_aegisplay(view)
 
     def close_tab(self, index: int):
         if isinstance(index, QWebEngineView):
@@ -9080,8 +9087,8 @@ class AegisBrowserWindow(QMainWindow):
             return
         elif url_str == "aegis://extensions":
             self.load_extensions(view)
-        elif url_str == "aegis://aniplay":
-            self.load_aniplay(view)
+        elif url_str in ("aegis://play", "aegis://aegisplay", "aegis://aniplay"):
+            self.load_aegisplay(view)
             return
         elif url_str == "aegis://start":
             if getattr(view, "_aegis_virtual_url", None) != "aegis://start":
