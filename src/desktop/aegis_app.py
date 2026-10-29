@@ -150,11 +150,10 @@ os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
     "--disable-default-apps "
     "--no-default-browser-check "
     "--no-first-run "
-    "--renderer-process-limit=2 "
     "--disable-gpu-shader-disk-cache "
     "--webrtc-ip-handling-policy=disable_non_proxied_udp "
     "--force-webrtc-ip-handling-policy "
-    "--js-flags=--expose-gc,--optimize-for-size "
+    "--js-flags=--expose-gc "
 )
 
 from PyQt6.QtWidgets import (
@@ -535,7 +534,7 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 
         discord_opt_script = scripts_dir / "aegis_discord_optimizer.js"
         cur_opt = discord_opt_script.read_text(encoding="utf-8", errors="ignore") if discord_opt_script.exists() else ""
-        if not discord_opt_script.exists() or "max-height: 100vh" not in cur_opt:
+        if not discord_opt_script.exists() or "setupVideoSafeDimensions" not in cur_opt:
             discord_opt_script.write_text(r"""// ==UserScript==
 // @name         Aegis Discord Ultra-Light Optimizer
 // @description  Reduce drásticamente el consumo de CPU y RAM de Discord Web: limita requestAnimationFrame a 1 FPS en segundo plano, defiende el WebRTC de voz sin microcortes, suprime desenfoques GPU pesados, oculta banners publicitarios de Nitro y ofrece un Responsive Drawer limpio para la barra lateral.
@@ -552,7 +551,133 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 
     if (window.self !== window.top) return;
 
-    function isAuthOrLogin() {
+        // =========================================================================
+    // AEGIS WEBRTC & DOM ROBUSTNESS SHIELD (ROOT-LEVEL FIX)
+    // =========================================================================
+
+    // 1. Inmunizacion contra NaN en Aspect Ratio (Evita que Mojo WidgetHost rechace mensajes IPC)
+    (function setupVideoSafeDimensions() {
+        if (window._aegisVideoSafeDimensionsHooked) return;
+        window._aegisVideoSafeDimensionsHooked = true;
+        try {
+            const origWidthDesc = Object.getOwnPropertyDescriptor(HTMLVideoElement.prototype, 'videoWidth');
+            const origHeightDesc = Object.getOwnPropertyDescriptor(HTMLVideoElement.prototype, 'videoHeight');
+
+            if (origWidthDesc && origWidthDesc.get) {
+                Object.defineProperty(HTMLVideoElement.prototype, 'videoWidth', {
+                    get() {
+                        const val = origWidthDesc.get.call(this);
+                        if (typeof val === 'number' && !isNaN(val) && val > 0) {
+                            this._lastAegisWidth = val;
+                            return val;
+                        }
+                        return this._lastAegisWidth || 1280;
+                    },
+                    configurable: true
+                });
+            }
+
+            if (origHeightDesc && origHeightDesc.get) {
+                Object.defineProperty(HTMLVideoElement.prototype, 'videoHeight', {
+                    get() {
+                        const val = origHeightDesc.get.call(this);
+                        if (typeof val === 'number' && !isNaN(val) && val > 0) {
+                            this._lastAegisHeight = val;
+                            return val;
+                        }
+                        return this._lastAegisHeight || 720;
+                    },
+                    configurable: true
+                });
+            }
+        } catch(e) {
+            console.warn('[Aegis] Error instalando getters seguros de video:', e);
+        }
+    })();
+
+    // 2. Blindaje de MediaStreamTrack.prototype.applyConstraints (Erradica OverconstrainedError)
+    (function setupSafeApplyConstraints() {
+        if (window._aegisSafeApplyConstraintsHooked) return;
+        window._aegisSafeApplyConstraintsHooked = true;
+        try {
+            const origApply = MediaStreamTrack.prototype.applyConstraints;
+            MediaStreamTrack.prototype.applyConstraints = function(constraints) {
+                if (!this || this.readyState === 'ended' || !constraints) {
+                    return Promise.resolve();
+                }
+                let clean = {};
+                try {
+                    clean = JSON.parse(JSON.stringify(constraints));
+                    if (clean.video && typeof clean.video === 'object') {
+                        if (clean.video.width && clean.video.width.exact) {
+                            clean.video.width.ideal = clean.video.width.exact;
+                            delete clean.video.width.exact;
+                        }
+                        if (clean.video.height && clean.video.height.exact) {
+                            clean.video.height.ideal = clean.video.height.exact;
+                            delete clean.video.height.exact;
+                        }
+                        if (clean.video.frameRate && clean.video.frameRate.exact) {
+                            clean.video.frameRate.ideal = clean.video.frameRate.exact;
+                            delete clean.video.frameRate.exact;
+                        }
+                    }
+                } catch(err) {
+                    clean = constraints;
+                }
+
+                return origApply.call(this, clean).catch(err => {
+                    console.warn('[Aegis WebRTC] applyConstraints soft-handled para prevenir caida de React:', err);
+                    return Promise.resolve();
+                });
+            };
+        } catch(e) {
+            console.warn('[Aegis] Error en setupSafeApplyConstraints:', e);
+        }
+    })();
+
+    // 3. Escudo Global contra Excepciones de WebRTC y Animacion (Protege el arbol de React)
+    (function setupGlobalWebRTCShield() {
+        if (window._aegisGlobalWebRTCShieldHooked) return;
+        window._aegisGlobalWebRTCShieldHooked = true;
+
+        window.addEventListener('unhandledrejection', (event) => {
+            const reason = String(event.reason || '');
+            if (reason.includes('Overconstrained') || reason.includes('Constraint') || reason.includes('StreamPreview') || reason.includes('UploadManager')) {
+                console.warn('[Aegis Shield] Unhandled rejection WebRTC suprimida:', reason);
+                event.preventDefault();
+            }
+        });
+
+        window.addEventListener('error', (event) => {
+            const msg = String(event.message || '');
+            if (msg.includes('NaN while animating') || msg.includes('animating') || msg.includes('Overconstrained')) {
+                console.warn('[Aegis Shield] Error de animacion suprimido para proteger DOM:', msg);
+                event.preventDefault();
+                return true;
+            }
+        });
+    })();
+
+    // 4. Watchdog de Integridad del DOM (Auto-recuperacion en caso de desmontaje anormal)
+    (function setupDOMHealthWatchdog() {
+        let wasLoggedIn = false;
+        setInterval(() => {
+            const hasAppUI = !!document.querySelector('[class*="guilds_"], [class*="sidebar_"], [class*="chat_"], [class*="channels_"]');
+            if (hasAppUI) {
+                wasLoggedIn = true;
+                return;
+            }
+            const appMount = document.getElementById('app-mount');
+            if (wasLoggedIn && appMount && appMount.children.length === 0) {
+                console.warn('[Aegis Watchdog] Discord sufrio vaciado de DOM. Restaurando...');
+                window.location.reload();
+            }
+        }, 1500);
+    })();
+
+
+function isAuthOrLogin() {
         const path = (window.location.pathname || '').toLowerCase();
         const href = (window.location.href || '').toLowerCase();
         if (path.startsWith('/login') || path.startsWith('/register') || href.includes('captcha')) {
@@ -875,7 +1000,7 @@ def ensure_builtin_userscripts(scripts_dir: Path):
         }
         setupResponsiveDrawer();
 
-        // ── 6. Discord Screen Share Picker, Constraint Sanitizer & Safe Teardown ──
+        // 6. Discord Screen Share Picker, Constraint Sanitizer & Atomic GPU Pipeline Flush
         function setupScreenShareHandler() {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) return;
             if (window._aegisDisplayMediaHooked) return;
@@ -894,7 +1019,7 @@ def ensure_builtin_userscripts(scripts_dir: Path):
                     modal.innerHTML = `
                         <div style="background:#2b2d31;border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:24px;width:460px;color:#f2f3f5;box-shadow:0 20px 50px rgba(0,0,0,0.8);">
                             <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-                                <div style="font-size:22px;">🛡️</div>
+                                <div style="font-size:22px;">📺</div>
                                 <div style="font-size:17px;font-weight:700;">Transmitir Pantalla (Aegis Shields)</div>
                             </div>
                             <div style="font-size:13px;color:#949ba4;margin-bottom:18px;">
@@ -911,7 +1036,7 @@ def ensure_builtin_userscripts(scripts_dir: Path):
                                 <button id="aegis-opt-window" style="background:#1e1f22;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px 14px;color:#fff;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.15s;">
                                     <span style="font-size:24px;">🪟</span>
                                     <div>
-                                        <div style="font-weight:700;font-size:14px;">Ventana de Aplicación Activa</div>
+                                        <div style="font-weight:700;font-size:14px;">Ventana de Aplicacion Activa</div>
                                         <div style="font-size:12px;color:#949ba4;">Transmite únicamente la ventana activa de primer plano</div>
                                     </div>
                                 </button>
@@ -947,8 +1072,6 @@ def ensure_builtin_userscripts(scripts_dir: Path):
                     throw err;
                 }
 
-                // Sanitizar constraints eliminando cualquier restricción rígida ("exact")
-                // para evitar que Discord lance OverconstrainedError
                 const cleanConstraints = {
                     video: {
                         width: { ideal: 1920, max: 1920 },
@@ -960,23 +1083,23 @@ def ensure_builtin_userscripts(scripts_dir: Path):
 
                 const stream = await origGetDisplayMedia(cleanConstraints);
 
-                // Teardown Seguro: previene desincronización de GPU / caída a pantalla en blanco
+                // Teardown Atómico Seguro: desacoplar pipeline y purgar texturas GPU antes de detener capturador
                 stream.getVideoTracks().forEach(track => {
                     const origTrackStop = track.stop.bind(track);
                     track.stop = function() {
-                        // Pausar y desconectar videos asociados antes de liberar el mailbox Skia
+                        // 1. Purgar todos los elementos de video asociados para liberar mailboxes Skia
                         document.querySelectorAll('video').forEach(v => {
-                            if (v.srcObject === stream) {
+                            if (v.srcObject === stream || v.srcObject === track) {
                                 try {
                                     v.pause();
                                     v.srcObject = null;
+                                    v.removeAttribute('src');
+                                    v.load(); // Desecha síncronamente el WebMediaPlayerImpl
                                 } catch(e) {}
                             }
                         });
-                        // Pequeño retardo asíncrono para que Blink finalice los mensajes IPC de WidgetHost
-                        setTimeout(() => {
-                            try { origTrackStop(); } catch(e) {}
-                        }, 50);
+                        // 2. Ejecutar inmediatamente el stop nativo para mantener sincronizado readyState = 'ended'
+                        try { origTrackStop(); } catch(e) {}
                     };
                 });
 
@@ -984,7 +1107,6 @@ def ensure_builtin_userscripts(scripts_dir: Path):
             };
         }
         setupScreenShareHandler();
-
 
         console.log('[Aegis] Optimizador Discord Ultra-Light activado (0% CPU en fondo, WebRTC blindado, Responsive Drawer OK).');
     }
@@ -5249,6 +5371,7 @@ class AegisSidebarWidget(QFrame):
         profile_to_use = self.parent_win.profile if self.parent_win else get_shared_profile()
         self.discord_view = AegisWebView(self.parent_win)
         self.discord_page = AegisWebPage(profile_to_use, self.discord_view, browser_win=self.parent_win)
+        self.discord_page.setBackgroundColor(QColor("#313338"))
         self.discord_view.setPage(self.discord_page)
         l_d.addWidget(self.discord_view, 1)
 
@@ -6442,7 +6565,7 @@ class AegisAppWindow(QMainWindow):
                 s_opt = QWebEngineScript()
                 s_opt.setName("aegis_discord_optimizer")
                 s_opt.setSourceCode(opt_file.read_text(encoding="utf-8"))
-                s_opt.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+                s_opt.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
                 s_opt.setRunsOnSubFrames(False)
                 s_opt.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
                 self.profile.scripts().insert(s_opt)
